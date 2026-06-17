@@ -1,0 +1,152 @@
+import Image from 'next/image'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faInstagram, faFacebook, faWhatsapp } from '@fortawesome/free-brands-svg-icons'
+
+export default function Footer() {
+  return (
+    <footer style={{
+      backgroundColor: '#060606',
+      borderTop: '1px solid rgba(255,255,255,0.05)',
+      padding: '4rem 3rem 2rem',
+    }}>
+      <div style={{
+        maxWidth: '1200px',
+        margin: '0 auto',
+      }}>
+
+        {/* Top grid */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: '2fr 1fr 1fr 1fr',
+          gap: '3rem',
+          marginBottom: '3rem',
+        }}>
+
+          {/* Brand */}
+          <div>
+            <Image
+              src="/images/logo.png"
+              alt="Onboard Games & Tales"
+              width={120}
+              height={80}
+              style={{ marginBottom: '1rem' }}
+            />
+            <p style={{
+              fontSize: '0.82rem',
+              color: 'rgba(245,242,236,0.35)',
+              lineHeight: 1.7,
+              maxWidth: '240px',
+              fontFamily: 'var(--font-inter)',
+            }}>
+              Lebanon's favourite board game café and restaurant. Where every table tells a story.
+            </p>
+          </div>
+
+          {/* Explore */}
+          <div>
+            <p style={{
+              fontSize: '0.68rem',
+              letterSpacing: '0.2em',
+              textTransform: 'uppercase',
+              color: 'rgba(245,242,236,0.25)',
+              marginBottom: '1.2rem',
+              fontFamily: 'var(--font-inter)',
+            }}>Explore</p>
+            <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '0.7rem' }}>
+              {[
+                { label: 'Game Library', href: '/shop' },
+                { label: 'Menu',         href: '/menu' },
+                { label: 'D&D',          href: '/dnd' },
+                { label: 'Events',       href: '#events' },
+              ].map(({ label, href }) => (
+                <li key={label}>
+                  <a href={href} style={{
+                    fontSize: '0.82rem',
+                    color: 'rgba(245,242,236,0.5)',
+                    textDecoration: 'none',
+                    fontFamily: 'var(--font-inter)',
+                  }}>{label}</a>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Branches */}
+          <div>
+            <p style={{
+              fontSize: '0.68rem',
+              letterSpacing: '0.2em',
+              textTransform: 'uppercase',
+              color: 'rgba(245,242,236,0.25)',
+              marginBottom: '1.2rem',
+              fontFamily: 'var(--font-inter)',
+            }}>Branches</p>
+            <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '0.7rem' }}>
+              {['Beirut', 'Zouk', 'Broummana'].map(branch => (
+                <li key={branch}>
+                  <a href="#branches" style={{
+                    fontSize: '0.82rem',
+                    color: 'rgba(245,242,236,0.5)',
+                    textDecoration: 'none',
+                    fontFamily: 'var(--font-inter)',
+                  }}>{branch}</a>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Connect */}
+          <div>
+            <p style={{
+              fontSize: '0.68rem',
+              letterSpacing: '0.2em',
+              textTransform: 'uppercase',
+              color: 'rgba(245,242,236,0.25)',
+              marginBottom: '1.2rem',
+              fontFamily: 'var(--font-inter)',
+            }}>Connect</p>
+            <div style={{ display: 'flex', gap: '1rem' }}>
+              {[
+                { icon: faInstagram, href: '#' },
+                { icon: faFacebook,  href: '#' },
+                { icon: faWhatsapp,  href: '#' },
+              ].map(({ icon, href }, i) => (
+                <a key={i} href={href} style={{
+                  width: '36px',
+                  height: '36px',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'rgba(245,242,236,0.4)',
+                }}>
+                  <FontAwesomeIcon icon={icon} style={{ width: '16px' }} />
+                </a>
+              ))}
+            </div>
+          </div>
+
+        </div>
+
+        {/* Bottom */}
+        <div style={{
+          borderTop: '1px solid rgba(255,255,255,0.05)',
+          paddingTop: '1.5rem',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+        }}>
+          <p style={{
+            fontSize: '0.74rem',
+            color: 'rgba(245,242,236,0.2)',
+            fontFamily: 'var(--font-inter)',
+          }}>
+            © 2026 Onboard — Games & Tales. All rights reserved.
+          </p>
+        </div>
+
+      </div>
+    </footer>
+  )
+}
