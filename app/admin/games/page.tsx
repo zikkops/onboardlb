@@ -40,6 +40,7 @@ export default function AdminGamesPage() {
   const [editing, setEditing]     = useState<Game | null>(null)
   const [form, setForm]           = useState({ ...EMPTY })
   const [saving, setSaving]       = useState(false)
+  const [uploading, setUploading] = useState(false)
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (user) => {
@@ -78,20 +79,26 @@ export default function AdminGamesPage() {
     setOpen(true)
   }
 
+  async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    const formData = new FormData()
+    formData.append('image', file)
+    formData.append('key', process.env.NEXT_PUBLIC_IMGBB_API_KEY!)
+    const res  = await fetch('https://api.imgbb.com/1/upload', { method: 'POST', body: formData })
+    const data = await res.json()
+    setForm(f => ({ ...f, image: data.data.url }))
+    setUploading(false)
+  }
+
   async function handleSave(e: React.FormEvent) {
     e.preventDefault()
     setSaving(true)
     if (editing) {
-      await updateDoc(doc(db, 'games', editing.id), {
-        ...form,
-        updatedAt: serverTimestamp(),
-      })
+      await updateDoc(doc(db, 'games', editing.id), { ...form, updatedAt: serverTimestamp() })
     } else {
-      await addDoc(collection(db, 'games'), {
-        ...form,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
+      await addDoc(collection(db, 'games'), { ...form, createdAt: serverTimestamp(), updatedAt: serverTimestamp() })
     }
     setSaving(false)
     setOpen(false)
@@ -102,6 +109,28 @@ export default function AdminGamesPage() {
     if (!confirm('Delete this game?')) return
     await deleteDoc(doc(db, 'games', id))
     loadGames()
+  }
+
+  const inputStyle = {
+    width: '100%',
+    backgroundColor: '#1a1a1a',
+    border: '1px solid rgba(255,255,255,0.1)',
+    color: '#F5F2EC',
+    padding: '0.75rem 1rem',
+    borderRadius: '2px',
+    fontSize: '0.85rem',
+    outline: 'none',
+    fontFamily: 'var(--font-inter)',
+  }
+
+  const labelStyle = {
+    display: 'block',
+    fontSize: '0.68rem',
+    letterSpacing: '0.2em',
+    textTransform: 'uppercase' as const,
+    color: 'rgba(245,242,236,0.35)',
+    marginBottom: '0.5rem',
+    fontFamily: 'var(--font-inter)',
   }
 
   if (checking) return null
@@ -171,7 +200,7 @@ export default function AdminGamesPage() {
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                  {['Name', 'Category', 'Players', 'Stock', 'Actions'].map(h => (
+                  {['Image', 'Name', 'Category', 'Players', 'Stock', 'Actions'].map(h => (
                     <th key={h} style={{
                       padding: '1rem 1.2rem',
                       textAlign: 'left',
@@ -188,6 +217,14 @@ export default function AdminGamesPage() {
               <tbody>
                 {games.map(game => (
                   <tr key={game.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                    <td style={{ padding: '0.8rem 1.2rem' }}>
+                      {game.image && (
+                        <img src={game.image} alt={game.name} style={{
+                          width: '50px', height: '50px',
+                          objectFit: 'cover', borderRadius: '2px',
+                        }} />
+                      )}
+                    </td>
                     <td style={{ padding: '1rem 1.2rem', fontFamily: 'var(--font-cinzel)', fontSize: '0.9rem', color: 'var(--offwhite)' }}>{game.name}</td>
                     <td style={{ padding: '1rem 1.2rem', fontFamily: 'var(--font-inter)', fontSize: '0.82rem', color: 'rgba(245,242,236,0.5)' }}>{game.category}</td>
                     <td style={{ padding: '1rem 1.2rem', fontFamily: 'var(--font-inter)', fontSize: '0.82rem', color: 'rgba(245,242,236,0.5)' }}>{game.players}</td>
@@ -233,179 +270,230 @@ export default function AdminGamesPage() {
             </table>
           </div>
         )}
-
       </div>
 
-      {/* Modal */}
+      {/* Full Screen Modal */}
       {open && (
         <div style={{
           position: 'fixed', inset: 0,
-          backgroundColor: 'rgba(0,0,0,0.8)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
+          backgroundColor: '#0d0d0d',
           zIndex: 100,
-          padding: '2rem',
+          display: 'flex',
+          flexDirection: 'column',
         }}>
-          <div style={{
-            backgroundColor: '#111',
-            border: '1px solid rgba(255,255,255,0.1)',
-            borderRadius: '8px',
-            width: '100%',
-            maxWidth: '540px',
-            maxHeight: '90vh',
-            overflowY: 'auto',
-          }}>
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              padding: '1.5rem 2rem',
-              borderBottom: '1px solid rgba(255,255,255,0.06)',
-            }}>
-              <h2 style={{
-                fontFamily: 'var(--font-cinzel)',
-                fontSize: '1.2rem',
-                color: 'var(--offwhite)',
-              }}>
-                {editing ? 'Edit Game' : 'Add Game'}
-              </h2>
-              <button onClick={() => setOpen(false)} style={{
-                background: 'transparent',
-                border: 'none',
-                color: 'rgba(245,242,236,0.4)',
-                fontSize: '1.2rem',
-                cursor: 'pointer',
-              }}>✕</button>
-            </div>
 
-            <form onSubmit={handleSave} style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
-              {[
-                { label: 'Name',                    key: 'name',        type: 'text' },
-                { label: 'Players (e.g. 2–4)',      key: 'players',     type: 'text' },
-                { label: 'Duration (e.g. 30–60 min)', key: 'duration',  type: 'text' },
-                { label: 'Min Age (e.g. 8+)',        key: 'age',        type: 'text' },
-                { label: 'Image URL',               key: 'image',       type: 'url' },
-                { label: 'Stock',                   key: 'stock',       type: 'number' },
-              ].map(({ label, key, type }) => (
-                <div key={key}>
-                  <label style={{
-                    display: 'block',
-                    fontSize: '0.68rem',
-                    letterSpacing: '0.2em',
-                    textTransform: 'uppercase',
-                    color: 'rgba(245,242,236,0.35)',
-                    marginBottom: '0.5rem',
-                    fontFamily: 'var(--font-inter)',
-                  }}>{label}</label>
-                  <input
-                    type={type}
-                    value={(form as any)[key]}
-                    onChange={e => setForm(f => ({ ...f, [key]: type === 'number' ? +e.target.value : e.target.value }))}
-                    required={key !== 'image'}
-                    style={{
-                      width: '100%',
-                      backgroundColor: 'rgba(255,255,255,0.04)',
-                      border: '1px solid rgba(255,255,255,0.1)',
-                      color: 'var(--offwhite)',
-                      padding: '0.75rem 1rem',
-                      borderRadius: '2px',
-                      fontSize: '0.85rem',
-                      outline: 'none',
-                      fontFamily: 'var(--font-inter)',
-                    }}
-                  />
-                </div>
-              ))}
+          {/* Modal Header */}
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            padding: '1.5rem 3rem',
+            borderBottom: '1px solid rgba(255,255,255,0.06)',
+            flexShrink: 0,
+          }}>
+            <h2 style={{
+              fontFamily: 'var(--font-cinzel)',
+              fontSize: '1.5rem',
+              color: 'var(--offwhite)',
+            }}>
+              {editing ? 'Edit Game' : 'Add New Game'}
+            </h2>
+            <button onClick={() => setOpen(false)} style={{
+              background: 'transparent',
+              border: '1px solid rgba(255,255,255,0.1)',
+              color: 'rgba(245,242,236,0.5)',
+              padding: '0.5rem 1.2rem',
+              borderRadius: '2px',
+              fontSize: '0.75rem',
+              cursor: 'pointer',
+              fontFamily: 'var(--font-inter)',
+              letterSpacing: '0.1em',
+              textTransform: 'uppercase',
+            }}>✕ Close</button>
+          </div>
+
+          {/* Modal Body */}
+          <form onSubmit={handleSave} style={{
+            flex: 1,
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gap: '0',
+            overflow: 'hidden',
+          }}>
+
+            {/* Left Column */}
+            <div style={{
+              padding: '2.5rem 3rem',
+              borderRight: '1px solid rgba(255,255,255,0.06)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '1.5rem',
+              overflowY: 'auto',
+            }}>
+              <p style={{
+                fontSize: '0.68rem',
+                letterSpacing: '0.2em',
+                textTransform: 'uppercase',
+                color: 'var(--teal)',
+                fontFamily: 'var(--font-inter)',
+              }}>Game Details</p>
 
               <div>
-                <label style={{
-                  display: 'block',
-                  fontSize: '0.68rem',
-                  letterSpacing: '0.2em',
-                  textTransform: 'uppercase',
-                  color: 'rgba(245,242,236,0.35)',
-                  marginBottom: '0.5rem',
-                  fontFamily: 'var(--font-inter)',
-                }}>Category</label>
-                <select
-                  value={form.category}
+                <label style={labelStyle}>Name</label>
+                <input type="text" value={form.name} required
+                  onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                  style={inputStyle} />
+              </div>
+
+              <div>
+                <label style={labelStyle}>Category</label>
+                <select value={form.category}
                   onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
-                  style={{
-                    width: '100%',
-                    backgroundColor: 'rgba(255,255,255,0.04)',
-                    border: '1px solid rgba(255,255,255,0.1)',
-                    color: 'var(--offwhite)',
-                    padding: '0.75rem 1rem',
-                    borderRadius: '2px',
-                    fontSize: '0.85rem',
-                    outline: 'none',
-                    fontFamily: 'var(--font-inter)',
-                  }}
-                >
-                  {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                  style={{ ...inputStyle, color: '#F5F2EC', backgroundColor: '#1a1a1a' }}>
+                  {CATEGORIES.map(c => (
+                    <option key={c} value={c} style={{ backgroundColor: '#1a1a1a', color: '#F5F2EC' }}>{c}</option>
+                  ))}
                 </select>
               </div>
 
               <div>
-                <label style={{
-                  display: 'block',
-                  fontSize: '0.68rem',
-                  letterSpacing: '0.2em',
-                  textTransform: 'uppercase',
-                  color: 'rgba(245,242,236,0.35)',
-                  marginBottom: '0.5rem',
-                  fontFamily: 'var(--font-inter)',
-                }}>Description</label>
-                <textarea
-                  value={form.description}
+                <label style={labelStyle}>Description</label>
+                <textarea value={form.description} rows={4} required
                   onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                  rows={3}
-                  required
-                  style={{
-                    width: '100%',
-                    backgroundColor: 'rgba(255,255,255,0.04)',
-                    border: '1px solid rgba(255,255,255,0.1)',
-                    color: 'var(--offwhite)',
-                    padding: '0.75rem 1rem',
-                    borderRadius: '2px',
-                    fontSize: '0.85rem',
-                    outline: 'none',
-                    fontFamily: 'var(--font-inter)',
-                    resize: 'none',
-                  }}
-                />
+                  style={{ ...inputStyle, resize: 'none' }} />
               </div>
 
-              <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                <div>
+                  <label style={labelStyle}>Players (e.g. 2–4)</label>
+                  <input type="text" value={form.players} required
+                    onChange={e => setForm(f => ({ ...f, players: e.target.value }))}
+                    style={inputStyle} />
+                </div>
+                <div>
+                  <label style={labelStyle}>Duration</label>
+                  <input type="text" value={form.duration} required
+                    onChange={e => setForm(f => ({ ...f, duration: e.target.value }))}
+                    style={inputStyle} />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                <div>
+                  <label style={labelStyle}>Min Age (e.g. 8+)</label>
+                  <input type="text" value={form.age} required
+                    onChange={e => setForm(f => ({ ...f, age: e.target.value }))}
+                    style={inputStyle} />
+                </div>
+                <div>
+                  <label style={labelStyle}>Stock</label>
+                  <input type="number" value={form.stock} required
+                    onChange={e => setForm(f => ({ ...f, stock: +e.target.value }))}
+                    style={inputStyle} />
+                </div>
+              </div>
+            </div>
+
+            {/* Right Column */}
+            <div style={{
+              padding: '2.5rem 3rem',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '1.5rem',
+            }}>
+              <p style={{
+                fontSize: '0.68rem',
+                letterSpacing: '0.2em',
+                textTransform: 'uppercase',
+                color: 'var(--teal)',
+                fontFamily: 'var(--font-inter)',
+              }}>Game Image</p>
+
+              {/* Upload */}
+              <div>
+                <label style={labelStyle}>Upload Image</label>
+                <input type="file" accept="image/*" onChange={handleImageUpload}
+                  style={{ ...inputStyle, cursor: 'pointer' }} />
+                {uploading && (
+                  <p style={{
+                    marginTop: '0.5rem',
+                    fontSize: '0.75rem',
+                    color: 'var(--teal)',
+                    fontFamily: 'var(--font-inter)',
+                  }}>Uploading…</p>
+                )}
+              </div>
+
+              {/* Preview */}
+              {form.image && !uploading ? (
+                <div style={{
+                  flex: 1,
+                  borderRadius: '4px',
+                  overflow: 'hidden',
+                  border: '1px solid rgba(255,255,255,0.06)',
+                  position: 'relative',
+                  minHeight: '300px',
+                }}>
+                  <img src={form.image} alt="Preview" style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover',
+                    position: 'absolute',
+                    inset: 0,
+                  }} />
+                </div>
+              ) : (
+                <div style={{
+                  flex: 1,
+                  minHeight: '300px',
+                  border: '1px dashed rgba(255,255,255,0.1)',
+                  borderRadius: '4px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'rgba(245,242,236,0.2)',
+                  fontFamily: 'var(--font-inter)',
+                  fontSize: '0.82rem',
+                }}>
+                  Image preview will appear here
+                </div>
+              )}
+
+              {/* Save / Cancel */}
+              <div style={{ display: 'flex', gap: '1rem' }}>
                 <button type="button" onClick={() => setOpen(false)} style={{
                   flex: 1,
                   background: 'transparent',
                   border: '1px solid rgba(255,255,255,0.1)',
                   color: 'rgba(245,242,236,0.5)',
-                  padding: '0.8rem',
+                  padding: '0.9rem',
                   borderRadius: '2px',
                   fontSize: '0.75rem',
+                  letterSpacing: '0.1em',
+                  textTransform: 'uppercase',
                   cursor: 'pointer',
                   fontFamily: 'var(--font-inter)',
                 }}>Cancel</button>
-                <button type="submit" disabled={saving} style={{
+                <button type="submit" disabled={saving || uploading} style={{
                   flex: 1,
                   backgroundColor: 'var(--purple)',
                   border: 'none',
                   color: '#fff',
-                  padding: '0.8rem',
+                  padding: '0.9rem',
                   borderRadius: '2px',
                   fontSize: '0.75rem',
-                  cursor: saving ? 'not-allowed' : 'pointer',
-                  opacity: saving ? 0.6 : 1,
+                  letterSpacing: '0.1em',
+                  textTransform: 'uppercase',
+                  cursor: saving || uploading ? 'not-allowed' : 'pointer',
+                  opacity: saving || uploading ? 0.6 : 1,
                   fontFamily: 'var(--font-inter)',
                 }}>
                   {saving ? 'Saving…' : 'Save Game'}
                 </button>
               </div>
-            </form>
-          </div>
+            </div>
+
+          </form>
         </div>
       )}
     </div>

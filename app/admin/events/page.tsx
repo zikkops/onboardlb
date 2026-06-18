@@ -1,0 +1,759 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { onAuthStateChanged } from 'firebase/auth'
+import {
+  collection, getDocs, addDoc, deleteDoc,
+  doc, updateDoc, serverTimestamp
+} from 'firebase/firestore'
+import { auth, db } from '../../lib/firebase'
+
+interface GameEvent {
+  id: string
+  title: string
+  type: string
+  branch: string
+  date: string
+  timeStart: string
+  timeEnd: string
+  description: string
+  price: number
+  minPlayers: number
+  maxPlayers: number
+  registrationLink?: string
+  image?: string
+}
+
+interface EventType {
+  id: string
+  name: string
+}
+
+const EMPTY = {
+  title: '',
+  type: '',
+  branch: 'Beirut',
+  date: '',
+  timeStart: '',
+  timeEnd: '',
+  description: '',
+  price: 0,
+  minPlayers: 2,
+  maxPlayers: 6,
+  registrationLink: '',
+  image: '',
+}
+
+const BRANCHES = ['Beirut', 'Zouk', 'Broummana', 'All Branches']
+
+export default function AdminEventsPage() {
+  const router = useRouter()
+  const [checking, setChecking]       = useState(true)
+  const [events, setEvents]           = useState<GameEvent[]>([])
+  const [eventTypes, setEventTypes]   = useState<EventType[]>([])
+  const [loading, setLoading]         = useState(true)
+  const [open, setOpen]               = useState(false)
+  const [editing, setEditing]         = useState<GameEvent | null>(null)
+  const [form, setForm]               = useState({ ...EMPTY })
+  const [saving, setSaving]           = useState(false)
+  const [uploading, setUploading]     = useState(false)
+  const [newType, setNewType]         = useState('')
+  const [addingType, setAddingType]   = useState(false)
+  const [showTypeManager, setShowTypeManager] = useState(false)
+
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (user) => {
+      if (!user) router.replace('/admin/login')
+      setChecking(false)
+    })
+    return unsub
+  }, [router])
+
+  async function loadData() {
+    const [evSnap, typeSnap] = await Promise.all([
+      getDocs(collection(db, 'events')),
+      getDocs(collection(db, 'eventTypes')),
+    ])
+
+    const evs = evSnap.docs
+      .map(d => ({ id: d.id, ...d.data() } as GameEvent))
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+
+    const types = typeSnap.docs.map(d => ({ id: d.id, ...d.data() } as EventType))
+
+    setEvents(evs)
+    setEventTypes(types)
+    if (types.length > 0 && !form.type) {
+      setForm(f => ({ ...f, type: types[0].name }))
+    }
+    setLoading(false)
+  }
+
+  useEffect(() => { loadData() }, [])
+
+  async function addEventType() {
+    if (!newType.trim()) return
+    setAddingType(true)
+    await addDoc(collection(db, 'eventTypes'), {
+      name: newType.trim(),
+      createdAt: serverTimestamp(),
+    })
+    setNewType('')
+    setAddingType(false)
+    loadData()
+  }
+
+  async function deleteEventType(id: string) {
+    if (!confirm('Delete this event type?')) return
+    await deleteDoc(doc(db, 'eventTypes', id))
+    loadData()
+  }
+
+  async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    const formData = new FormData()
+    formData.append('image', file)
+    formData.append('key', process.env.NEXT_PUBLIC_IMGBB_API_KEY!)
+    const res  = await fetch('https://api.imgbb.com/1/upload', { method: 'POST', body: formData })
+    const data = await res.json()
+    setForm(f => ({ ...f, image: data.data.url }))
+    setUploading(false)
+  }
+
+  function openNew() {
+    setEditing(null)
+    setForm({ ...EMPTY, type: eventTypes[0]?.name ?? '' })
+    setOpen(true)
+  }
+
+  function openEdit(ev: GameEvent) {
+    setEditing(ev)
+    setForm({
+      title:            ev.title,
+      type:             ev.type,
+      branch:           ev.branch,
+      date:             ev.date,
+      timeStart:        ev.timeStart,
+      timeEnd:          ev.timeEnd,
+      description:      ev.description,
+      price:            ev.price,
+      minPlayers:       ev.minPlayers,
+      maxPlayers:       ev.maxPlayers,
+      registrationLink: ev.registrationLink ?? '',
+      image:            ev.image ?? '',
+    })
+    setOpen(true)
+  }
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault()
+    setSaving(true)
+    if (editing) {
+      await updateDoc(doc(db, 'events', editing.id), {
+        ...form,
+        updatedAt: serverTimestamp(),
+      })
+    } else {
+      await addDoc(collection(db, 'events'), {
+        ...form,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      })
+    }
+    setSaving(false)
+    setOpen(false)
+    loadData()
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm('Delete this event?')) return
+    await deleteDoc(doc(db, 'events', id))
+    loadData()
+  }
+
+  const inputStyle = {
+    width: '100%',
+    backgroundColor: '#1a1a1a',
+    border: '1px solid rgba(255,255,255,0.1)',
+    color: '#F5F2EC',
+    padding: '0.75rem 1rem',
+    borderRadius: '2px',
+    fontSize: '0.85rem',
+    outline: 'none',
+    fontFamily: 'var(--font-inter)',
+  }
+
+  const labelStyle = {
+    display: 'block',
+    fontSize: '0.68rem',
+    letterSpacing: '0.2em',
+    textTransform: 'uppercase' as const,
+    color: 'rgba(245,242,236,0.35)',
+    marginBottom: '0.5rem',
+    fontFamily: 'var(--font-inter)',
+  }
+
+  if (checking) return null
+
+  return (
+    <div style={{ minHeight: '100vh', backgroundColor: 'var(--black)', padding: '3rem' }}>
+      <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+
+        {/* Header */}
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '2rem',
+        }}>
+          <div>
+            <a href="/admin" style={{
+              fontSize: '0.7rem',
+              letterSpacing: '0.2em',
+              textTransform: 'uppercase',
+              color: 'rgba(245,242,236,0.3)',
+              textDecoration: 'none',
+              fontFamily: 'var(--font-inter)',
+              marginBottom: '0.5rem',
+              display: 'block',
+            }}>← Back to Dashboard</a>
+            <h1 style={{ fontFamily: 'var(--font-cinzel)', fontSize: '2rem', color: 'var(--offwhite)' }}>
+              Events Manager
+            </h1>
+          </div>
+          <div style={{ display: 'flex', gap: '0.8rem' }}>
+            <button onClick={() => setShowTypeManager(!showTypeManager)} style={{
+              backgroundColor: 'transparent',
+              color: 'rgba(245,242,236,0.5)',
+              padding: '0.7rem 1.5rem',
+              border: '1px solid rgba(255,255,255,0.1)',
+              borderRadius: '2px',
+              fontSize: '0.75rem',
+              letterSpacing: '0.1em',
+              textTransform: 'uppercase',
+              cursor: 'pointer',
+              fontFamily: 'var(--font-inter)',
+            }}>Manage Types</button>
+            <button onClick={openNew} style={{
+              backgroundColor: 'var(--red)',
+              color: '#fff',
+              padding: '0.7rem 1.5rem',
+              border: 'none',
+              borderRadius: '2px',
+              fontSize: '0.75rem',
+              letterSpacing: '0.1em',
+              textTransform: 'uppercase',
+              cursor: 'pointer',
+              fontFamily: 'var(--font-inter)',
+            }}>+ Add Event</button>
+          </div>
+        </div>
+
+        {/* Type Manager Panel */}
+        {showTypeManager && (
+          <div style={{
+            background: 'rgba(255,255,255,0.02)',
+            border: '1px solid rgba(255,255,255,0.08)',
+            borderRadius: '4px',
+            padding: '1.5rem',
+            marginBottom: '2rem',
+          }}>
+            <p style={{ ...labelStyle, marginBottom: '1rem' }}>Event Types</p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1rem' }}>
+              {eventTypes.map(t => (
+                <div key={t.id} style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  backgroundColor: 'rgba(228,51,41,0.1)',
+                  border: '1px solid rgba(228,51,41,0.2)',
+                  borderRadius: '2px',
+                  padding: '0.35rem 0.8rem',
+                }}>
+                  <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.82rem', color: 'var(--offwhite)' }}>
+                    {t.name}
+                  </span>
+                  <button onClick={() => deleteEventType(t.id)} style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: 'rgba(228,51,41,0.6)',
+                    cursor: 'pointer',
+                    fontSize: '0.75rem',
+                    padding: '0',
+                    lineHeight: 1,
+                  }}>✕</button>
+                </div>
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: '0.5rem', maxWidth: '400px' }}>
+              <input
+                type="text"
+                placeholder="New type name…"
+                value={newType}
+                onChange={e => setNewType(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && addEventType()}
+                style={{
+                  flex: 1,
+                  backgroundColor: '#1a1a1a',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  color: '#F5F2EC',
+                  padding: '0.6rem 0.8rem',
+                  borderRadius: '2px',
+                  fontSize: '0.82rem',
+                  outline: 'none',
+                  fontFamily: 'var(--font-inter)',
+                }}
+              />
+              <button onClick={addEventType} disabled={addingType} style={{
+                backgroundColor: 'var(--red)',
+                border: 'none',
+                color: '#fff',
+                padding: '0.6rem 1rem',
+                borderRadius: '2px',
+                fontSize: '0.82rem',
+                cursor: 'pointer',
+                fontFamily: 'var(--font-inter)',
+              }}>+ Add</button>
+            </div>
+          </div>
+        )}
+
+        {/* Events Grid */}
+        {loading ? (
+          <p style={{ color: 'rgba(245,242,236,0.3)', fontFamily: 'var(--font-inter)' }}>Loading…</p>
+        ) : events.length === 0 ? (
+          <div style={{
+            border: '1px dashed rgba(255,255,255,0.08)',
+            borderRadius: '4px',
+            padding: '4rem',
+            textAlign: 'center',
+            color: 'rgba(245,242,236,0.2)',
+            fontFamily: 'var(--font-inter)',
+          }}>
+            No events yet — click + Add Event to get started
+          </div>
+        ) : (
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(3, 1fr)',
+            gap: '1.5rem',
+          }}>
+            {events.map(ev => {
+              const d = new Date(ev.date)
+              return (
+                <div key={ev.id} style={{
+                  border: '1px solid rgba(255,255,255,0.06)',
+                  borderRadius: '4px',
+                  overflow: 'hidden',
+                }}>
+                  {/* Image */}
+                  {ev.image ? (
+                    <div style={{
+                      height: '140px',
+                      backgroundImage: `url(${ev.image})`,
+                      backgroundSize: 'cover',
+                      backgroundPosition: 'center',
+                    }} />
+                  ) : (
+                    <div style={{
+                      height: '140px',
+                      backgroundColor: 'rgba(255,255,255,0.02)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: 'rgba(255,255,255,0.1)',
+                      fontSize: '0.75rem',
+                      fontFamily: 'var(--font-inter)',
+                    }}>No image</div>
+                  )}
+
+                  <div style={{ padding: '1.5rem' }}>
+                    <div style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'flex-start',
+                      marginBottom: '0.8rem',
+                    }}>
+                      <div>
+                        <p style={{
+                          fontFamily: 'var(--font-cinzel)',
+                          fontSize: '1.8rem',
+                          color: 'var(--offwhite)',
+                          lineHeight: 1,
+                        }}>{d.getDate()}</p>
+                        <p style={{
+                          fontFamily: 'var(--font-inter)',
+                          fontSize: '0.7rem',
+                          color: 'rgba(245,242,236,0.4)',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.1em',
+                        }}>
+                          {d.toLocaleString('en', { month: 'long', year: 'numeric' })}
+                        </p>
+                      </div>
+                      <span style={{
+                        fontSize: '0.65rem',
+                        padding: '0.25rem 0.7rem',
+                        borderRadius: '2px',
+                        backgroundColor: 'rgba(228,51,41,0.15)',
+                        color: 'var(--red)',
+                        fontFamily: 'var(--font-inter)',
+                        letterSpacing: '0.08em',
+                        textTransform: 'uppercase',
+                      }}>{ev.type}</span>
+                    </div>
+
+                    <h3 style={{
+                      fontFamily: 'var(--font-cinzel)',
+                      fontSize: '1rem',
+                      color: 'var(--offwhite)',
+                      marginBottom: '0.5rem',
+                    }}>{ev.title}</h3>
+
+                    <div style={{
+                      display: 'flex',
+                      gap: '0.8rem',
+                      fontSize: '0.72rem',
+                      color: 'rgba(245,242,236,0.4)',
+                      fontFamily: 'var(--font-inter)',
+                      marginBottom: '0.4rem',
+                      flexWrap: 'wrap',
+                    }}>
+                      <span style={{ color: 'var(--teal)' }}>{ev.branch}</span>
+                      <span>{ev.timeStart} – {ev.timeEnd}</span>
+                      <span>{ev.price === 0 ? 'Free' : `$${ev.price}/player`}</span>
+                    </div>
+
+                    <div style={{
+                      fontSize: '0.72rem',
+                      color: 'rgba(245,242,236,0.4)',
+                      fontFamily: 'var(--font-inter)',
+                      marginBottom: '1rem',
+                    }}>
+                      👥 {ev.minPlayers}–{ev.maxPlayers} players
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <button onClick={() => openEdit(ev)} style={{
+                        flex: 1,
+                        background: 'transparent',
+                        border: '1px solid rgba(255,255,255,0.1)',
+                        color: 'rgba(245,242,236,0.5)',
+                        padding: '0.5rem',
+                        borderRadius: '2px',
+                        fontSize: '0.72rem',
+                        cursor: 'pointer',
+                        fontFamily: 'var(--font-inter)',
+                      }}>Edit</button>
+                      <button onClick={() => handleDelete(ev.id)} style={{
+                        flex: 1,
+                        background: 'transparent',
+                        border: '1px solid rgba(228,51,41,0.3)',
+                        color: 'var(--red)',
+                        padding: '0.5rem',
+                        borderRadius: '2px',
+                        fontSize: '0.72rem',
+                        cursor: 'pointer',
+                        fontFamily: 'var(--font-inter)',
+                      }}>Delete</button>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Full Screen Modal */}
+      {open && (
+        <div style={{
+          position: 'fixed', inset: 0,
+          backgroundColor: '#0d0d0d',
+          zIndex: 100,
+          display: 'flex',
+          flexDirection: 'column',
+        }}>
+          {/* Modal Header */}
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            padding: '1.5rem 3rem',
+            borderBottom: '1px solid rgba(255,255,255,0.06)',
+            flexShrink: 0,
+          }}>
+            <h2 style={{ fontFamily: 'var(--font-cinzel)', fontSize: '1.5rem', color: 'var(--offwhite)' }}>
+              {editing ? 'Edit Event' : 'Add New Event'}
+            </h2>
+            <button onClick={() => setOpen(false)} style={{
+              background: 'transparent',
+              border: '1px solid rgba(255,255,255,0.1)',
+              color: 'rgba(245,242,236,0.5)',
+              padding: '0.5rem 1.2rem',
+              borderRadius: '2px',
+              fontSize: '0.75rem',
+              cursor: 'pointer',
+              fontFamily: 'var(--font-inter)',
+              letterSpacing: '0.1em',
+              textTransform: 'uppercase',
+            }}>✕ Close</button>
+          </div>
+
+          {/* Modal Body */}
+          <form onSubmit={handleSave} style={{
+            flex: 1,
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gap: '0',
+            overflow: 'hidden',
+          }}>
+
+            {/* Left Column */}
+            <div style={{
+              padding: '2.5rem 3rem',
+              borderRight: '1px solid rgba(255,255,255,0.06)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '1.5rem',
+              overflowY: 'auto',
+            }}>
+              <p style={{
+                fontSize: '0.68rem',
+                letterSpacing: '0.2em',
+                textTransform: 'uppercase',
+                color: 'var(--red)',
+                fontFamily: 'var(--font-inter)',
+              }}>Event Details</p>
+
+              <div>
+                <label style={labelStyle}>Title</label>
+                <input type="text" value={form.title} required
+                  onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
+                  style={inputStyle} />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                <div>
+                  <label style={labelStyle}>Type</label>
+                  <select value={form.type}
+                    onChange={e => setForm(f => ({ ...f, type: e.target.value }))}
+                    style={{ ...inputStyle, color: '#F5F2EC', backgroundColor: '#1a1a1a' }}>
+                    {eventTypes.map(t => (
+                      <option key={t.id} value={t.name}
+                        style={{ backgroundColor: '#1a1a1a', color: '#F5F2EC' }}>
+                        {t.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label style={labelStyle}>Branch</label>
+                  <select value={form.branch}
+                    onChange={e => setForm(f => ({ ...f, branch: e.target.value }))}
+                    style={{ ...inputStyle, color: '#F5F2EC', backgroundColor: '#1a1a1a' }}>
+                    {BRANCHES.map(b => (
+                      <option key={b} value={b}
+                        style={{ backgroundColor: '#1a1a1a', color: '#F5F2EC' }}>
+                        {b}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label style={labelStyle}>Date</label>
+                <input type="date" value={form.date} required
+                  onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
+                  style={{ ...inputStyle, colorScheme: 'dark' }} />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                <div>
+                  <label style={labelStyle}>Time Start</label>
+                  <input type="time" value={form.timeStart} required
+                    onChange={e => setForm(f => ({ ...f, timeStart: e.target.value }))}
+                    style={{ ...inputStyle, colorScheme: 'dark' }} />
+                </div>
+                <div>
+                  <label style={labelStyle}>Time End</label>
+                  <input type="time" value={form.timeEnd} required
+                    onChange={e => setForm(f => ({ ...f, timeEnd: e.target.value }))}
+                    style={{ ...inputStyle, colorScheme: 'dark' }} />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
+                <div>
+                  <label style={labelStyle}>Min Players</label>
+                  <input type="number" min={1} value={form.minPlayers} required
+                    onChange={e => setForm(f => ({ ...f, minPlayers: +e.target.value }))}
+                    style={inputStyle} />
+                </div>
+                <div>
+                  <label style={labelStyle}>Max Players</label>
+                  <input type="number" min={1} value={form.maxPlayers} required
+                    onChange={e => setForm(f => ({ ...f, maxPlayers: +e.target.value }))}
+                    style={inputStyle} />
+                </div>
+                <div>
+                  <label style={labelStyle}>Price per Player ($)</label>
+                  <input type="number" min={0} value={form.price}
+                    onChange={e => setForm(f => ({ ...f, price: +e.target.value }))}
+                    style={inputStyle} />
+                </div>
+              </div>
+
+              <div>
+                <label style={labelStyle}>Description</label>
+                <textarea value={form.description} rows={4} required
+                  onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                  style={{ ...inputStyle, resize: 'none' }} />
+              </div>
+
+              <div>
+                <label style={labelStyle}>Registration Link (optional)</label>
+                <input type="url" value={form.registrationLink}
+                  placeholder="https://..."
+                  onChange={e => setForm(f => ({ ...f, registrationLink: e.target.value }))}
+                  style={inputStyle} />
+              </div>
+            </div>
+
+            {/* Right Column */}
+            <div style={{
+              padding: '2.5rem 3rem',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '1.5rem',
+            }}>
+              <p style={{
+                fontSize: '0.68rem',
+                letterSpacing: '0.2em',
+                textTransform: 'uppercase',
+                color: 'var(--red)',
+                fontFamily: 'var(--font-inter)',
+              }}>Event Image</p>
+
+              <div>
+                <label style={labelStyle}>Upload Image</label>
+                <input type="file" accept="image/*" onChange={handleImageUpload}
+                  style={{ ...inputStyle, cursor: 'pointer' }} />
+                {uploading && (
+                  <p style={{
+                    marginTop: '0.5rem',
+                    fontSize: '0.75rem',
+                    color: 'var(--teal)',
+                    fontFamily: 'var(--font-inter)',
+                  }}>Uploading…</p>
+                )}
+              </div>
+
+              {/* Image Preview */}
+              {form.image && !uploading ? (
+                <div style={{
+                  flex: 1,
+                  borderRadius: '4px',
+                  overflow: 'hidden',
+                  border: '1px solid rgba(255,255,255,0.06)',
+                  position: 'relative',
+                  minHeight: '250px',
+                }}>
+                  <img src={form.image} alt="Preview" style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover',
+                    position: 'absolute',
+                    inset: 0,
+                  }} />
+                </div>
+              ) : (
+                <div style={{
+                  flex: 1,
+                  minHeight: '250px',
+                  border: '1px dashed rgba(255,255,255,0.1)',
+                  borderRadius: '4px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'rgba(245,242,236,0.2)',
+                  fontFamily: 'var(--font-inter)',
+                  fontSize: '0.82rem',
+                }}>
+                  Image preview will appear here
+                </div>
+              )}
+
+              {/* Preview Card */}
+              <div style={{
+                border: '1px solid rgba(255,255,255,0.06)',
+                borderRadius: '4px',
+                padding: '1.2rem',
+                background: 'rgba(255,255,255,0.02)',
+              }}>
+                <p style={{ ...labelStyle, marginBottom: '0.8rem' }}>Preview</p>
+                <p style={{
+                  fontFamily: 'var(--font-cinzel)',
+                  fontSize: '1rem',
+                  color: 'var(--offwhite)',
+                  marginBottom: '0.4rem',
+                }}>{form.title || 'Event Title'}</p>
+                <div style={{
+                  display: 'flex',
+                  gap: '0.8rem',
+                  fontSize: '0.72rem',
+                  color: 'rgba(245,242,236,0.4)',
+                  fontFamily: 'var(--font-inter)',
+                  flexWrap: 'wrap',
+                }}>
+                  <span style={{ color: 'var(--teal)' }}>{form.branch}</span>
+                  <span>{form.date}</span>
+                  <span>{form.timeStart} – {form.timeEnd}</span>
+                  <span style={{ color: 'var(--teal)' }}>
+                    {form.price === 0 ? 'Free entry' : `$${form.price} per person`}
+                  </span>
+                  <span>👥 {form.minPlayers}–{form.maxPlayers}</span>
+                </div>
+              </div>
+
+              {/* Save / Cancel */}
+              <div style={{ display: 'flex', gap: '1rem' }}>
+                <button type="button" onClick={() => setOpen(false)} style={{
+                  flex: 1,
+                  background: 'transparent',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  color: 'rgba(245,242,236,0.5)',
+                  padding: '0.9rem',
+                  borderRadius: '2px',
+                  fontSize: '0.75rem',
+                  letterSpacing: '0.1em',
+                  textTransform: 'uppercase',
+                  cursor: 'pointer',
+                  fontFamily: 'var(--font-inter)',
+                }}>Cancel</button>
+                <button type="submit" disabled={saving || uploading} style={{
+                  flex: 1,
+                  backgroundColor: 'var(--red)',
+                  border: 'none',
+                  color: '#fff',
+                  padding: '0.9rem',
+                  borderRadius: '2px',
+                  fontSize: '0.75rem',
+                  letterSpacing: '0.1em',
+                  textTransform: 'uppercase',
+                  cursor: saving || uploading ? 'not-allowed' : 'pointer',
+                  opacity: saving || uploading ? 0.6 : 1,
+                  fontFamily: 'var(--font-inter)',
+                }}>{saving ? 'Saving…' : 'Save Event'}</button>
+              </div>
+            </div>
+          </form>
+        </div>
+      )}
+    </div>
+  )
+}

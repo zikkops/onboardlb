@@ -1,107 +1,60 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import { collection, getDocs } from 'firebase/firestore'
+import { db } from '../lib/firebase'
 import Navbar from '../components/layout/Navbar'
 import Footer from '../components/layout/Footer'
 
-const menuData = [
-  {
-    category: 'Appetizers',
-    image: 'https://images.unsplash.com/photo-1541014741259-de529411b96a?w=400&q=80',
-    items: [
-      { name: 'Crispy Calamari',        description: 'Lightly breaded calamari rings, served with marinara sauce', price: '$9' },
-      { name: 'Bruschetta Board',       description: 'Toasted bread, tomato, basil, garlic and olive oil', price: '$8' },
-      { name: 'Loaded Nachos',          description: 'Tortilla chips, guacamole, salsa, cheese sauce, jalapeños', price: '$10' },
-      { name: 'Mozzarella Sticks',      description: 'Golden fried mozzarella sticks with marinara dipping sauce', price: '$8' },
-    ],
-  },
-  {
-    category: 'Sandwiches',
-    image: 'https://images.unsplash.com/photo-1528735602780-2552fd46c7af?w=400&q=80',
-    items: [
-      { name: 'Club Sandwich',          description: 'Triple decker with chicken, turkey, bacon, avocado, tomato', price: '$12' },
-      { name: 'Grilled Veggie Wrap',    description: 'Seasonal vegetables, hummus, feta cheese in a warm wrap', price: '$10' },
-      { name: 'Crispy Chicken Sandwich', description: 'Fried chicken fillet, coleslaw, pickles, sriracha mayo', price: '$11' },
-    ],
-  },
-  {
-    category: 'Burgers',
-    image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400&q=80',
-    items: [
-      { name: 'The Game Master Burger', description: 'Double smash patty, aged cheddar, caramelised onion, house sauce', price: '$14' },
-      { name: 'Classic Cheeseburger',   description: 'Beef patty, American cheese, lettuce, tomato, pickles', price: '$12' },
-      { name: 'Mushroom Swiss Burger',  description: 'Beef patty, sautéed mushrooms, swiss cheese, garlic aioli', price: '$13' },
-      { name: 'Veggie Burger',          description: 'Plant-based patty, avocado, tomato, lettuce, chipotle mayo', price: '$11' },
-    ],
-  },
-  {
-    category: 'Salads',
-    image: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=400&q=80',
-    items: [
-      { name: 'Caesar Salad',           description: 'Romaine lettuce, parmesan, croutons, caesar dressing', price: '$9' },
-      { name: 'Greek Salad',            description: 'Tomato, cucumber, olives, feta cheese, red onion, oregano', price: '$9' },
-      { name: 'Grilled Chicken Salad',  description: 'Mixed greens, grilled chicken, avocado, cherry tomato', price: '$12' },
-    ],
-  },
-  {
-    category: 'Milkshakes',
-    image: 'https://images.unsplash.com/photo-1572490122747-3968b75cc699?w=400&q=80',
-    items: [
-      { name: 'Classic Vanilla',        description: 'Creamy vanilla ice cream blended with whole milk', price: '$7' },
-      { name: 'Double Chocolate',       description: 'Rich chocolate ice cream with chocolate syrup', price: '$7' },
-      { name: 'Strawberry Dream',       description: 'Fresh strawberries blended with vanilla ice cream', price: '$7' },
-      { name: 'Lotus Biscoff',          description: 'Biscoff spread and ice cream with crushed cookies on top', price: '$8' },
-    ],
-  },
-  {
-    category: 'Tea',
-    image: 'https://images.unsplash.com/photo-1556679343-c7306c1976bc?w=400&q=80',
-    items: [
-      { name: 'Classic Lebanese Tea',   description: 'Strong black tea served in traditional style', price: '$3' },
-      { name: 'Mint Tea',               description: 'Fresh mint leaves steeped in hot water', price: '$3' },
-      { name: 'Chamomile',              description: 'Soothing chamomile flowers, perfect for a long game night', price: '$3' },
-      { name: 'Cinnamon Tea',           description: 'Warming cinnamon sticks brewed with black tea', price: '$3' },
-    ],
-  },
-  {
-    category: 'Cookies',
-    image: 'https://images.unsplash.com/photo-1499636136210-6f4ee915583e?w=400&q=80',
-    items: [
-      { name: 'Chocolate Chip Cookie',  description: 'Warm, freshly baked classic chocolate chip cookie', price: '$3' },
-      { name: 'Double Chocolate Cookie', description: 'Rich cocoa dough loaded with chocolate chunks', price: '$3' },
-      { name: 'Oatmeal Raisin Cookie',  description: 'Wholesome oats, plump raisins, hint of cinnamon', price: '$3' },
-    ],
-  },
-  {
-    category: 'Soft Drinks',
-    image: 'https://images.unsplash.com/photo-1581006852262-e4307cf6283a?w=400&q=80',
-    items: [
-      { name: 'Fresh Lemonade',         description: 'Freshly squeezed lemon with mint and sugar syrup', price: '$4' },
-      { name: 'Soft Drinks',            description: 'Pepsi, 7UP, Miranda — ask your server for options', price: '$3' },
-      { name: 'Sparkling Water',        description: 'Chilled sparkling mineral water', price: '$2' },
-      { name: 'Fresh Juice',            description: 'Orange, watermelon, or mango — freshly pressed', price: '$5' },
-    ],
-  },
-  {
-    category: 'Beers',
-    image: 'https://images.unsplash.com/photo-1608270586620-248524c67de9?w=400&q=80',
-    items: [
-      { name: 'Almaza',                 description: 'Lebanon\'s classic pilsner — crisp and refreshing', price: '$4' },
-      { name: 'Almaza Light',           description: 'Lighter version of Lebanon\'s favourite beer', price: '$4' },
-      { name: 'Corona',                 description: 'Mexican lager served with a slice of lime', price: '$5' },
-      { name: 'Heineken',               description: 'Dutch pale lager, smooth and balanced', price: '$5' },
-    ],
-  },
-  {
-    category: 'Alcoholic Drinks',
-    image: 'https://images.unsplash.com/photo-1551538827-9c037cb4f32a?w=400&q=80',
-    items: [
-      { name: 'Mojito',                 description: 'White rum, fresh mint, lime, sugar, soda water', price: '$9' },
-      { name: 'Gin & Tonic',            description: 'Premium gin, tonic water, lime, cucumber', price: '$9' },
-      { name: 'Whiskey Sour',           description: 'Bourbon, lemon juice, sugar syrup, egg white', price: '$10' },
-      { name: 'House Wine',             description: 'Red or white — ask your server for today\'s selection', price: '$8' },
-    ],
-  },
-]
+interface Category {
+  id: string
+  name: string
+  order: number
+}
+
+interface MenuItem {
+  id: string
+  name: string
+  description: string
+  price: number
+  categoryId: string
+  order: number
+  badge?: string
+  available: boolean
+}
 
 export default function MenuPage() {
+  const [categories, setCategories] = useState<Category[]>([])
+  const [items, setItems]           = useState<MenuItem[]>([])
+  const [loading, setLoading]       = useState(true)
+  const [activeCategory, setActiveCategory] = useState<string>('')
+
+  useEffect(() => {
+    async function load() {
+      const [catSnap, itemSnap] = await Promise.all([
+        getDocs(collection(db, 'menuCategories')),
+        getDocs(collection(db, 'menuItems')),
+      ])
+
+      const cats = catSnap.docs
+        .map(d => ({ id: d.id, ...d.data() } as Category))
+        .sort((a, b) => a.order - b.order)
+
+      const its = itemSnap.docs
+        .map(d => ({ id: d.id, ...d.data() } as MenuItem))
+        .filter(i => i.available)
+        .sort((a, b) => a.order - b.order)
+
+      setCategories(cats)
+      setItems(its)
+      if (cats.length > 0) setActiveCategory(cats[0].id)
+      setLoading(false)
+    }
+    load()
+  }, [])
+
+  const activeItems = items.filter(i => i.categoryId === activeCategory)
+
   return (
     <>
       <Navbar />
@@ -132,65 +85,69 @@ export default function MenuPage() {
               color: 'var(--teal)',
               marginBottom: '1rem',
               fontFamily: 'var(--font-inter)',
-            }}>
-              Food & Drinks
-            </p>
+            }}>Food & Drinks</p>
             <h1 style={{
               fontFamily: 'var(--font-cinzel)',
               fontSize: '3.5rem',
               color: 'var(--offwhite)',
               lineHeight: 1.2,
-            }}>
-              Our Menu
-            </h1>
+            }}>Our Menu</h1>
           </div>
         </section>
 
-        {/* Menu Categories */}
-        <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '5rem 3rem' }}>
-          {menuData.map(({ category, image, items }) => (
-            <div key={category} style={{
-              marginBottom: '5rem',
-            }}>
-              {/* Category Header */}
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '1.5rem',
-                marginBottom: '2rem',
-              }}>
-                <div style={{
-                  width: '60px',
-                  height: '60px',
-                  borderRadius: '4px',
-                  backgroundImage: `url(${image})`,
-                  backgroundSize: 'cover',
-                  backgroundPosition: 'center',
-                  flexShrink: 0,
-                  border: '1px solid rgba(255,255,255,0.06)',
-                }} />
-                <div>
-                  <h2 style={{
-                    fontFamily: 'var(--font-cinzel)',
-                    fontSize: '1.6rem',
-                    color: 'var(--offwhite)',
-                  }}>{category}</h2>
-                  <div style={{
-                    width: '40px', height: '2px',
-                    backgroundColor: 'var(--teal)',
-                    marginTop: '0.4rem',
-                  }} />
-                </div>
-              </div>
+        {loading ? (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '8rem',
+            color: 'rgba(245,242,236,0.3)',
+            fontFamily: 'var(--font-inter)',
+          }}>Loading menu…</div>
+        ) : (
+          <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '4rem 3rem' }}>
 
-              {/* Items */}
+            {/* Category Tabs */}
+            <div style={{
+              display: 'flex',
+              gap: '0',
+              borderBottom: '1px solid rgba(255,255,255,0.08)',
+              marginBottom: '3rem',
+              flexWrap: 'wrap',
+            }}>
+              {categories.map(cat => (
+                <button key={cat.id} onClick={() => setActiveCategory(cat.id)} style={{
+                  background: 'transparent',
+                  border: 'none',
+                  borderBottom: `2px solid ${activeCategory === cat.id ? 'var(--teal)' : 'transparent'}`,
+                  color: activeCategory === cat.id ? 'var(--offwhite)' : 'rgba(245,242,236,0.4)',
+                  padding: '0.85rem 1.5rem',
+                  fontSize: '0.78rem',
+                  letterSpacing: '0.15em',
+                  textTransform: 'uppercase',
+                  cursor: 'pointer',
+                  fontFamily: 'var(--font-inter)',
+                  marginBottom: '-1px',
+                  transition: 'all 0.2s',
+                }}>
+                  {cat.name}
+                </button>
+              ))}
+            </div>
+
+            {/* Items Grid */}
+            {activeItems.length === 0 ? (
+              <p style={{ color: 'rgba(245,242,236,0.3)', fontFamily: 'var(--font-inter)' }}>
+                No items in this category yet.
+              </p>
+            ) : (
               <div style={{
                 display: 'grid',
                 gridTemplateColumns: 'repeat(2, 1fr)',
                 gap: '0',
               }}>
-                {items.map(({ name, description, price }) => (
-                  <div key={name} style={{
+                {activeItems.map(item => (
+                  <div key={item.id} style={{
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'flex-start',
@@ -199,18 +156,29 @@ export default function MenuPage() {
                     gap: '1rem',
                   }}>
                     <div style={{ flex: 1 }}>
-                      <p style={{
-                        fontFamily: 'var(--font-cinzel)',
-                        fontSize: '0.95rem',
-                        color: 'var(--offwhite)',
-                        marginBottom: '0.3rem',
-                      }}>{name}</p>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.3rem' }}>
+                        <p style={{
+                          fontFamily: 'var(--font-cinzel)',
+                          fontSize: '0.95rem',
+                          color: 'var(--offwhite)',
+                        }}>{item.name}</p>
+                        {item.badge && (
+                          <span style={{
+                            fontSize: '0.6rem',
+                            padding: '0.15rem 0.5rem',
+                            borderRadius: '50px',
+                            backgroundColor: 'rgba(228,51,41,0.15)',
+                            color: 'var(--red)',
+                            fontFamily: 'var(--font-inter)',
+                          }}>{item.badge}</span>
+                        )}
+                      </div>
                       <p style={{
                         fontFamily: 'var(--font-inter)',
                         fontSize: '0.78rem',
                         color: 'rgba(245,242,236,0.4)',
                         lineHeight: 1.6,
-                      }}>{description}</p>
+                      }}>{item.description}</p>
                     </div>
                     <span style={{
                       fontFamily: 'var(--font-inter)',
@@ -218,13 +186,13 @@ export default function MenuPage() {
                       color: 'var(--teal)',
                       fontWeight: 600,
                       whiteSpace: 'nowrap',
-                    }}>{price}</span>
+                    }}>${item.price}</span>
                   </div>
                 ))}
               </div>
-            </div>
-          ))}
-        </div>
+            )}
+          </div>
+        )}
 
       </main>
       <Footer />
