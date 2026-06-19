@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { onAuthStateChanged } from 'firebase/auth'
 import {
@@ -18,9 +18,13 @@ import {
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 
+type Section = 'Food' | 'Beverage' | 'Sweets'
+
 interface Category {
   id: string
   name: string
+  section: Section
+  image?: string
   order: number
 }
 
@@ -45,17 +49,21 @@ const EMPTY_ITEM = {
   available: true,
 }
 
+const SECTIONS: Section[] = ['Food', 'Beverage', 'Sweets']
+
+const sectionColors: Record<Section, string> = {
+  Food:     'var(--teal)',
+  Beverage: 'var(--purple)',
+  Sweets:   'var(--red)',
+}
+
 function SortableItem({ item, onEdit, onDelete }: {
   item: MenuItem
   onEdit: (item: MenuItem) => void
   onDelete: (id: string) => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: item.id })
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  }
+  const style = { transform: CSS.Transform.toString(transform), transition }
 
   return (
     <div ref={setNodeRef} style={{
@@ -67,7 +75,6 @@ function SortableItem({ item, onEdit, onDelete }: {
       borderBottom: '1px solid rgba(255,255,255,0.04)',
       background: 'rgba(255,255,255,0.01)',
     }}>
-      {/* Drag handle */}
       <div {...attributes} {...listeners} style={{
         cursor: 'grab',
         color: 'rgba(255,255,255,0.2)',
@@ -145,17 +152,35 @@ function SortableItem({ item, onEdit, onDelete }: {
 
 export default function AdminMenuPage() {
   const router = useRouter()
-  const [checking, setChecking]         = useState(true)
-  const [categories, setCategories]     = useState<Category[]>([])
-  const [items, setItems]               = useState<MenuItem[]>([])
+  const [checking, setChecking]             = useState(true)
+  const [categories, setCategories]         = useState<Category[]>([])
+  const [items, setItems]                   = useState<MenuItem[]>([])
   const [activeCategory, setActiveCategory] = useState<string>('')
-  const [loading, setLoading]           = useState(true)
-  const [newCatName, setNewCatName]     = useState('')
-  const [addingCat, setAddingCat]       = useState(false)
-  const [open, setOpen]                 = useState(false)
-  const [editing, setEditing]           = useState<MenuItem | null>(null)
-  const [form, setForm]                 = useState({ ...EMPTY_ITEM })
-  const [saving, setSaving]             = useState(false)
+  const [activeSection, setActiveSection]   = useState<Section>('Food')
+  const [loading, setLoading]               = useState(true)
+
+  // Category add form
+  const [newCatName, setNewCatName]         = useState('')
+  const [newCatSection, setNewCatSection]   = useState<Section>('Food')
+  const [newCatImage, setNewCatImage]       = useState('')
+  const [uploadingCat, setUploadingCat]     = useState(false)
+  const [addingCat, setAddingCat]           = useState(false)
+  const catFileRef                          = useRef<HTMLInputElement>(null)
+
+  // Category edit
+  const [editingCat, setEditingCat]             = useState<Category | null>(null)
+  const [editCatName, setEditCatName]           = useState('')
+  const [editCatSection, setEditCatSection]     = useState<Section>('Food')
+  const [editCatImage, setEditCatImage]         = useState('')
+  const [savingCat, setSavingCat]               = useState(false)
+  const [uploadingEditCat, setUploadingEditCat] = useState(false)
+  const editCatFileRef                          = useRef<HTMLInputElement>(null)
+
+  // Item form
+  const [open, setOpen]       = useState(false)
+  const [editing, setEditing] = useState<MenuItem | null>(null)
+  const [form, setForm]       = useState({ ...EMPTY_ITEM })
+  const [saving, setSaving]   = useState(false)
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -192,16 +217,63 @@ export default function AdminMenuPage() {
 
   useEffect(() => { loadData() }, [])
 
+  async function handleCatImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploadingCat(true)
+    const formData = new FormData()
+    formData.append('image', file)
+    formData.append('key', process.env.NEXT_PUBLIC_IMGBB_API_KEY!)
+    const res  = await fetch('https://api.imgbb.com/1/upload', { method: 'POST', body: formData })
+    const data = await res.json()
+    setNewCatImage(data.data.url)
+    setUploadingCat(false)
+  }
+
+  async function handleEditCatImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploadingEditCat(true)
+    const formData = new FormData()
+    formData.append('image', file)
+    formData.append('key', process.env.NEXT_PUBLIC_IMGBB_API_KEY!)
+    const res  = await fetch('https://api.imgbb.com/1/upload', { method: 'POST', body: formData })
+    const data = await res.json()
+    setEditCatImage(data.data.url)
+    setUploadingEditCat(false)
+  }
+
   async function addCategory() {
     if (!newCatName.trim()) return
     setAddingCat(true)
     await addDoc(collection(db, 'menuCategories'), {
-      name: newCatName.trim(),
-      order: categories.length,
+      name:      newCatName.trim(),
+      section:   newCatSection,
+      image:     newCatImage,
+      order:     categories.filter(c => c.section === newCatSection).length,
       createdAt: serverTimestamp(),
     })
     setNewCatName('')
+    setNewCatImage('')
+    setNewCatSection('Food')
     setAddingCat(false)
+    if (catFileRef.current) catFileRef.current.value = ''
+    loadData()
+  }
+
+  async function handleSaveCat(e: React.FormEvent) {
+    e.preventDefault()
+    if (!editingCat) return
+    setSavingCat(true)
+    await updateDoc(doc(db, 'menuCategories', editingCat.id), {
+      name:      editCatName,
+      section:   editCatSection,
+      image:     editCatImage,
+      updatedAt: serverTimestamp(),
+    })
+    setSavingCat(false)
+    setEditingCat(null)
+    if (editCatFileRef.current) editCatFileRef.current.value = ''
     loadData()
   }
 
@@ -247,9 +319,9 @@ export default function AdminMenuPage() {
       await addDoc(collection(db, 'menuItems'), {
         ...form,
         categoryId: activeCategory,
-        order: catItems.length,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
+        order:      catItems.length,
+        createdAt:  serverTimestamp(),
+        updatedAt:  serverTimestamp(),
       })
     }
     setSaving(false)
@@ -266,13 +338,11 @@ export default function AdminMenuPage() {
   async function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event
     if (!over || active.id === over.id) return
-
-    const catItems = items.filter(i => i.categoryId === activeCategory)
-    const oldIndex = catItems.findIndex(i => i.id === active.id)
-    const newIndex = catItems.findIndex(i => i.id === over.id)
+    const catItems  = items.filter(i => i.categoryId === activeCategory)
+    const oldIndex  = catItems.findIndex(i => i.id === active.id)
+    const newIndex  = catItems.findIndex(i => i.id === over.id)
     const reordered = arrayMove(catItems, oldIndex, newIndex)
-
-    const batch = writeBatch(db)
+    const batch     = writeBatch(db)
     reordered.forEach((item, index) => {
       batch.update(doc(db, 'menuItems', item.id), { order: index })
     })
@@ -280,7 +350,8 @@ export default function AdminMenuPage() {
     loadData()
   }
 
-  const activeCatItems = items.filter(i => i.categoryId === activeCategory)
+  const sectionCategories = categories.filter(c => c.section === activeSection)
+  const activeCatItems    = items.filter(i => i.categoryId === activeCategory)
 
   const inputStyle = {
     width: '100%',
@@ -332,8 +403,8 @@ export default function AdminMenuPage() {
               Menu Manager
             </h1>
           </div>
-          <button onClick={openNew} style={{
-            backgroundColor: 'var(--teal)',
+          <button onClick={openNew} disabled={!activeCategory} style={{
+            backgroundColor: sectionColors[activeSection],
             color: '#fff',
             padding: '0.7rem 1.5rem',
             border: 'none',
@@ -341,40 +412,121 @@ export default function AdminMenuPage() {
             fontSize: '0.75rem',
             letterSpacing: '0.1em',
             textTransform: 'uppercase',
-            cursor: 'pointer',
+            cursor: !activeCategory ? 'not-allowed' : 'pointer',
             fontFamily: 'var(--font-inter)',
+            opacity: !activeCategory ? 0.5 : 1,
           }}>+ Add Item</button>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: '2rem' }}>
+        {/* Section Tabs */}
+        <div style={{
+          display: 'flex',
+          gap: '0',
+          borderBottom: '1px solid rgba(255,255,255,0.08)',
+          marginBottom: '2rem',
+        }}>
+          {SECTIONS.map(s => (
+            <button key={s} onClick={() => {
+              setActiveSection(s)
+              const firstCat = categories.find(c => c.section === s)
+              if (firstCat) setActiveCategory(firstCat.id)
+              else setActiveCategory('')
+            }} style={{
+              background: 'transparent',
+              border: 'none',
+              borderBottom: `2px solid ${activeSection === s ? sectionColors[s] : 'transparent'}`,
+              color: activeSection === s ? 'var(--offwhite)' : 'rgba(245,242,236,0.4)',
+              padding: '0.85rem 2rem',
+              fontSize: '0.78rem',
+              letterSpacing: '0.15em',
+              textTransform: 'uppercase',
+              cursor: 'pointer',
+              fontFamily: 'var(--font-inter)',
+              marginBottom: '-1px',
+            }}>{s}</button>
+          ))}
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: '2rem' }}>
 
           {/* Left — Categories */}
           <div>
-            <p style={{ ...labelStyle, marginBottom: '1rem' }}>Categories</p>
+            <p style={{ ...labelStyle, marginBottom: '1rem' }}>
+              {activeSection} Categories
+            </p>
 
             <div style={{
               background: 'rgba(255,255,255,0.02)',
               border: '1px solid rgba(255,255,255,0.06)',
               borderRadius: '4px',
               overflow: 'hidden',
-              marginBottom: '1rem',
+              marginBottom: '1.5rem',
             }}>
-              {categories.map(cat => (
+              {sectionCategories.length === 0 ? (
+                <p style={{
+                  padding: '1.5rem',
+                  fontFamily: 'var(--font-inter)',
+                  fontSize: '0.82rem',
+                  color: 'rgba(245,242,236,0.2)',
+                }}>No categories yet</p>
+              ) : sectionCategories.map(cat => (
                 <div key={cat.id} style={{
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: '0.9rem 1rem',
+                  gap: '0.8rem',
+                  padding: '0.8rem 1rem',
                   borderBottom: '1px solid rgba(255,255,255,0.04)',
-                  backgroundColor: activeCategory === cat.id ? 'rgba(0,160,152,0.1)' : 'transparent',
+                  backgroundColor: activeCategory === cat.id
+                    ? `${sectionColors[activeSection]}15`
+                    : 'transparent',
                   cursor: 'pointer',
-                  borderLeft: activeCategory === cat.id ? '2px solid var(--teal)' : '2px solid transparent',
+                  borderLeft: activeCategory === cat.id
+                    ? `2px solid ${sectionColors[activeSection]}`
+                    : '2px solid transparent',
                 }} onClick={() => setActiveCategory(cat.id)}>
+
+                  {cat.image ? (
+                    <div style={{
+                      width: '36px', height: '36px',
+                      borderRadius: '2px',
+                      backgroundImage: `url(${cat.image})`,
+                      backgroundSize: 'cover',
+                      backgroundPosition: 'center',
+                      flexShrink: 0,
+                    }} />
+                  ) : (
+                    <div style={{
+                      width: '36px', height: '36px',
+                      borderRadius: '2px',
+                      backgroundColor: 'rgba(255,255,255,0.04)',
+                      flexShrink: 0,
+                    }} />
+                  )}
+
                   <span style={{
                     fontFamily: 'var(--font-inter)',
                     fontSize: '0.85rem',
-                    color: activeCategory === cat.id ? 'var(--teal)' : 'rgba(245,242,236,0.6)',
+                    color: activeCategory === cat.id
+                      ? sectionColors[activeSection]
+                      : 'rgba(245,242,236,0.6)',
+                    flex: 1,
                   }}>{cat.name}</span>
+
+                  <button onClick={e => {
+                    e.stopPropagation()
+                    setEditingCat(cat)
+                    setEditCatName(cat.name)
+                    setEditCatSection(cat.section)
+                    setEditCatImage(cat.image ?? '')
+                  }} style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: 'rgba(245,242,236,0.3)',
+                    cursor: 'pointer',
+                    fontSize: '0.7rem',
+                    padding: '0.2rem 0.4rem',
+                  }}>✏️</button>
+
                   <button onClick={e => { e.stopPropagation(); deleteCategory(cat.id) }} style={{
                     background: 'transparent',
                     border: 'none',
@@ -387,36 +539,79 @@ export default function AdminMenuPage() {
               ))}
             </div>
 
-            {/* Add Category */}
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
+            {/* Add Category Form */}
+            <div style={{
+              background: 'rgba(255,255,255,0.02)',
+              border: '1px solid rgba(255,255,255,0.06)',
+              borderRadius: '4px',
+              padding: '1.2rem',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '0.8rem',
+            }}>
+              <p style={{ ...labelStyle, margin: 0 }}>Add Category</p>
+
               <input
                 type="text"
-                placeholder="New category…"
+                placeholder="Category name…"
                 value={newCatName}
                 onChange={e => setNewCatName(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && addCategory()}
-                style={{
-                  flex: 1,
-                  backgroundColor: '#1a1a1a',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  color: '#F5F2EC',
-                  padding: '0.6rem 0.8rem',
-                  borderRadius: '2px',
-                  fontSize: '0.82rem',
-                  outline: 'none',
-                  fontFamily: 'var(--font-inter)',
-                }}
+                style={{ ...inputStyle, padding: '0.6rem 0.8rem', fontSize: '0.82rem' }}
               />
-              <button onClick={addCategory} disabled={addingCat} style={{
-                backgroundColor: 'var(--teal)',
-                border: 'none',
-                color: '#fff',
-                padding: '0.6rem 0.8rem',
-                borderRadius: '2px',
-                fontSize: '0.82rem',
-                cursor: 'pointer',
-                fontFamily: 'var(--font-inter)',
-              }}>+</button>
+
+              <select
+                value={newCatSection}
+                onChange={e => setNewCatSection(e.target.value as Section)}
+                style={{ ...inputStyle, padding: '0.6rem 0.8rem', fontSize: '0.82rem', color: '#F5F2EC', backgroundColor: '#1a1a1a' }}
+              >
+                {SECTIONS.map(s => (
+                  <option key={s} value={s} style={{ backgroundColor: '#1a1a1a', color: '#F5F2EC' }}>{s}</option>
+                ))}
+              </select>
+
+              <div>
+                <label style={{ ...labelStyle, marginBottom: '0.4rem' }}>Category Image</label>
+                <input
+                  ref={catFileRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleCatImageUpload}
+                  style={{ ...inputStyle, padding: '0.5rem', fontSize: '0.78rem', cursor: 'pointer' }}
+                />
+                {uploadingCat && (
+                  <p style={{ fontSize: '0.72rem', color: 'var(--teal)', fontFamily: 'var(--font-inter)', marginTop: '0.3rem' }}>
+                    Uploading…
+                  </p>
+                )}
+                {newCatImage && !uploadingCat && (
+                  <img src={newCatImage} alt="preview" style={{
+                    width: '100%', height: '80px',
+                    objectFit: 'cover', borderRadius: '2px',
+                    marginTop: '0.5rem',
+                    border: '1px solid rgba(255,255,255,0.06)',
+                  }} />
+                )}
+              </div>
+
+              <button
+                onClick={addCategory}
+                disabled={addingCat || uploadingCat || !newCatName.trim()}
+                style={{
+                  backgroundColor: sectionColors[newCatSection],
+                  border: 'none',
+                  color: '#fff',
+                  padding: '0.65rem',
+                  borderRadius: '2px',
+                  fontSize: '0.78rem',
+                  letterSpacing: '0.08em',
+                  textTransform: 'uppercase',
+                  cursor: 'pointer',
+                  fontFamily: 'var(--font-inter)',
+                  opacity: addingCat || uploadingCat || !newCatName.trim() ? 0.5 : 1,
+                }}
+              >
+                {addingCat ? 'Adding…' : '+ Add Category'}
+              </button>
             </div>
           </div>
 
@@ -438,6 +633,16 @@ export default function AdminMenuPage() {
 
             {loading ? (
               <p style={{ color: 'rgba(245,242,236,0.3)', fontFamily: 'var(--font-inter)' }}>Loading…</p>
+            ) : !activeCategory ? (
+              <div style={{
+                border: '1px dashed rgba(255,255,255,0.08)',
+                borderRadius: '4px',
+                padding: '3rem',
+                textAlign: 'center',
+                color: 'rgba(245,242,236,0.2)',
+                fontFamily: 'var(--font-inter)',
+                fontSize: '0.85rem',
+              }}>Select or create a category on the left</div>
             ) : activeCatItems.length === 0 ? (
               <div style={{
                 border: '1px dashed rgba(255,255,255,0.08)',
@@ -447,9 +652,7 @@ export default function AdminMenuPage() {
                 color: 'rgba(245,242,236,0.2)',
                 fontFamily: 'var(--font-inter)',
                 fontSize: '0.85rem',
-              }}>
-                No items yet — click + Add Item to get started
-              </div>
+              }}>No items yet — click + Add Item to get started</div>
             ) : (
               <div style={{
                 background: 'rgba(255,255,255,0.02)',
@@ -470,7 +673,106 @@ export default function AdminMenuPage() {
         </div>
       </div>
 
-      {/* Modal */}
+      {/* Edit Category Modal */}
+      {editingCat && (
+        <div style={{
+          position: 'fixed', inset: 0,
+          backgroundColor: 'rgba(0,0,0,0.85)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 200,
+          padding: '2rem',
+        }}>
+          <div style={{
+            backgroundColor: '#111',
+            border: '1px solid rgba(255,255,255,0.1)',
+            borderRadius: '8px',
+            width: '100%',
+            maxWidth: '480px',
+          }}>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '1.5rem 2rem',
+              borderBottom: '1px solid rgba(255,255,255,0.06)',
+            }}>
+              <h2 style={{ fontFamily: 'var(--font-cinzel)', fontSize: '1.2rem', color: 'var(--offwhite)' }}>
+                Edit Category
+              </h2>
+              <button onClick={() => setEditingCat(null)} style={{
+                background: 'transparent', border: 'none',
+                color: 'rgba(245,242,236,0.4)', fontSize: '1.2rem', cursor: 'pointer',
+              }}>✕</button>
+            </div>
+
+            <form onSubmit={handleSaveCat} style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+              <div>
+                <label style={labelStyle}>Category Name</label>
+                <input type="text" value={editCatName} required
+                  onChange={e => setEditCatName(e.target.value)}
+                  style={inputStyle} />
+              </div>
+
+              <div>
+                <label style={labelStyle}>Section</label>
+                <select value={editCatSection}
+                  onChange={e => setEditCatSection(e.target.value as Section)}
+                  style={{ ...inputStyle, color: '#F5F2EC', backgroundColor: '#1a1a1a' }}>
+                  {SECTIONS.map(s => (
+                    <option key={s} value={s} style={{ backgroundColor: '#1a1a1a', color: '#F5F2EC' }}>{s}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label style={labelStyle}>Category Image</label>
+                <input
+                  ref={editCatFileRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleEditCatImageUpload}
+                  style={{ ...inputStyle, padding: '0.5rem', fontSize: '0.78rem', cursor: 'pointer' }}
+                />
+                {uploadingEditCat && (
+                  <p style={{ fontSize: '0.72rem', color: 'var(--teal)', fontFamily: 'var(--font-inter)', marginTop: '0.3rem' }}>
+                    Uploading…
+                  </p>
+                )}
+                {editCatImage && !uploadingEditCat && (
+                  <img src={editCatImage} alt="preview" style={{
+                    width: '100%', height: '100px',
+                    objectFit: 'cover', borderRadius: '2px',
+                    marginTop: '0.5rem',
+                    border: '1px solid rgba(255,255,255,0.06)',
+                  }} />
+                )}
+              </div>
+
+              <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
+                <button type="button" onClick={() => setEditingCat(null)} style={{
+                  flex: 1, background: 'transparent',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  color: 'rgba(245,242,236,0.5)', padding: '0.8rem',
+                  borderRadius: '2px', fontSize: '0.75rem',
+                  cursor: 'pointer', fontFamily: 'var(--font-inter)',
+                }}>Cancel</button>
+                <button type="submit" disabled={savingCat || uploadingEditCat} style={{
+                  flex: 1, backgroundColor: sectionColors[editCatSection],
+                  border: 'none', color: '#fff', padding: '0.8rem',
+                  borderRadius: '2px', fontSize: '0.75rem',
+                  cursor: savingCat ? 'not-allowed' : 'pointer',
+                  opacity: savingCat || uploadingEditCat ? 0.6 : 1,
+                  fontFamily: 'var(--font-inter)',
+                }}>{savingCat ? 'Saving…' : 'Save Changes'}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Item Modal */}
       {open && (
         <div style={{
           position: 'fixed', inset: 0,
@@ -545,9 +847,9 @@ export default function AdminMenuPage() {
                         flex: 1,
                         padding: '0.6rem',
                         borderRadius: '2px',
-                        border: `1px solid ${form.available === val ? 'var(--teal)' : 'rgba(255,255,255,0.1)'}`,
-                        backgroundColor: form.available === val ? 'rgba(0,160,152,0.15)' : 'transparent',
-                        color: form.available === val ? 'var(--teal)' : 'rgba(245,242,236,0.4)',
+                        border: `1px solid ${form.available === val ? sectionColors[activeSection] : 'rgba(255,255,255,0.1)'}`,
+                        backgroundColor: form.available === val ? `${sectionColors[activeSection]}20` : 'transparent',
+                        color: form.available === val ? sectionColors[activeSection] : 'rgba(245,242,236,0.4)',
                         cursor: 'pointer',
                         fontFamily: 'var(--font-inter)',
                         fontSize: '0.78rem',
@@ -567,7 +869,7 @@ export default function AdminMenuPage() {
                   cursor: 'pointer', fontFamily: 'var(--font-inter)',
                 }}>Cancel</button>
                 <button type="submit" disabled={saving} style={{
-                  flex: 1, backgroundColor: 'var(--teal)',
+                  flex: 1, backgroundColor: sectionColors[activeSection],
                   border: 'none', color: '#fff', padding: '0.8rem',
                   borderRadius: '2px', fontSize: '0.75rem',
                   cursor: saving ? 'not-allowed' : 'pointer',

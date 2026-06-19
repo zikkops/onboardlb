@@ -1,19 +1,40 @@
-import Link from 'next/link'
+'use client'
 
-const categories = [
-  { label: 'Appetizers',       image: 'https://images.unsplash.com/photo-1541014741259-de529411b96a?w=400&q=80' },
-  { label: 'Sandwiches',       image: 'https://images.unsplash.com/photo-1528735602780-2552fd46c7af?w=400&q=80' },
-  { label: 'Burgers',          image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400&q=80' },
-  { label: 'Salads',           image: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=400&q=80' },
-  { label: 'Milkshakes',       image: 'https://images.unsplash.com/photo-1572490122747-3968b75cc699?w=400&q=80' },
-  { label: 'Tea',              image: 'https://images.unsplash.com/photo-1556679343-c7306c1976bc?w=400&q=80' },
-  { label: 'Cookies',          image: 'https://images.unsplash.com/photo-1499636136210-6f4ee915583e?w=400&q=80' },
-  { label: 'Soft Drinks',      image: 'https://images.unsplash.com/photo-1581006852262-e4307cf6283a?w=400&q=80' },
-  { label: 'Beers',            image: 'https://images.unsplash.com/photo-1608270586620-248524c67de9?w=400&q=80' },
-  { label: 'Alcoholic Drinks', image: 'https://images.unsplash.com/photo-1551538827-9c037cb4f32a?w=400&q=80' },
-]
+import Link from 'next/link'
+import { useEffect, useState } from 'react'
+import { collection, getDocs } from 'firebase/firestore'
+import { db } from '../../lib/firebase'
+
+interface Category {
+  id: string
+  name: string
+  section: string
+  image?: string
+  order: number
+}
 
 export default function MenuPreview() {
+  const [categories, setCategories] = useState<Category[]>([])
+  const [loading, setLoading]       = useState(true)
+
+  useEffect(() => {
+    async function load() {
+      const snap = await getDocs(collection(db, 'menuCategories'))
+      const cats = snap.docs
+        .map(d => ({ id: d.id, ...d.data() } as Category))
+        .sort((a, b) => a.order - b.order)
+      setCategories(cats)
+      setLoading(false)
+    }
+    load()
+  }, [])
+
+  // Pick 4 food, 3 beverage, 2 sweets
+  const food     = categories.filter(c => c.section === 'Food').slice(0, 4)
+  const beverage = categories.filter(c => c.section === 'Beverage').slice(0, 3)
+  const sweets   = categories.filter(c => c.section === 'Sweets').slice(0, 2)
+  const display  = [...food, ...beverage, ...sweets]
+
   return (
     <section style={{
       backgroundColor: 'rgba(255,255,255,0.015)',
@@ -31,29 +52,17 @@ export default function MenuPreview() {
           color: 'var(--teal)',
           marginBottom: '1rem',
           fontFamily: 'var(--font-inter)',
-        }}>
-          Food & Drinks
-        </p>
+        }}>Food & Drinks</p>
 
-        <div style={{
-          display: 'flex',
-          alignItems: 'flex-end',
-          justifyContent: 'space-between',
+        <h2 style={{
+          fontFamily: 'var(--font-cinzel)',
+          fontSize: '2.8rem',
+          color: 'var(--offwhite)',
+          lineHeight: 1.2,
           marginBottom: '1.5rem',
-          flexWrap: 'wrap',
-          gap: '1rem',
         }}>
-          <h2 style={{
-            fontFamily: 'var(--font-cinzel)',
-            fontSize: '2.8rem',
-            color: 'var(--offwhite)',
-            lineHeight: 1.2,
-          }}>
-            Fuel for<br />the Game
-          </h2>
-
-          
-        </div>
+          Fuel for<br />the Game
+        </h2>
 
         <div style={{
           width: '60px', height: '2px',
@@ -61,78 +70,126 @@ export default function MenuPreview() {
           marginBottom: '3rem',
         }} />
 
-        {/* Category Grid */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(5, 1fr)',
-          gap: '1rem',
-        }}>
-          {categories.map(({ label, image }) => (
-            <Link key={label} href="/menu" style={{
+        {loading ? (
+          <p style={{ color: 'rgba(245,242,236,0.3)', fontFamily: 'var(--font-inter)' }}>Loading…</p>
+        ) : (
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(5, 1fr)',
+            gap: '1rem',
+          }}>
+            {/* Category Cards */}
+            {display.map(({ id, name, image, section }) => {
+              const color = section === 'Food'
+                ? 'var(--teal)'
+                : section === 'Beverage'
+                ? 'var(--purple)'
+                : 'var(--red)'
+
+              return (
+                <Link key={id} href="/menu" style={{
+                  position: 'relative',
+                  height: '180px',
+                  borderRadius: '4px',
+                  overflow: 'hidden',
+                  textDecoration: 'none',
+                  display: 'block',
+                  border: '1px solid rgba(255,255,255,0.06)',
+                }}>
+                  {/* Background image or color */}
+                  {image ? (
+                    <div style={{
+                      position: 'absolute', inset: 0,
+                      backgroundImage: `url(${image})`,
+                      backgroundSize: 'cover',
+                      backgroundPosition: 'center',
+                    }} />
+                  ) : (
+                    <div style={{
+                      position: 'absolute', inset: 0,
+                      backgroundColor: 'rgba(255,255,255,0.03)',
+                    }} />
+                  )}
+
+                  {/* Overlay */}
+                  <div style={{
+                    position: 'absolute', inset: 0,
+                    background: 'linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.2) 100%)',
+                  }} />
+
+                  {/* Section dot */}
+                  <div style={{
+                    position: 'absolute',
+                    top: '0.7rem',
+                    right: '0.7rem',
+                    width: '6px',
+                    height: '6px',
+                    borderRadius: '50%',
+                    backgroundColor: color,
+                  }} />
+
+                  {/* Label */}
+                  <div style={{
+                    position: 'absolute',
+                    bottom: '1rem',
+                    left: '1rem',
+                    right: '1rem',
+                  }}>
+                    <p style={{
+                      fontFamily: 'var(--font-cinzel)',
+                      fontSize: '0.85rem',
+                      color: '#fff',
+                      letterSpacing: '0.05em',
+                    }}>{name}</p>
+                    <p style={{
+                      fontFamily: 'var(--font-inter)',
+                      fontSize: '0.65rem',
+                      color: color,
+                      letterSpacing: '0.1em',
+                      textTransform: 'uppercase',
+                      marginTop: '0.2rem',
+                    }}>{section}</p>
+                  </div>
+                </Link>
+              )
+            })}
+
+            {/* Last card — Go to Menu */}
+            <Link href="/menu" style={{
               position: 'relative',
               height: '180px',
               borderRadius: '4px',
               overflow: 'hidden',
               textDecoration: 'none',
-              display: 'block',
-              border: '1px solid rgba(255,255,255,0.06)',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.8rem',
+              border: '1px solid rgba(0,160,152,0.25)',
+              background: 'rgba(0,160,152,0.05)',
             }}>
-              {/* Background image */}
               <div style={{
-                position: 'absolute',
-                inset: 0,
-                backgroundImage: `url(${image})`,
-                backgroundSize: 'cover',
-                backgroundPosition: 'center',
-                transition: 'transform 0.4s ease',
-              }} />
-
-              {/* Dark overlay */}
-              <div style={{
-                position: 'absolute',
-                inset: 0,
-                background: 'linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.3) 100%)',
-              }} />
-
-              {/* Label */}
-              <div style={{
-                position: 'absolute',
-                bottom: '1rem',
-                left: '1rem',
-                right: '1rem',
-              }}>
-                <p style={{
-                  fontFamily: 'var(--font-cinzel)',
-                  fontSize: '0.85rem',
-                  color: '#fff',
-                  letterSpacing: '0.05em',
-                }}>
-                  {label}
-                </p>
-              </div>
-
+                width: '44px',
+                height: '44px',
+                borderRadius: '50%',
+                border: '1px solid rgba(0,160,152,0.4)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'var(--teal)',
+                fontSize: '1.2rem',
+              }}>{'→'}</div>
+              <p style={{
+                fontFamily: 'var(--font-cinzel)',
+                fontSize: '0.85rem',
+                color: 'var(--offwhite)',
+                textAlign: 'center',
+                padding: '0 1rem',
+              }}>View Full Menu</p>
             </Link>
-          ))}
-        </div>
-
-        {/* Bottom CTA */}
-        <div style={{ textAlign: 'center', marginTop: '3rem' }}>
-          <Link href="/menu" style={{
-            display: 'inline-block',
-            border: '1px solid rgba(255,255,255,0.2)',
-            color: 'var(--offwhite)',
-            padding: '0.9rem 3rem',
-            borderRadius: '2px',
-            fontSize: '0.78rem',
-            letterSpacing: '0.15em',
-            textTransform: 'uppercase',
-            textDecoration: 'none',
-            fontFamily: 'var(--font-inter)',
-          }}>
-            View Full Menu
-          </Link>
-        </div>
-
+          </div>
+        )}
       </div>
     </section>
   )

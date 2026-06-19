@@ -23,6 +23,7 @@ interface GameEvent {
   maxPlayers: number
   registrationLink?: string
   image?: string
+  contactNumber?: string
 }
 
 interface EventType {
@@ -43,23 +44,30 @@ const EMPTY = {
   maxPlayers: 6,
   registrationLink: '',
   image: '',
+  contactNumber: '+96181950042',
 }
 
 const BRANCHES = ['Beirut', 'Zouk', 'Broummana', 'All Branches']
 
+const BRANCH_NUMBERS = [
+  { label: 'Hamra',     number: '+96181950042' },
+  { label: 'Zouk',      number: '+96170973242' },
+  { label: 'Broummana', number: '+96176648054' },
+]
+
 export default function AdminEventsPage() {
   const router = useRouter()
-  const [checking, setChecking]       = useState(true)
-  const [events, setEvents]           = useState<GameEvent[]>([])
-  const [eventTypes, setEventTypes]   = useState<EventType[]>([])
-  const [loading, setLoading]         = useState(true)
-  const [open, setOpen]               = useState(false)
-  const [editing, setEditing]         = useState<GameEvent | null>(null)
-  const [form, setForm]               = useState({ ...EMPTY })
-  const [saving, setSaving]           = useState(false)
-  const [uploading, setUploading]     = useState(false)
-  const [newType, setNewType]         = useState('')
-  const [addingType, setAddingType]   = useState(false)
+  const [checking, setChecking]               = useState(true)
+  const [events, setEvents]                   = useState<GameEvent[]>([])
+  const [eventTypes, setEventTypes]           = useState<EventType[]>([])
+  const [loading, setLoading]                 = useState(true)
+  const [open, setOpen]                       = useState(false)
+  const [editing, setEditing]                 = useState<GameEvent | null>(null)
+  const [form, setForm]                       = useState({ ...EMPTY })
+  const [saving, setSaving]                   = useState(false)
+  const [uploading, setUploading]             = useState(false)
+  const [newType, setNewType]                 = useState('')
+  const [addingType, setAddingType]           = useState(false)
   const [showTypeManager, setShowTypeManager] = useState(false)
 
   useEffect(() => {
@@ -75,18 +83,12 @@ export default function AdminEventsPage() {
       getDocs(collection(db, 'events')),
       getDocs(collection(db, 'eventTypes')),
     ])
-
     const evs = evSnap.docs
       .map(d => ({ id: d.id, ...d.data() } as GameEvent))
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-
     const types = typeSnap.docs.map(d => ({ id: d.id, ...d.data() } as EventType))
-
     setEvents(evs)
     setEventTypes(types)
-    if (types.length > 0 && !form.type) {
-      setForm(f => ({ ...f, type: types[0].name }))
-    }
     setLoading(false)
   }
 
@@ -144,6 +146,7 @@ export default function AdminEventsPage() {
       maxPlayers:       ev.maxPlayers,
       registrationLink: ev.registrationLink ?? '',
       image:            ev.image ?? '',
+      contactNumber:    ev.contactNumber ?? '+96181950042',
     })
     setOpen(true)
   }
@@ -277,13 +280,9 @@ export default function AdminEventsPage() {
                     {t.name}
                   </span>
                   <button onClick={() => deleteEventType(t.id)} style={{
-                    background: 'transparent',
-                    border: 'none',
-                    color: 'rgba(228,51,41,0.6)',
-                    cursor: 'pointer',
-                    fontSize: '0.75rem',
-                    padding: '0',
-                    lineHeight: 1,
+                    background: 'transparent', border: 'none',
+                    color: 'rgba(228,51,41,0.6)', cursor: 'pointer',
+                    fontSize: '0.75rem', padding: '0', lineHeight: 1,
                   }}>✕</button>
                 </div>
               ))}
@@ -308,14 +307,10 @@ export default function AdminEventsPage() {
                 }}
               />
               <button onClick={addEventType} disabled={addingType} style={{
-                backgroundColor: 'var(--red)',
-                border: 'none',
-                color: '#fff',
-                padding: '0.6rem 1rem',
-                borderRadius: '2px',
-                fontSize: '0.82rem',
-                cursor: 'pointer',
-                fontFamily: 'var(--font-inter)',
+                backgroundColor: 'var(--red)', border: 'none',
+                color: '#fff', padding: '0.6rem 1rem',
+                borderRadius: '2px', fontSize: '0.82rem',
+                cursor: 'pointer', fontFamily: 'var(--font-inter)',
               }}>+ Add</button>
             </div>
           </div>
@@ -332,9 +327,7 @@ export default function AdminEventsPage() {
             textAlign: 'center',
             color: 'rgba(245,242,236,0.2)',
             fontFamily: 'var(--font-inter)',
-          }}>
-            No events yet — click + Add Event to get started
-          </div>
+          }}>No events yet — click + Add Event to get started</div>
         ) : (
           <div style={{
             display: 'grid',
@@ -349,7 +342,6 @@ export default function AdminEventsPage() {
                   borderRadius: '4px',
                   overflow: 'hidden',
                 }}>
-                  {/* Image */}
                   {ev.image ? (
                     <div style={{
                       height: '140px',
@@ -424,17 +416,24 @@ export default function AdminEventsPage() {
                     }}>
                       <span style={{ color: 'var(--teal)' }}>{ev.branch}</span>
                       <span>{ev.timeStart} – {ev.timeEnd}</span>
-                      <span>{ev.price === 0 ? 'Free' : `$${ev.price}/player`}</span>
+                      <span>{ev.price === 0 ? 'Free' : `$${ev.price}/person`}</span>
                     </div>
 
                     <div style={{
                       fontSize: '0.72rem',
                       color: 'rgba(245,242,236,0.4)',
                       fontFamily: 'var(--font-inter)',
-                      marginBottom: '1rem',
-                    }}>
-                      👥 {ev.minPlayers}–{ev.maxPlayers} players
-                    </div>
+                      marginBottom: '0.5rem',
+                    }}>👥 {ev.minPlayers}–{ev.maxPlayers} players</div>
+
+                    {ev.contactNumber && (
+                      <div style={{
+                        fontSize: '0.7rem',
+                        color: 'var(--teal)',
+                        fontFamily: 'var(--font-inter)',
+                        marginBottom: '1rem',
+                      }}>📞 {ev.contactNumber}</div>
+                    )}
 
                     <div style={{ display: 'flex', gap: '0.5rem' }}>
                       <button onClick={() => openEdit(ev)} style={{
@@ -601,7 +600,7 @@ export default function AdminEventsPage() {
                     style={inputStyle} />
                 </div>
                 <div>
-                  <label style={labelStyle}>Price per Player ($)</label>
+                  <label style={labelStyle}>Price ($)</label>
                   <input type="number" min={0} value={form.price}
                     onChange={e => setForm(f => ({ ...f, price: +e.target.value }))}
                     style={inputStyle} />
@@ -630,6 +629,7 @@ export default function AdminEventsPage() {
               display: 'flex',
               flexDirection: 'column',
               gap: '1.5rem',
+              overflowY: 'auto',
             }}>
               <p style={{
                 fontSize: '0.68rem',
@@ -637,8 +637,9 @@ export default function AdminEventsPage() {
                 textTransform: 'uppercase',
                 color: 'var(--red)',
                 fontFamily: 'var(--font-inter)',
-              }}>Event Image</p>
+              }}>Image & Contact</p>
 
+              {/* Image Upload */}
               <div>
                 <label style={labelStyle}>Upload Image</label>
                 <input type="file" accept="image/*" onChange={handleImageUpload}
@@ -656,25 +657,20 @@ export default function AdminEventsPage() {
               {/* Image Preview */}
               {form.image && !uploading ? (
                 <div style={{
-                  flex: 1,
                   borderRadius: '4px',
                   overflow: 'hidden',
                   border: '1px solid rgba(255,255,255,0.06)',
-                  position: 'relative',
-                  minHeight: '250px',
+                  height: '200px',
                 }}>
                   <img src={form.image} alt="Preview" style={{
                     width: '100%',
                     height: '100%',
                     objectFit: 'cover',
-                    position: 'absolute',
-                    inset: 0,
                   }} />
                 </div>
               ) : (
                 <div style={{
-                  flex: 1,
-                  minHeight: '250px',
+                  height: '200px',
                   border: '1px dashed rgba(255,255,255,0.1)',
                   borderRadius: '4px',
                   display: 'flex',
@@ -683,10 +679,78 @@ export default function AdminEventsPage() {
                   color: 'rgba(245,242,236,0.2)',
                   fontFamily: 'var(--font-inter)',
                   fontSize: '0.82rem',
-                }}>
-                  Image preview will appear here
-                </div>
+                }}>Image preview will appear here</div>
               )}
+
+              {/* Contact Number */}
+              <div>
+                <label style={labelStyle}>WhatsApp Contact Number</label>
+
+                {/* Quick select branch numbers */}
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '0.5rem',
+                  marginBottom: '0.8rem',
+                }}>
+                  {BRANCH_NUMBERS.map(({ label, number }) => (
+                    <button
+                      key={label}
+                      type="button"
+                      onClick={() => setForm(f => ({ ...f, contactNumber: number }))}
+                      style={{
+                        backgroundColor: form.contactNumber === number
+                          ? 'rgba(0,160,152,0.15)'
+                          : 'transparent',
+                        border: `1px solid ${form.contactNumber === number
+                          ? 'var(--teal)'
+                          : 'rgba(255,255,255,0.1)'}`,
+                        color: form.contactNumber === number
+                          ? 'var(--teal)'
+                          : 'rgba(245,242,236,0.5)',
+                        padding: '0.6rem 1rem',
+                        borderRadius: '2px',
+                        fontSize: '0.78rem',
+                        letterSpacing: '0.05em',
+                        cursor: 'pointer',
+                        fontFamily: 'var(--font-inter)',
+                        textAlign: 'left',
+                        transition: 'all 0.2s',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <span style={{ fontWeight: 600 }}>{label}</span>
+                      <span style={{ opacity: 0.7 }}>{number}</span>
+                    </button>
+                  ))}
+                </div>
+
+                {/* Custom number input */}
+                <label style={{ ...labelStyle, marginBottom: '0.4rem' }}>
+                  Or enter a custom number
+                </label>
+                <input
+                  type="tel"
+                  placeholder="+9611234567"
+                  value={form.contactNumber}
+                  onChange={e => setForm(f => ({ ...f, contactNumber: e.target.value }))}
+                  style={inputStyle}
+                />
+
+                {/* Preview link */}
+                {form.contactNumber && (
+                  <p style={{
+                    marginTop: '0.5rem',
+                    fontSize: '0.72rem',
+                    color: 'var(--teal)',
+                    fontFamily: 'var(--font-inter)',
+                  }}>
+                    ✓ WhatsApp: wa.me/{form.contactNumber.replace(/\+/g, '')}
+                  </p>
+                )}
+              </div>
 
               {/* Preview Card */}
               <div style={{
@@ -713,9 +777,7 @@ export default function AdminEventsPage() {
                   <span style={{ color: 'var(--teal)' }}>{form.branch}</span>
                   <span>{form.date}</span>
                   <span>{form.timeStart} – {form.timeEnd}</span>
-                  <span style={{ color: 'var(--teal)' }}>
-                    {form.price === 0 ? 'Free entry' : `$${form.price} per person`}
-                  </span>
+                  <span>{form.price === 0 ? 'Free' : `$${form.price}/person`}</span>
                   <span>👥 {form.minPlayers}–{form.maxPlayers}</span>
                 </div>
               </div>

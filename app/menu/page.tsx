@@ -6,9 +6,13 @@ import { db } from '../lib/firebase'
 import Navbar from '../components/layout/Navbar'
 import Footer from '../components/layout/Footer'
 
+type Section = 'Food' | 'Beverage' | 'Sweets'
+
 interface Category {
   id: string
   name: string
+  section: Section
+  image?: string
   order: number
 }
 
@@ -23,11 +27,30 @@ interface MenuItem {
   available: boolean
 }
 
+const SECTIONS: Section[] = ['Food', 'Beverage', 'Sweets']
+
+const sectionColors: Record<Section, string> = {
+  Food:     '#00A098',
+  Beverage: '#6A6AB7',
+  Sweets:   '#E43329',
+}
+
+const sectionBg: Record<Section, string> = {
+  Food:     'rgba(0,160,152,0.06)',
+  Beverage: 'rgba(106,106,183,0.06)',
+  Sweets:   'rgba(228,51,41,0.06)',
+}
+
 export default function MenuPage() {
-  const [categories, setCategories] = useState<Category[]>([])
-  const [items, setItems]           = useState<MenuItem[]>([])
-  const [loading, setLoading]       = useState(true)
-  const [activeCategory, setActiveCategory] = useState<string>('')
+  const [categories, setCategories]               = useState<Category[]>([])
+  const [items, setItems]                         = useState<MenuItem[]>([])
+  const [loading, setLoading]                     = useState(true)
+  const [activeCategory, setActiveCategory]       = useState<string>('')
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({})
+
+  function toggleSection(s: string) {
+    setCollapsedSections(prev => ({ ...prev, [s]: !prev[s] }))
+  }
 
   useEffect(() => {
     async function load() {
@@ -47,13 +70,13 @@ export default function MenuPage() {
 
       setCategories(cats)
       setItems(its)
-      if (cats.length > 0) setActiveCategory(cats[0].id)
+
+      const firstCat = cats.find(c => c.section === 'Food')
+      if (firstCat) setActiveCategory(firstCat.id)
       setLoading(false)
     }
     load()
   }, [])
-
-  const activeItems = items.filter(i => i.categoryId === activeCategory)
 
   return (
     <>
@@ -77,7 +100,7 @@ export default function MenuPage() {
             backgroundPosition: 'center',
           }} />
           <div style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.75)' }} />
-          <div style={{ position: 'relative', zIndex: 1 }}>
+          <div style={{ position: 'relative', zIndex: 1, paddingTop: '4rem' }}>
             <p style={{
               fontSize: '0.7rem',
               letterSpacing: '0.3em',
@@ -105,95 +128,303 @@ export default function MenuPage() {
             fontFamily: 'var(--font-inter)',
           }}>Loading menu…</div>
         ) : (
-          <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '4rem 3rem' }}>
+          <div style={{
+            maxWidth: '1400px',
+            margin: '0 auto',
+            display: 'grid',
+            gridTemplateColumns: '280px 1fr',
+            minHeight: '80vh',
+          }}>
 
-            {/* Category Tabs */}
+            {/* LEFT SIDEBAR */}
             <div style={{
-              display: 'flex',
-              gap: '0',
-              borderBottom: '1px solid rgba(255,255,255,0.08)',
-              marginBottom: '3rem',
-              flexWrap: 'wrap',
+              borderRight: '1px solid rgba(255,255,255,0.06)',
+              padding: '3rem 0',
+              position: 'sticky',
+              top: '64px',
+              height: 'fit-content',
+              maxHeight: 'calc(100vh - 64px)',
+              overflowY: 'auto',
             }}>
-              {categories.map(cat => (
-                <button key={cat.id} onClick={() => setActiveCategory(cat.id)} style={{
-                  background: 'transparent',
-                  border: 'none',
-                  borderBottom: `2px solid ${activeCategory === cat.id ? 'var(--teal)' : 'transparent'}`,
-                  color: activeCategory === cat.id ? 'var(--offwhite)' : 'rgba(245,242,236,0.4)',
-                  padding: '0.85rem 1.5rem',
-                  fontSize: '0.78rem',
-                  letterSpacing: '0.15em',
-                  textTransform: 'uppercase',
-                  cursor: 'pointer',
-                  fontFamily: 'var(--font-inter)',
-                  marginBottom: '-1px',
-                  transition: 'all 0.2s',
-                }}>
-                  {cat.name}
-                </button>
-              ))}
+              {SECTIONS.map(s => {
+                const sectionCats = categories.filter(c => c.section === s)
+                const isCollapsed = collapsedSections[s]
+
+                return (
+                  <div key={s} style={{ marginBottom: '0.5rem' }}>
+
+                    {/* Section Header — collapsible */}
+                    <button
+                      onClick={() => toggleSection(s)}
+                      style={{
+                        width: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '0.9rem 1.5rem',
+                        borderLeft: `3px solid ${sectionColors[s]}`,
+                        marginBottom: isCollapsed ? '0.5rem' : '0.5rem',
+                        background: sectionBg[s],
+                        border: 'none',
+                        cursor: 'pointer',
+                      }}>
+                      <p style={{
+                        fontFamily: 'var(--font-cinzel)',
+                        fontSize: '0.85rem',
+                        letterSpacing: '0.1em',
+                        textTransform: 'uppercase',
+                        color: sectionColors[s],
+                      }}>{s}</p>
+                      <span style={{
+                        color: sectionColors[s],
+                        fontSize: '0.65rem',
+                        display: 'block',
+                        transition: 'transform 0.3s',
+                        transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)',
+                      }}>▼</span>
+                    </button>
+
+                    {/* Subcategories — collapsible */}
+                    {!isCollapsed && (
+                      <div style={{ marginBottom: '1rem' }}>
+                        {sectionCats.length === 0 ? (
+                          <p style={{
+                            fontFamily: 'var(--font-inter)',
+                            fontSize: '0.78rem',
+                            color: 'rgba(245,242,236,0.2)',
+                            padding: '0.5rem 1.5rem 0.5rem 2rem',
+                          }}>No categories yet</p>
+                        ) : sectionCats.map(cat => (
+                          <button key={cat.id}
+                            onClick={() => {
+                              setActiveCategory(cat.id)
+                              const el = document.getElementById(`cat-${cat.id}`)
+                              if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                            }}
+                            onMouseEnter={e => {
+                              if (activeCategory !== cat.id) {
+                                const el = e.currentTarget as HTMLButtonElement
+                                el.style.color = '#fff'
+                                el.style.borderLeftColor = sectionColors[s]
+                                const shine = el.querySelector('.shine') as HTMLElement
+                                if (shine) shine.style.left = '120%'
+                              }
+                            }}
+                            onMouseLeave={e => {
+                              if (activeCategory !== cat.id) {
+                                const el = e.currentTarget as HTMLButtonElement
+                                el.style.color = 'rgba(245,242,236,0.45)'
+                                el.style.borderLeftColor = 'transparent'
+                                const shine = el.querySelector('.shine') as HTMLElement
+                                if (shine) shine.style.left = '-60%'
+                              }
+                            }}
+                            style={{
+                              position: 'relative',
+                              overflow: 'hidden',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '0.8rem',
+                              width: '100%',
+                              textAlign: 'left',
+                              background: activeCategory === cat.id
+                                ? `${sectionColors[s]}10`
+                                : 'transparent',
+                              border: 'none',
+                              borderLeft: `2px solid ${activeCategory === cat.id ? sectionColors[s] : 'transparent'}`,
+                              color: activeCategory === cat.id ? 'var(--offwhite)' : 'rgba(245,242,236,0.45)',
+                              padding: '0.6rem 1rem 0.6rem 2rem',
+                              fontSize: '0.82rem',
+                              cursor: 'pointer',
+                              fontFamily: 'var(--font-inter)',
+                              borderRadius: '0 4px 4px 0',
+                              transition: 'color 0.2s, border-color 0.2s',
+                            }}>
+
+                            {/* Shine effect */}
+                            <span className="shine" style={{
+                              position: 'absolute',
+                              top: 0,
+                              left: '-60%',
+                              width: '40%',
+                              height: '100%',
+                              background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent)',
+                              transform: 'skewX(-20deg)',
+                              transition: 'left 0.4s ease',
+                              pointerEvents: 'none',
+                            }} />
+
+                            {cat.image && (
+                              <div style={{
+                                width: '24px', height: '24px',
+                                borderRadius: '2px',
+                                backgroundImage: `url(${cat.image})`,
+                                backgroundSize: 'cover',
+                                backgroundPosition: 'center',
+                                flexShrink: 0,
+                                opacity: activeCategory === cat.id ? 1 : 0.5,
+                                transition: 'opacity 0.2s',
+                              }} />
+                            )}
+                            {cat.name}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
             </div>
 
-            {/* Items Grid */}
-            {activeItems.length === 0 ? (
-              <p style={{ color: 'rgba(245,242,236,0.3)', fontFamily: 'var(--font-inter)' }}>
-                No items in this category yet.
-              </p>
-            ) : (
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(2, 1fr)',
-                gap: '0',
-              }}>
-                {activeItems.map(item => (
-                  <div key={item.id} style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'flex-start',
-                    padding: '1.2rem 1.5rem',
-                    borderBottom: '1px solid rgba(255,255,255,0.05)',
-                    gap: '1rem',
-                  }}>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.3rem' }}>
-                        <p style={{
+            {/* RIGHT — All Items */}
+            <div style={{ padding: '4rem' }}>
+              {categories.length === 0 ? (
+                <p style={{ color: 'rgba(245,242,236,0.2)', fontFamily: 'var(--font-inter)' }}>
+                  No categories yet.
+                </p>
+              ) : (
+                SECTIONS.map(s => {
+                  const sectionCats = categories.filter(c => c.section === s)
+                  const hasItems = sectionCats.some(cat =>
+                    items.some(i => i.categoryId === cat.id)
+                  )
+                  if (sectionCats.length === 0 || !hasItems) return null
+
+                  return (
+                    <div key={s} style={{ marginBottom: '5rem' }}>
+
+                      {/* Section Title */}
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '1rem',
+                        marginBottom: '3rem',
+                        paddingBottom: '1rem',
+                        borderBottom: `2px solid ${sectionColors[s]}`,
+                      }}>
+                        <h2 style={{
                           fontFamily: 'var(--font-cinzel)',
-                          fontSize: '0.95rem',
-                          color: 'var(--offwhite)',
-                        }}>{item.name}</p>
-                        {item.badge && (
-                          <span style={{
-                            fontSize: '0.6rem',
-                            padding: '0.15rem 0.5rem',
-                            borderRadius: '50px',
-                            backgroundColor: 'rgba(228,51,41,0.15)',
-                            color: 'var(--red)',
-                            fontFamily: 'var(--font-inter)',
-                          }}>{item.badge}</span>
-                        )}
+                          fontSize: '2rem',
+                          color: sectionColors[s],
+                        }}>{s}</h2>
                       </div>
-                      <p style={{
-                        fontFamily: 'var(--font-inter)',
-                        fontSize: '0.78rem',
-                        color: 'rgba(245,242,236,0.4)',
-                        lineHeight: 1.6,
-                      }}>{item.description}</p>
+
+                      {/* Categories */}
+                      {sectionCats.map(cat => {
+                        const catItems = items.filter(i => i.categoryId === cat.id)
+                        if (catItems.length === 0) return null
+                        return (
+                          <div key={cat.id} id={`cat-${cat.id}`} style={{ marginBottom: '3rem' }}>
+
+                            {/* Category Header */}
+                            <div style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '1rem',
+                              marginBottom: '1.5rem',
+                            }}>
+                              {cat.image && (
+                                <div style={{
+                                  width: '50px', height: '50px',
+                                  borderRadius: '4px',
+                                  backgroundImage: `url(${cat.image})`,
+                                  backgroundSize: 'cover',
+                                  backgroundPosition: 'center',
+                                  border: `1px solid ${sectionColors[s]}40`,
+                                  flexShrink: 0,
+                                }} />
+                              )}
+                              <div>
+                                <p style={{
+                                  fontSize: '0.62rem',
+                                  letterSpacing: '0.2em',
+                                  textTransform: 'uppercase',
+                                  color: sectionColors[s],
+                                  fontFamily: 'var(--font-inter)',
+                                  marginBottom: '0.2rem',
+                                  opacity: 0.7,
+                                }}>{s}</p>
+                                <h3 style={{
+                                  fontFamily: 'var(--font-cinzel)',
+                                  fontSize: '1.4rem',
+                                  color: 'var(--offwhite)',
+                                }}>{cat.name}</h3>
+                              </div>
+                            </div>
+
+                            {/* Gradient divider */}
+                            <div style={{
+                              height: '1px',
+                              background: `linear-gradient(to right, ${sectionColors[s]}40, transparent)`,
+                              marginBottom: '1.5rem',
+                            }} />
+
+                            {/* Items */}
+                            <div style={{
+                              display: 'grid',
+                              gridTemplateColumns: 'repeat(2, 1fr)',
+                              gap: '0',
+                            }}>
+                              {catItems.map(item => (
+                                <div key={item.id} style={{
+                                  display: 'flex',
+                                  justifyContent: 'space-between',
+                                  alignItems: 'flex-start',
+                                  padding: '1.1rem 1.2rem',
+                                  borderBottom: '1px solid rgba(255,255,255,0.05)',
+                                  gap: '1rem',
+                                }}>
+                                  <div style={{ flex: 1 }}>
+                                    <div style={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '0.6rem',
+                                      marginBottom: '0.3rem',
+                                    }}>
+                                      <p style={{
+                                        fontFamily: 'var(--font-cinzel)',
+                                        fontSize: '0.92rem',
+                                        color: 'var(--offwhite)',
+                                      }}>{item.name}</p>
+                                      {item.badge && (
+                                        <span style={{
+                                          fontSize: '0.6rem',
+                                          padding: '0.15rem 0.5rem',
+                                          borderRadius: '50px',
+                                          backgroundColor: `${sectionColors[s]}20`,
+                                          color: sectionColors[s],
+                                          fontFamily: 'var(--font-inter)',
+                                          whiteSpace: 'nowrap',
+                                        }}>{item.badge}</span>
+                                      )}
+                                    </div>
+                                    <p style={{
+                                      fontFamily: 'var(--font-inter)',
+                                      fontSize: '0.78rem',
+                                      color: 'rgba(245,242,236,0.4)',
+                                      lineHeight: 1.6,
+                                    }}>{item.description}</p>
+                                  </div>
+                                  <span style={{
+                                    fontFamily: 'var(--font-inter)',
+                                    fontSize: '0.9rem',
+                                    color: sectionColors[s],
+                                    fontWeight: 600,
+                                    whiteSpace: 'nowrap',
+                                  }}>${item.price}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )
+                      })}
                     </div>
-                    <span style={{
-                      fontFamily: 'var(--font-inter)',
-                      fontSize: '0.9rem',
-                      color: 'var(--teal)',
-                      fontWeight: 600,
-                      whiteSpace: 'nowrap',
-                    }}>${item.price}</span>
-                  </div>
-                ))}
-              </div>
-            )}
+                  )
+                })
+              )}
+            </div>
           </div>
         )}
-
       </main>
       <Footer />
     </>

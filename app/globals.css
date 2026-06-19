@@ -22,4 +22,9 @@
 body {
   background-color: var(--black);
   color: var(--offwhite);
+  min-height: 100vh;
+}
+
+html {
+  background-color: #0a0a0a;
 }

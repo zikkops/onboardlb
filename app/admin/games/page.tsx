@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { onAuthStateChanged } from 'firebase/auth'
 import { collection, getDocs, addDoc, deleteDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore'
@@ -14,33 +14,40 @@ interface Game {
   players: string
   duration: string
   age: string
+  price: number
   stock: number
   image: string
 }
 
 const EMPTY = {
   name: '',
-  category: 'Strategy',
+  category: '',
   description: '',
   players: '',
   duration: '',
   age: '',
+  price: 0,
   stock: 0,
   image: '',
 }
 
-const CATEGORIES = ['Strategy', 'Party', 'Family', 'Cooperative', 'Card', 'Trivia', 'RPG', 'Puzzle']
+const FALLBACK_CATEGORIES = ['Strategy', 'Party', 'Family', 'Cooperative', 'Card', 'Trivia', 'RPG', 'Puzzle']
 
 export default function AdminGamesPage() {
   const router = useRouter()
-  const [checking, setChecking]   = useState(true)
-  const [games, setGames]         = useState<Game[]>([])
-  const [loading, setLoading]     = useState(true)
-  const [open, setOpen]           = useState(false)
-  const [editing, setEditing]     = useState<Game | null>(null)
-  const [form, setForm]           = useState({ ...EMPTY })
-  const [saving, setSaving]       = useState(false)
-  const [uploading, setUploading] = useState(false)
+  const [checking, setChecking]             = useState(true)
+  const [games, setGames]                   = useState<Game[]>([])
+  const [loading, setLoading]               = useState(true)
+  const [open, setOpen]                     = useState(false)
+  const [editing, setEditing]               = useState<Game | null>(null)
+  const [form, setForm]                     = useState({ ...EMPTY })
+  const [saving, setSaving]                 = useState(false)
+  const [uploading, setUploading]           = useState(false)
+  const [categories, setCategories]         = useState<string[]>([])
+  const [newCategory, setNewCategory]       = useState('')
+  const [addingCat, setAddingCat]           = useState(false)
+  const [showCatManager, setShowCatManager] = useState(false)
+  const catFileRef                          = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (user) => {
@@ -56,11 +63,38 @@ export default function AdminGamesPage() {
     setLoading(false)
   }
 
-  useEffect(() => { loadGames() }, [])
+  async function loadCategories() {
+    const snap = await getDocs(collection(db, 'gameCategories'))
+    setCategories(snap.docs.map(d => (d.data() as any).name))
+  }
+
+  useEffect(() => {
+    loadGames()
+    loadCategories()
+  }, [])
+
+  async function addCategory() {
+    if (!newCategory.trim()) return
+    setAddingCat(true)
+    await addDoc(collection(db, 'gameCategories'), {
+      name: newCategory.trim(),
+      createdAt: serverTimestamp(),
+    })
+    setNewCategory('')
+    setAddingCat(false)
+    loadCategories()
+  }
+
+  async function deleteCategory(name: string) {
+    const snap = await getDocs(collection(db, 'gameCategories'))
+    const docToDelete = snap.docs.find(d => (d.data() as any).name === name)
+    if (docToDelete) await deleteDoc(doc(db, 'gameCategories', docToDelete.id))
+    loadCategories()
+  }
 
   function openNew() {
     setEditing(null)
-    setForm({ ...EMPTY })
+    setForm({ ...EMPTY, category: categories[0] ?? FALLBACK_CATEGORIES[0] })
     setOpen(true)
   }
 
@@ -73,6 +107,7 @@ export default function AdminGamesPage() {
       players:     game.players,
       duration:    game.duration,
       age:         game.age,
+      price:       game.price,
       stock:       game.stock,
       image:       game.image,
     })
@@ -96,12 +131,20 @@ export default function AdminGamesPage() {
     e.preventDefault()
     setSaving(true)
     if (editing) {
-      await updateDoc(doc(db, 'games', editing.id), { ...form, updatedAt: serverTimestamp() })
+      await updateDoc(doc(db, 'games', editing.id), {
+        ...form,
+        updatedAt: serverTimestamp(),
+      })
     } else {
-      await addDoc(collection(db, 'games'), { ...form, createdAt: serverTimestamp(), updatedAt: serverTimestamp() })
+      await addDoc(collection(db, 'games'), {
+        ...form,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      })
     }
     setSaving(false)
     setOpen(false)
+    if (catFileRef.current) catFileRef.current.value = ''
     loadGames()
   }
 
@@ -110,6 +153,8 @@ export default function AdminGamesPage() {
     await deleteDoc(doc(db, 'games', id))
     loadGames()
   }
+
+  const displayCategories = categories.length > 0 ? categories : FALLBACK_CATEGORIES
 
   const inputStyle = {
     width: '100%',
@@ -136,11 +181,7 @@ export default function AdminGamesPage() {
   if (checking) return null
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      backgroundColor: 'var(--black)',
-      padding: '3rem',
-    }}>
+    <div style={{ minHeight: '100vh', backgroundColor: 'var(--black)', padding: '3rem' }}>
       <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
 
         {/* Header */}
@@ -160,14 +201,8 @@ export default function AdminGamesPage() {
               fontFamily: 'var(--font-inter)',
               marginBottom: '0.5rem',
               display: 'block',
-            }}>
-              ← Back to Dashboard
-            </a>
-            <h1 style={{
-              fontFamily: 'var(--font-cinzel)',
-              fontSize: '2rem',
-              color: 'var(--offwhite)',
-            }}>
+            }}>← Back to Dashboard</a>
+            <h1 style={{ fontFamily: 'var(--font-cinzel)', fontSize: '2rem', color: 'var(--offwhite)' }}>
               Game Library
             </h1>
           </div>
@@ -182,9 +217,107 @@ export default function AdminGamesPage() {
             textTransform: 'uppercase',
             cursor: 'pointer',
             fontFamily: 'var(--font-inter)',
+          }}>+ Add Game</button>
+        </div>
+
+        {/* Category Manager */}
+        <div style={{ marginBottom: '2rem' }}>
+          <button onClick={() => setShowCatManager(!showCatManager)} style={{
+            background: 'transparent',
+            border: '1px solid rgba(255,255,255,0.1)',
+            color: 'rgba(245,242,236,0.5)',
+            padding: '0.6rem 1.2rem',
+            borderRadius: '2px',
+            fontSize: '0.72rem',
+            letterSpacing: '0.1em',
+            textTransform: 'uppercase',
+            cursor: 'pointer',
+            fontFamily: 'var(--font-inter)',
+            marginBottom: '1rem',
           }}>
-            + Add Game
+            {showCatManager ? 'Hide' : 'Manage'} Categories
           </button>
+
+          {showCatManager && (
+            <div style={{
+              background: 'rgba(255,255,255,0.02)',
+              border: '1px solid rgba(255,255,255,0.06)',
+              borderRadius: '4px',
+              padding: '1.5rem',
+            }}>
+              <p style={{
+                fontSize: '0.68rem',
+                letterSpacing: '0.2em',
+                textTransform: 'uppercase',
+                color: 'rgba(245,242,236,0.3)',
+                fontFamily: 'var(--font-inter)',
+                marginBottom: '1rem',
+              }}>Game Categories</p>
+
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1rem' }}>
+                {displayCategories.map(cat => (
+                  <div key={cat} style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    backgroundColor: 'rgba(106,106,183,0.1)',
+                    border: '1px solid rgba(106,106,183,0.2)',
+                    borderRadius: '2px',
+                    padding: '0.35rem 0.8rem',
+                  }}>
+                    <span style={{
+                      fontFamily: 'var(--font-inter)',
+                      fontSize: '0.82rem',
+                      color: 'var(--offwhite)',
+                    }}>{cat}</span>
+                    {categories.length > 0 && (
+                      <button onClick={() => deleteCategory(cat)} style={{
+                        background: 'transparent',
+                        border: 'none',
+                        color: 'rgba(228,51,41,0.6)',
+                        cursor: 'pointer',
+                        fontSize: '0.75rem',
+                        padding: '0',
+                        lineHeight: 1,
+                      }}>✕</button>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ display: 'flex', gap: '0.5rem', maxWidth: '400px' }}>
+                <input
+                  type="text"
+                  placeholder="New category name…"
+                  value={newCategory}
+                  onChange={e => setNewCategory(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && addCategory()}
+                  style={{
+                    flex: 1,
+                    backgroundColor: '#1a1a1a',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    color: '#F5F2EC',
+                    padding: '0.6rem 0.8rem',
+                    borderRadius: '2px',
+                    fontSize: '0.82rem',
+                    outline: 'none',
+                    fontFamily: 'var(--font-inter)',
+                  }}
+                />
+                <button onClick={addCategory} disabled={addingCat || !newCategory.trim()} style={{
+                  backgroundColor: 'var(--purple)',
+                  border: 'none',
+                  color: '#fff',
+                  padding: '0.6rem 1rem',
+                  borderRadius: '2px',
+                  fontSize: '0.82rem',
+                  cursor: 'pointer',
+                  fontFamily: 'var(--font-inter)',
+                  opacity: addingCat || !newCategory.trim() ? 0.5 : 1,
+                }}>+ Add</button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Table */}
@@ -200,7 +333,7 @@ export default function AdminGamesPage() {
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                  {['Image', 'Name', 'Category', 'Players', 'Stock', 'Actions'].map(h => (
+                  {['Image', 'Name', 'Category', 'Players', 'Price', 'Stock', 'Actions'].map(h => (
                     <th key={h} style={{
                       padding: '1rem 1.2rem',
                       textAlign: 'left',
@@ -228,6 +361,9 @@ export default function AdminGamesPage() {
                     <td style={{ padding: '1rem 1.2rem', fontFamily: 'var(--font-cinzel)', fontSize: '0.9rem', color: 'var(--offwhite)' }}>{game.name}</td>
                     <td style={{ padding: '1rem 1.2rem', fontFamily: 'var(--font-inter)', fontSize: '0.82rem', color: 'rgba(245,242,236,0.5)' }}>{game.category}</td>
                     <td style={{ padding: '1rem 1.2rem', fontFamily: 'var(--font-inter)', fontSize: '0.82rem', color: 'rgba(245,242,236,0.5)' }}>{game.players}</td>
+                    <td style={{ padding: '1rem 1.2rem', fontFamily: 'var(--font-inter)', fontSize: '0.82rem', color: 'var(--teal)' }}>
+                      {game.price > 0 ? `$${game.price}` : '—'}
+                    </td>
                     <td style={{ padding: '1rem 1.2rem' }}>
                       <span style={{
                         fontSize: '0.72rem',
@@ -291,11 +427,7 @@ export default function AdminGamesPage() {
             borderBottom: '1px solid rgba(255,255,255,0.06)',
             flexShrink: 0,
           }}>
-            <h2 style={{
-              fontFamily: 'var(--font-cinzel)',
-              fontSize: '1.5rem',
-              color: 'var(--offwhite)',
-            }}>
+            <h2 style={{ fontFamily: 'var(--font-cinzel)', fontSize: '1.5rem', color: 'var(--offwhite)' }}>
               {editing ? 'Edit Game' : 'Add New Game'}
             </h2>
             <button onClick={() => setOpen(false)} style={{
@@ -350,7 +482,7 @@ export default function AdminGamesPage() {
                 <select value={form.category}
                   onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
                   style={{ ...inputStyle, color: '#F5F2EC', backgroundColor: '#1a1a1a' }}>
-                  {CATEGORIES.map(c => (
+                  {displayCategories.map(c => (
                     <option key={c} value={c} style={{ backgroundColor: '#1a1a1a', color: '#F5F2EC' }}>{c}</option>
                   ))}
                 </select>
@@ -378,7 +510,7 @@ export default function AdminGamesPage() {
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
                 <div>
                   <label style={labelStyle}>Min Age (e.g. 8+)</label>
                   <input type="text" value={form.age} required
@@ -386,8 +518,14 @@ export default function AdminGamesPage() {
                     style={inputStyle} />
                 </div>
                 <div>
+                  <label style={labelStyle}>Price ($)</label>
+                  <input type="number" value={form.price} required min={0}
+                    onChange={e => setForm(f => ({ ...f, price: +e.target.value }))}
+                    style={inputStyle} />
+                </div>
+                <div>
                   <label style={labelStyle}>Stock</label>
-                  <input type="number" value={form.stock} required
+                  <input type="number" value={form.stock} required min={0}
                     onChange={e => setForm(f => ({ ...f, stock: +e.target.value }))}
                     style={inputStyle} />
                 </div>
@@ -409,11 +547,15 @@ export default function AdminGamesPage() {
                 fontFamily: 'var(--font-inter)',
               }}>Game Image</p>
 
-              {/* Upload */}
               <div>
                 <label style={labelStyle}>Upload Image</label>
-                <input type="file" accept="image/*" onChange={handleImageUpload}
-                  style={{ ...inputStyle, cursor: 'pointer' }} />
+                <input
+                  ref={catFileRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageUpload}
+                  style={{ ...inputStyle, cursor: 'pointer' }}
+                />
                 {uploading && (
                   <p style={{
                     marginTop: '0.5rem',
@@ -424,22 +566,23 @@ export default function AdminGamesPage() {
                 )}
               </div>
 
-              {/* Preview */}
               {form.image && !uploading ? (
                 <div style={{
                   flex: 1,
                   borderRadius: '4px',
                   overflow: 'hidden',
                   border: '1px solid rgba(255,255,255,0.06)',
-                  position: 'relative',
+                  backgroundColor: '#fff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '1rem',
                   minHeight: '300px',
                 }}>
                   <img src={form.image} alt="Preview" style={{
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'cover',
-                    position: 'absolute',
-                    inset: 0,
+                    maxWidth: '100%',
+                    maxHeight: '280px',
+                    objectFit: 'contain',
                   }} />
                 </div>
               ) : (
@@ -459,7 +602,6 @@ export default function AdminGamesPage() {
                 </div>
               )}
 
-              {/* Save / Cancel */}
               <div style={{ display: 'flex', gap: '1rem' }}>
                 <button type="button" onClick={() => setOpen(false)} style={{
                   flex: 1,
@@ -492,7 +634,6 @@ export default function AdminGamesPage() {
                 </button>
               </div>
             </div>
-
           </form>
         </div>
       )}
