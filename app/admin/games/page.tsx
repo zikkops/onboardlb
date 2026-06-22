@@ -1,10 +1,9 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
-import { useRouter } from 'next/navigation'
-import { onAuthStateChanged } from 'firebase/auth'
 import { collection, getDocs, addDoc, deleteDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore'
-import { auth, db } from '../../lib/firebase'
+import { db } from '../../lib/firebase'
+import { useRequireRole, SECTION_ACCESS } from '../../lib/adminAuth'
 
 interface Game {
   id: string
@@ -45,9 +44,8 @@ function useIsMobile(breakpoint = 768) {
 }
 
 export default function AdminGamesPage() {
-  const router = useRouter()
+  const { checking } = useRequireRole(SECTION_ACCESS.games)
   const isMobile = useIsMobile()
-  const [checking, setChecking]             = useState(true)
   const [games, setGames]                   = useState<Game[]>([])
   const [loading, setLoading]               = useState(true)
   const [open, setOpen]                     = useState(false)
@@ -60,14 +58,6 @@ export default function AdminGamesPage() {
   const [addingCat, setAddingCat]           = useState(false)
   const [showCatManager, setShowCatManager] = useState(false)
   const catFileRef                          = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (user) => {
-      if (!user) router.replace('/admin/login')
-      setChecking(false)
-    })
-    return unsub
-  }, [router])
 
   async function loadGames() {
     const snap = await getDocs(collection(db, 'games'))

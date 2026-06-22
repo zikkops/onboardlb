@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { onAuthStateChanged, signOut } from 'firebase/auth'
+import { signOut } from 'firebase/auth'
 import { auth } from '../lib/firebase'
+import { useRequireRole, ALL_ROLES, SECTION_ACCESS, ROLE_LABELS, type Role } from '../lib/adminAuth'
 
 function useIsMobile(breakpoint = 768) {
   const [isMobile, setIsMobile] = useState(false)
@@ -18,26 +19,21 @@ function useIsMobile(breakpoint = 768) {
 
 export default function AdminPage() {
   const router  = useRouter()
-  const [checking, setChecking] = useState(true)
-  const [email, setEmail]       = useState('')
+  const { checking, role, user } = useRequireRole(ALL_ROLES)
   const isMobile = useIsMobile()
-
-  useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (user) => {
-      if (!user) {
-        router.replace('/admin/login')
-      } else {
-        setEmail(user.email ?? '')
-      }
-      setChecking(false)
-    })
-    return unsub
-  }, [router])
 
   async function handleSignOut() {
     await signOut(auth)
     router.replace('/admin/login')
   }
+
+  const cards = [
+    { label: 'Manage Games',  desc: 'Add, edit or remove games from the shop', href: '/admin/games',  color: 'var(--purple)', access: SECTION_ACCESS.games },
+    { label: 'Manage Menu',   desc: 'Update food and drink items',              href: '/admin/menu',   color: 'var(--teal)', access: SECTION_ACCESS.menu },
+    { label: 'Manage Events', desc: 'Create and manage D&D sessions and events', href: '/admin/events', color: 'var(--red)', access: SECTION_ACCESS.events },
+    { label: 'D&D Campaigns', desc: 'Add and manage D&D campaigns', href: '/admin/dnd', color: 'var(--navy)', access: SECTION_ACCESS.dnd },
+    { label: 'Manage Users',  desc: 'Create accounts and set access levels', href: '/admin/users', color: 'rgba(245,242,236,0.4)', access: ['admin'] as Role[] },
+  ].filter(({ access }) => role && access.includes(role))
 
   if (checking) {
     return (
@@ -90,7 +86,7 @@ export default function AdminPage() {
               fontSize: '0.78rem',
               color: 'rgba(245,242,236,0.3)',
             }}>
-              Signed in as {email}
+              Signed in as {user?.email} · {role ? ROLE_LABELS[role] : ''}
             </p>
           </div>
           <button
@@ -118,12 +114,7 @@ export default function AdminPage() {
           gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)',
           gap: '1.5rem',
         }}>
-          {[
-            { label: 'Manage Games',  desc: 'Add, edit or remove games from the shop', href: '/admin/games',  color: 'var(--purple)' },
-            { label: 'Manage Menu',   desc: 'Update food and drink items',              href: '/admin/menu',   color: 'var(--teal)' },
-            { label: 'Manage Events', desc: 'Create and manage D&D sessions and events', href: '/admin/events', color: 'var(--red)' },
-            { label: 'D&D Campaigns', desc: 'Add and manage D&D campaigns', href: '/admin/dnd', color: 'var(--navy)' },
-          ].map(({ label, desc, href, color }) => (
+          {cards.map(({ label, desc, href, color }) => (
             <a key={label} href={href} style={{
               display: 'block',
               background: 'rgba(255,255,255,0.02)',

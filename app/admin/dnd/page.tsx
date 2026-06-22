@@ -1,13 +1,12 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
-import { useRouter } from 'next/navigation'
-import { onAuthStateChanged } from 'firebase/auth'
 import {
   collection, getDocs, addDoc, deleteDoc,
   doc, updateDoc, serverTimestamp, writeBatch
 } from 'firebase/firestore'
-import { auth, db } from '../../lib/firebase'
+import { db } from '../../lib/firebase'
+import { useRequireRole, SECTION_ACCESS } from '../../lib/adminAuth'
 
 interface Campaign {
   id: string
@@ -66,9 +65,8 @@ function useIsMobile(breakpoint = 768) {
 }
 
 export default function AdminDndPage() {
-  const router = useRouter()
+  const { checking } = useRequireRole(SECTION_ACCESS.dnd)
   const isMobile = useIsMobile()
-  const [checking, setChecking]   = useState(true)
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [loading, setLoading]     = useState(true)
   const [open, setOpen]           = useState(false)
@@ -77,14 +75,6 @@ export default function AdminDndPage() {
   const [saving, setSaving]       = useState(false)
   const [uploading, setUploading] = useState(false)
   const fileRef                   = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (user) => {
-      if (!user) router.replace('/admin/login')
-      setChecking(false)
-    })
-    return unsub
-  }, [router])
 
   async function loadCampaigns() {
     const snap = await getDocs(collection(db, 'dndCampaigns'))

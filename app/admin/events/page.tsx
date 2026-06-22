@@ -1,13 +1,12 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { onAuthStateChanged } from 'firebase/auth'
 import {
   collection, getDocs, addDoc, deleteDoc,
   doc, updateDoc, serverTimestamp
 } from 'firebase/firestore'
-import { auth, db } from '../../lib/firebase'
+import { db } from '../../lib/firebase'
+import { useRequireRole, SECTION_ACCESS } from '../../lib/adminAuth'
 
 interface GameEvent {
   id: string
@@ -67,9 +66,8 @@ function useIsMobile(breakpoint = 768) {
 }
 
 export default function AdminEventsPage() {
-  const router = useRouter()
+  const { checking } = useRequireRole(SECTION_ACCESS.events)
   const isMobile = useIsMobile()
-  const [checking, setChecking]               = useState(true)
   const [events, setEvents]                   = useState<GameEvent[]>([])
   const [eventTypes, setEventTypes]           = useState<EventType[]>([])
   const [loading, setLoading]                 = useState(true)
@@ -81,14 +79,6 @@ export default function AdminEventsPage() {
   const [newType, setNewType]                 = useState('')
   const [addingType, setAddingType]           = useState(false)
   const [showTypeManager, setShowTypeManager] = useState(false)
-
-  useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (user) => {
-      if (!user) router.replace('/admin/login')
-      setChecking(false)
-    })
-    return unsub
-  }, [router])
 
   async function loadData() {
     const [evSnap, typeSnap] = await Promise.all([
