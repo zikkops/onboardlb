@@ -55,8 +55,20 @@ const BRANCH_NUMBERS = [
   { label: 'Broummana', number: '+96176648054' },
 ]
 
+function useIsMobile(breakpoint = 768) {
+  const [isMobile, setIsMobile] = useState(false)
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < breakpoint)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [breakpoint])
+  return isMobile
+}
+
 export default function AdminEventsPage() {
   const router = useRouter()
+  const isMobile = useIsMobile()
   const [checking, setChecking]               = useState(true)
   const [events, setEvents]                   = useState<GameEvent[]>([])
   const [eventTypes, setEventTypes]           = useState<EventType[]>([])
@@ -202,14 +214,16 @@ export default function AdminEventsPage() {
   if (checking) return null
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: 'var(--black)', padding: '3rem' }}>
+    <div style={{ minHeight: '100vh', backgroundColor: 'var(--black)', padding: isMobile ? '1.25rem' : '3rem' }}>
       <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
 
         {/* Header */}
         <div style={{
           display: 'flex',
+          flexDirection: isMobile ? 'column' : 'row',
           justifyContent: 'space-between',
-          alignItems: 'center',
+          alignItems: isMobile ? 'flex-start' : 'center',
+          gap: isMobile ? '1.25rem' : '0',
           marginBottom: '2rem',
         }}>
           <div>
@@ -227,7 +241,7 @@ export default function AdminEventsPage() {
               Events Manager
             </h1>
           </div>
-          <div style={{ display: 'flex', gap: '0.8rem' }}>
+          <div style={{ display: 'flex', gap: '0.8rem', flexWrap: 'wrap' }}>
             <button onClick={() => setShowTypeManager(!showTypeManager)} style={{
               backgroundColor: 'transparent',
               color: 'rgba(245,242,236,0.5)',
@@ -331,7 +345,7 @@ export default function AdminEventsPage() {
         ) : (
           <div style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(3, 1fr)',
+            gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)',
             gap: '1.5rem',
           }}>
             {events.map(ev => {
@@ -481,11 +495,11 @@ export default function AdminEventsPage() {
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            padding: '1.5rem 3rem',
+            padding: isMobile ? '1.25rem 1.5rem' : '1.5rem 3rem',
             borderBottom: '1px solid rgba(255,255,255,0.06)',
             flexShrink: 0,
           }}>
-            <h2 style={{ fontFamily: 'var(--font-cinzel)', fontSize: '1.5rem', color: 'var(--offwhite)' }}>
+            <h2 style={{ fontFamily: 'var(--font-cinzel)', fontSize: isMobile ? '1.1rem' : '1.5rem', color: 'var(--offwhite)' }}>
               {editing ? 'Edit Event' : 'Add New Event'}
             </h2>
             <button onClick={() => setOpen(false)} style={{
@@ -506,19 +520,20 @@ export default function AdminEventsPage() {
           <form onSubmit={handleSave} style={{
             flex: 1,
             display: 'grid',
-            gridTemplateColumns: '1fr 1fr',
+            gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
             gap: '0',
-            overflow: 'hidden',
+            overflow: isMobile ? 'auto' : 'hidden',
           }}>
 
             {/* Left Column */}
             <div style={{
-              padding: '2.5rem 3rem',
-              borderRight: '1px solid rgba(255,255,255,0.06)',
+              padding: isMobile ? '1.5rem' : '2.5rem 3rem',
+              borderRight: isMobile ? 'none' : '1px solid rgba(255,255,255,0.06)',
+              borderBottom: isMobile ? '1px solid rgba(255,255,255,0.06)' : 'none',
               display: 'flex',
               flexDirection: 'column',
               gap: '1.5rem',
-              overflowY: 'auto',
+              overflowY: isMobile ? 'visible' : 'auto',
             }}>
               <p style={{
                 fontSize: '0.68rem',
@@ -535,7 +550,7 @@ export default function AdminEventsPage() {
                   style={inputStyle} />
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '1rem' }}>
                 <div>
                   <label style={labelStyle}>Type</label>
                   <select value={form.type}
@@ -571,7 +586,7 @@ export default function AdminEventsPage() {
                   style={{ ...inputStyle, colorScheme: 'dark' }} />
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '1rem' }}>
                 <div>
                   <label style={labelStyle}>Time Start</label>
                   <input type="time" value={form.timeStart} required
@@ -586,7 +601,7 @@ export default function AdminEventsPage() {
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr', gap: '1rem' }}>
                 <div>
                   <label style={labelStyle}>Min Players</label>
                   <input type="number" min={1} value={form.minPlayers} required
@@ -625,11 +640,11 @@ export default function AdminEventsPage() {
 
             {/* Right Column */}
             <div style={{
-              padding: '2.5rem 3rem',
+              padding: isMobile ? '1.5rem' : '2.5rem 3rem',
               display: 'flex',
               flexDirection: 'column',
               gap: '1.5rem',
-              overflowY: 'auto',
+              overflowY: isMobile ? 'visible' : 'auto',
             }}>
               <p style={{
                 fontSize: '0.68rem',

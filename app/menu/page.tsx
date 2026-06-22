@@ -5,6 +5,8 @@ import { collection, getDocs } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import Navbar from '../components/layout/Navbar'
 import Footer from '../components/layout/Footer'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faList } from '@fortawesome/free-solid-svg-icons'
 
 type Section = 'Food' | 'Beverage' | 'Sweets'
 
@@ -41,6 +43,17 @@ const sectionBg: Record<Section, string> = {
   Sweets:   'rgba(228,51,41,0.06)',
 }
 
+function useIsMobile(breakpoint = 768) {
+  const [isMobile, setIsMobile] = useState(false)
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < breakpoint)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [breakpoint])
+  return isMobile
+}
+
 export default function MenuPage() {
   const [categories, setCategories]               = useState<Category[]>([])
   const [items, setItems]                         = useState<MenuItem[]>([])
@@ -51,6 +64,8 @@ export default function MenuPage() {
   Beverage: true,
   Sweets:   true,
   })
+  const isMobile = useIsMobile()
+  const [categoriesOpen, setCategoriesOpen] = useState(false)
 
 
   function toggleSection(s: string) {
@@ -91,7 +106,7 @@ export default function MenuPage() {
         {/* Hero */}
         <section style={{
           position: 'relative',
-          height: '40vh',
+          height: isMobile ? '32vh' : '40vh',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -116,7 +131,7 @@ export default function MenuPage() {
             }}>Food & Drinks</p>
             <h1 style={{
               fontFamily: 'var(--font-cinzel)',
-              fontSize: '3.5rem',
+              fontSize: isMobile ? '2.2rem' : '3.5rem',
               color: 'var(--offwhite)',
               lineHeight: 1.2,
             }}>Our Menu</h1>
@@ -137,12 +152,66 @@ export default function MenuPage() {
             maxWidth: '1400px',
             margin: '0 auto',
             display: 'grid',
-            gridTemplateColumns: '280px 1fr',
+            gridTemplateColumns: isMobile ? '1fr' : '280px 1fr',
             minHeight: '80vh',
           }}>
 
-            {/* LEFT SIDEBAR */}
-            <div style={{
+            {/* Mobile categories tab — fixed, vertically centered on the left edge */}
+            {isMobile && !categoriesOpen && (
+              <button onClick={() => setCategoriesOpen(true)} style={{
+                position: 'fixed',
+                left: 0,
+                top: '50%',
+                transform: 'translateY(-50%)',
+                zIndex: 60,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '0.4rem',
+                background: 'var(--teal)',
+                border: 'none',
+                color: '#fff',
+                padding: '1rem 0.6rem',
+                borderRadius: '0 6px 6px 0',
+                fontSize: '0.65rem',
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase',
+                cursor: 'pointer',
+                fontFamily: 'var(--font-inter)',
+                boxShadow: '4px 0 12px rgba(0,0,0,0.4)',
+              }}>
+                <FontAwesomeIcon icon={faList} style={{ width: '13px' }} />
+                Categories
+              </button>
+            )}
+
+            {/* Backdrop — closes the panel when tapped */}
+            {isMobile && categoriesOpen && (
+              <div onClick={() => setCategoriesOpen(false)} style={{
+                position: 'fixed',
+                inset: 0,
+                backgroundColor: 'rgba(0,0,0,0.5)',
+                zIndex: 59,
+              }} />
+            )}
+
+            {/* LEFT SIDEBAR — desktop: sticky inline. Mobile: slides in from the left as an overlay */}
+            <div style={isMobile ? {
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              bottom: 0,
+              width: '80%',
+              maxWidth: '320px',
+              backgroundColor: 'var(--black)',
+              borderRight: '1px solid rgba(255,255,255,0.08)',
+              boxShadow: '8px 0 24px rgba(0,0,0,0.6)',
+              zIndex: 60,
+              padding: '6rem 0 2rem',
+              overflowY: 'auto',
+              transform: categoriesOpen ? 'translateX(0)' : 'translateX(-100%)',
+              transition: 'transform 0.3s ease',
+            } : {
               borderRight: '1px solid rgba(255,255,255,0.06)',
               padding: '3rem 0',
               position: 'sticky',
@@ -208,6 +277,7 @@ export default function MenuPage() {
                           <button key={cat.id}
                             onClick={() => {
                               setActiveCategory(cat.id)
+                              setCategoriesOpen(false)
                               const el = document.getElementById(`cat-${cat.id}`)
                               if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
                             }}
@@ -287,7 +357,7 @@ export default function MenuPage() {
             </div>
 
             {/* RIGHT — All Items */}
-            <div style={{ padding: '4rem' }}>
+            <div style={{ padding: isMobile ? '1.5rem' : '4rem' }}>
               {categories.length === 0 ? (
                 <p style={{ color: 'rgba(245,242,236,0.2)', fontFamily: 'var(--font-inter)' }}>
                   No categories yet.
@@ -314,7 +384,7 @@ export default function MenuPage() {
                       }}>
                         <h2 style={{
                           fontFamily: 'var(--font-cinzel)',
-                          fontSize: '2rem',
+                          fontSize: isMobile ? '1.5rem' : '2rem',
                           color: sectionColors[s],
                         }}>{s}</h2>
                       </div>
@@ -335,7 +405,8 @@ export default function MenuPage() {
                             }}>
                               {cat.image && (
                                 <div style={{
-                                  width: '50px', height: '50px',
+                                  width: isMobile ? '40px' : '50px',
+                                  height: isMobile ? '40px' : '50px',
                                   borderRadius: '4px',
                                   backgroundImage: `url(${cat.image})`,
                                   backgroundSize: 'cover',
@@ -356,7 +427,7 @@ export default function MenuPage() {
                                 }}>{s}</p>
                                 <h3 style={{
                                   fontFamily: 'var(--font-cinzel)',
-                                  fontSize: '1.4rem',
+                                  fontSize: isMobile ? '1.1rem' : '1.4rem',
                                   color: 'var(--offwhite)',
                                 }}>{cat.name}</h3>
                               </div>
@@ -372,7 +443,7 @@ export default function MenuPage() {
                             {/* Items */}
                             <div style={{
                               display: 'grid',
-                              gridTemplateColumns: 'repeat(2, 1fr)',
+                              gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, 1fr)',
                               gap: '0',
                             }}>
                               {catItems.map(item => (

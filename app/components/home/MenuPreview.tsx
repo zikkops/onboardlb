@@ -13,9 +13,21 @@ interface Category {
   order: number
 }
 
+function useIsMobile(breakpoint = 768) {
+  const [isMobile, setIsMobile] = useState(false)
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < breakpoint)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [breakpoint])
+  return isMobile
+}
+
 export default function MenuPreview() {
   const [categories, setCategories] = useState<Category[]>([])
   const [loading, setLoading]       = useState(true)
+  const isMobile = useIsMobile()
 
   useEffect(() => {
     async function load() {
@@ -40,7 +52,7 @@ export default function MenuPreview() {
       backgroundColor: 'rgba(255,255,255,0.015)',
       borderTop: '1px solid rgba(255,255,255,0.05)',
       borderBottom: '1px solid rgba(255,255,255,0.05)',
-      padding: '6rem 3rem',
+      padding: isMobile ? '4rem 1.25rem' : '6rem 3rem',
     }}>
       <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
 
@@ -56,7 +68,7 @@ export default function MenuPreview() {
 
         <h2 style={{
           fontFamily: 'var(--font-cinzel)',
-          fontSize: '2.8rem',
+          fontSize: isMobile ? '1.75rem' : '2.8rem',
           color: 'var(--offwhite)',
           lineHeight: 1.2,
           marginBottom: '1.5rem',
@@ -67,7 +79,7 @@ export default function MenuPreview() {
         <div style={{
           width: '60px', height: '2px',
           backgroundColor: 'var(--teal)',
-          marginBottom: '3rem',
+          marginBottom: isMobile ? '2rem' : '3rem',
         }} />
 
         {loading ? (
@@ -75,8 +87,8 @@ export default function MenuPreview() {
         ) : (
           <div style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(5, 1fr)',
-            gap: '1rem',
+            gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(5, 1fr)',
+            gap: isMobile ? '0.75rem' : '1rem',
           }}>
             {/* Category Cards */}
             {display.map(({ id, name, image, section }) => {
@@ -89,7 +101,7 @@ export default function MenuPreview() {
               return (
                 <Link key={id} href="/menu" style={{
                   position: 'relative',
-                  height: '180px',
+                  height: isMobile ? '140px' : '180px',
                   borderRadius: '4px',
                   overflow: 'hidden',
                   textDecoration: 'none',
@@ -137,13 +149,13 @@ export default function MenuPreview() {
                   }}>
                     <p style={{
                       fontFamily: 'var(--font-cinzel)',
-                      fontSize: '0.85rem',
+                      fontSize: isMobile ? '0.75rem' : '0.85rem',
                       color: '#fff',
                       letterSpacing: '0.05em',
                     }}>{name}</p>
                     <p style={{
                       fontFamily: 'var(--font-inter)',
-                      fontSize: '0.65rem',
+                      fontSize: isMobile ? '0.6rem' : '0.65rem',
                       color: color,
                       letterSpacing: '0.1em',
                       textTransform: 'uppercase',
@@ -157,7 +169,7 @@ export default function MenuPreview() {
             {/* Last card — Go to Menu */}
             <Link href="/menu" style={{
               position: 'relative',
-              height: '180px',
+              height: isMobile ? '140px' : '180px',
               borderRadius: '4px',
               overflow: 'hidden',
               textDecoration: 'none',
@@ -170,19 +182,19 @@ export default function MenuPreview() {
               background: 'rgba(0,160,152,0.05)',
             }}>
               <div style={{
-                width: '44px',
-                height: '44px',
+                width: isMobile ? '36px' : '44px',
+                height: isMobile ? '36px' : '44px',
                 borderRadius: '50%',
                 border: '1px solid rgba(0,160,152,0.4)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 color: 'var(--teal)',
-                fontSize: '1.2rem',
+                fontSize: isMobile ? '1rem' : '1.2rem',
               }}>{'→'}</div>
               <p style={{
                 fontFamily: 'var(--font-cinzel)',
-                fontSize: '0.85rem',
+                fontSize: isMobile ? '0.75rem' : '0.85rem',
                 color: 'var(--offwhite)',
                 textAlign: 'center',
                 padding: '0 1rem',

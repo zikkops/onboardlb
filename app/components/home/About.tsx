@@ -4,7 +4,18 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { useEffect, useRef, useState } from 'react'
 
-function AnimatedNumber({ target, suffix = '' }: { target: number, suffix?: string }) {
+function useIsMobile(breakpoint = 768) {
+  const [isMobile, setIsMobile] = useState(false)
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < breakpoint)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [breakpoint])
+  return isMobile
+}
+
+function AnimatedNumber({ target, suffix = '' }: { target: number; suffix?: string }) {
   const [count, setCount] = useState(0)
   const ref = useRef<HTMLDivElement>(null)
   const started = useRef(false)
@@ -91,26 +102,28 @@ function InfinityNumber() {
 }
 
 export default function About() {
+  const isMobile = useIsMobile()
+
   return (
     <section id="about" style={{
       maxWidth: '1200px',
       margin: '0 auto',
-      padding: '6rem 3rem',
+      padding: isMobile ? '4rem 1.25rem' : '6rem 3rem',
     }}>
 
       {/* Top grid — image + text */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: '1fr 1fr',
-        gap: '5rem',
+        gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+        gap: isMobile ? '2rem' : '5rem',
         alignItems: 'center',
         marginBottom: '4rem',
       }}>
 
-        {/* Left — Image */}
+        {/* Image */}
         <div style={{
           position: 'relative',
-          height: '450px',
+          height: isMobile ? '240px' : '450px',
           borderRadius: '4px',
           overflow: 'hidden',
           border: '1px solid rgba(255,255,255,0.06)',
@@ -123,7 +136,7 @@ export default function About() {
           />
         </div>
 
-        {/* Right — Text */}
+        {/* Text */}
         <div>
           <p style={{
             fontSize: '0.7rem',
@@ -138,7 +151,7 @@ export default function About() {
 
           <h2 style={{
             fontFamily: 'var(--font-cinzel)',
-            fontSize: '2.5rem',
+            fontSize: isMobile ? '1.75rem' : '2.5rem',
             color: 'var(--offwhite)',
             lineHeight: 1.2,
             marginBottom: '1.5rem',
@@ -157,6 +170,7 @@ export default function About() {
             lineHeight: 1.9,
             marginBottom: '2.5rem',
             fontFamily: 'var(--font-inter)',
+            fontSize: isMobile ? '0.88rem' : '1rem',
           }}>
             Onboard was born from a simple belief: the best moments happen around
             a table. We're a restaurant, a social hub, and home to Lebanon's biggest
@@ -180,63 +194,37 @@ export default function About() {
         </div>
       </div>
 
-      {/* Full width stats bar */}
+      {/* Stats bar */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(3, 1fr)',
+        gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)',
         gap: '1px',
         backgroundColor: 'rgba(255,255,255,0.06)',
         border: '1px solid rgba(255,255,255,0.06)',
         borderRadius: '4px',
         overflow: 'hidden',
       }}>
-        <div style={{
-          padding: '2.5rem 2rem',
-          textAlign: 'center',
-          backgroundColor: 'var(--black)',
-        }}>
-          <AnimatedNumber target={500} suffix="+" />
-          <div style={{
-            fontSize: '0.68rem',
-            letterSpacing: '0.15em',
-            textTransform: 'uppercase',
-            color: 'rgba(245,242,236,0.4)',
-            marginTop: '0.5rem',
-            fontFamily: 'var(--font-inter)',
-          }}>Games in Library</div>
-        </div>
-
-        <div style={{
-          padding: '2.5rem 2rem',
-          textAlign: 'center',
-          backgroundColor: 'var(--black)',
-        }}>
-          <AnimatedNumber target={3} />
-          <div style={{
-            fontSize: '0.68rem',
-            letterSpacing: '0.15em',
-            textTransform: 'uppercase',
-            color: 'rgba(245,242,236,0.4)',
-            marginTop: '0.5rem',
-            fontFamily: 'var(--font-inter)',
-          }}>Branches</div>
-        </div>
-
-        <div style={{
-          padding: '2.5rem 2rem',
-          textAlign: 'center',
-          backgroundColor: 'var(--black)',
-        }}>
-          <InfinityNumber />
-          <div style={{
-            fontSize: '0.68rem',
-            letterSpacing: '0.15em',
-            textTransform: 'uppercase',
-            color: 'rgba(245,242,236,0.4)',
-            marginTop: '0.5rem',
-            fontFamily: 'var(--font-inter)',
-          }}>Good Times</div>
-        </div>
+        {[
+          { el: <AnimatedNumber target={500} suffix="+" />, label: 'Games in Library' },
+          { el: <AnimatedNumber target={3} />, label: 'Branches' },
+          { el: <InfinityNumber />, label: 'Good Times' },
+        ].map(({ el, label }, i) => (
+          <div key={i} style={{
+            padding: isMobile ? '1.75rem 1.5rem' : '2.5rem 2rem',
+            textAlign: 'center',
+            backgroundColor: 'var(--black)',
+          }}>
+            {el}
+            <div style={{
+              fontSize: '0.68rem',
+              letterSpacing: '0.15em',
+              textTransform: 'uppercase',
+              color: 'rgba(245,242,236,0.4)',
+              marginTop: '0.5rem',
+              fontFamily: 'var(--font-inter)',
+            }}>{label}</div>
+          </div>
+        ))}
       </div>
 
     </section>

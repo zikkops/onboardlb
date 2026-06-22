@@ -57,10 +57,22 @@ const sectionColors: Record<Section, string> = {
   Sweets:   'var(--red)',
 }
 
-function SortableItem({ item, onEdit, onDelete }: {
+function useIsMobile(breakpoint = 768) {
+  const [isMobile, setIsMobile] = useState(false)
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < breakpoint)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [breakpoint])
+  return isMobile
+}
+
+function SortableItem({ item, onEdit, onDelete, isMobile }: {
   item: MenuItem
   onEdit: (item: MenuItem) => void
   onDelete: (id: string) => void
+  isMobile: boolean
 }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: item.id })
   const style = { transform: CSS.Transform.toString(transform), transition }
@@ -69,9 +81,10 @@ function SortableItem({ item, onEdit, onDelete }: {
     <div ref={setNodeRef} style={{
       ...style,
       display: 'flex',
+      flexWrap: isMobile ? 'wrap' : 'nowrap',
       alignItems: 'center',
-      gap: '1rem',
-      padding: '0.9rem 1.2rem',
+      gap: isMobile ? '0.6rem' : '1rem',
+      padding: isMobile ? '0.8rem 1rem' : '0.9rem 1.2rem',
       borderBottom: '1px solid rgba(255,255,255,0.04)',
       background: 'rgba(255,255,255,0.01)',
     }}>
@@ -152,6 +165,7 @@ function SortableItem({ item, onEdit, onDelete }: {
 
 export default function AdminMenuPage() {
   const router = useRouter()
+  const isMobile = useIsMobile()
   const [checking, setChecking]             = useState(true)
   const [categories, setCategories]         = useState<Category[]>([])
   const [items, setItems]                   = useState<MenuItem[]>([])
@@ -378,14 +392,16 @@ export default function AdminMenuPage() {
   if (checking) return null
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: 'var(--black)', padding: '3rem' }}>
+    <div style={{ minHeight: '100vh', backgroundColor: 'var(--black)', padding: isMobile ? '1.25rem' : '3rem' }}>
       <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
 
         {/* Header */}
         <div style={{
           display: 'flex',
+          flexDirection: isMobile ? 'column' : 'row',
           justifyContent: 'space-between',
-          alignItems: 'center',
+          alignItems: isMobile ? 'flex-start' : 'center',
+          gap: isMobile ? '1.25rem' : '0',
           marginBottom: '2rem',
         }}>
           <div>
@@ -422,6 +438,7 @@ export default function AdminMenuPage() {
         <div style={{
           display: 'flex',
           gap: '0',
+          flexWrap: 'wrap',
           borderBottom: '1px solid rgba(255,255,255,0.08)',
           marginBottom: '2rem',
         }}>
@@ -436,7 +453,7 @@ export default function AdminMenuPage() {
               border: 'none',
               borderBottom: `2px solid ${activeSection === s ? sectionColors[s] : 'transparent'}`,
               color: activeSection === s ? 'var(--offwhite)' : 'rgba(245,242,236,0.4)',
-              padding: '0.85rem 2rem',
+              padding: isMobile ? '0.7rem 1.2rem' : '0.85rem 2rem',
               fontSize: '0.78rem',
               letterSpacing: '0.15em',
               textTransform: 'uppercase',
@@ -447,7 +464,7 @@ export default function AdminMenuPage() {
           ))}
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: '2rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '300px 1fr', gap: isMobile ? '1.5rem' : '2rem' }}>
 
           {/* Left — Categories */}
           <div>
@@ -663,7 +680,7 @@ export default function AdminMenuPage() {
                 <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
                   <SortableContext items={activeCatItems.map(i => i.id)} strategy={verticalListSortingStrategy}>
                     {activeCatItems.map(item => (
-                      <SortableItem key={item.id} item={item} onEdit={openEdit} onDelete={handleDelete} />
+                      <SortableItem key={item.id} item={item} onEdit={openEdit} onDelete={handleDelete} isMobile={isMobile} />
                     ))}
                   </SortableContext>
                 </DndContext>
@@ -682,7 +699,7 @@ export default function AdminMenuPage() {
           alignItems: 'center',
           justifyContent: 'center',
           zIndex: 200,
-          padding: '2rem',
+          padding: isMobile ? '1rem' : '2rem',
         }}>
           <div style={{
             backgroundColor: '#111',
@@ -690,12 +707,14 @@ export default function AdminMenuPage() {
             borderRadius: '8px',
             width: '100%',
             maxWidth: '480px',
+            maxHeight: '90vh',
+            overflowY: 'auto',
           }}>
             <div style={{
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
-              padding: '1.5rem 2rem',
+              padding: isMobile ? '1.25rem 1.5rem' : '1.5rem 2rem',
               borderBottom: '1px solid rgba(255,255,255,0.06)',
             }}>
               <h2 style={{ fontFamily: 'var(--font-cinzel)', fontSize: '1.2rem', color: 'var(--offwhite)' }}>
@@ -707,7 +726,7 @@ export default function AdminMenuPage() {
               }}>✕</button>
             </div>
 
-            <form onSubmit={handleSaveCat} style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+            <form onSubmit={handleSaveCat} style={{ padding: isMobile ? '1.5rem' : '2rem', display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
               <div>
                 <label style={labelStyle}>Category Name</label>
                 <input type="text" value={editCatName} required
@@ -781,7 +800,7 @@ export default function AdminMenuPage() {
           alignItems: 'center',
           justifyContent: 'center',
           zIndex: 100,
-          padding: '2rem',
+          padding: isMobile ? '1rem' : '2rem',
         }}>
           <div style={{
             backgroundColor: '#111',
@@ -789,12 +808,14 @@ export default function AdminMenuPage() {
             borderRadius: '8px',
             width: '100%',
             maxWidth: '500px',
+            maxHeight: '90vh',
+            overflowY: 'auto',
           }}>
             <div style={{
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
-              padding: '1.5rem 2rem',
+              padding: isMobile ? '1.25rem 1.5rem' : '1.5rem 2rem',
               borderBottom: '1px solid rgba(255,255,255,0.06)',
             }}>
               <h2 style={{ fontFamily: 'var(--font-cinzel)', fontSize: '1.2rem', color: 'var(--offwhite)' }}>
@@ -806,7 +827,7 @@ export default function AdminMenuPage() {
               }}>✕</button>
             </div>
 
-            <form onSubmit={handleSave} style={{ padding: '2rem', display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+            <form onSubmit={handleSave} style={{ padding: isMobile ? '1.5rem' : '2rem', display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
               <div>
                 <label style={labelStyle}>Name</label>
                 <input type="text" value={form.name} required
@@ -821,7 +842,7 @@ export default function AdminMenuPage() {
                   style={{ ...inputStyle, resize: 'none' }} />
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '1rem' }}>
                 <div>
                   <label style={labelStyle}>Price ($)</label>
                   <input type="number" step="0.5" value={form.price} required

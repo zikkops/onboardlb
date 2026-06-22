@@ -5,10 +5,22 @@ import { useRouter } from 'next/navigation'
 import { onAuthStateChanged, signOut } from 'firebase/auth'
 import { auth } from '../lib/firebase'
 
+function useIsMobile(breakpoint = 768) {
+  const [isMobile, setIsMobile] = useState(false)
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < breakpoint)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [breakpoint])
+  return isMobile
+}
+
 export default function AdminPage() {
   const router  = useRouter()
   const [checking, setChecking] = useState(true)
   const [email, setEmail]       = useState('')
+  const isMobile = useIsMobile()
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (user) => {
@@ -49,16 +61,18 @@ export default function AdminPage() {
     <div style={{
       minHeight: '100vh',
       backgroundColor: 'var(--black)',
-      padding: '3rem',
+      padding: isMobile ? '1.5rem' : '3rem',
     }}>
       <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
 
         {/* Header */}
         <div style={{
           display: 'flex',
+          flexDirection: isMobile ? 'column' : 'row',
           justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: '3rem',
+          alignItems: isMobile ? 'flex-start' : 'center',
+          gap: isMobile ? '1.25rem' : '0',
+          marginBottom: isMobile ? '2rem' : '3rem',
           borderBottom: '1px solid rgba(255,255,255,0.06)',
           paddingBottom: '2rem',
         }}>
@@ -101,7 +115,7 @@ export default function AdminPage() {
         {/* Cards */}
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(3, 1fr)',
+          gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)',
           gap: '1.5rem',
         }}>
           {[

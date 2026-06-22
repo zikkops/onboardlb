@@ -19,10 +19,22 @@ function truncate(text: string, words: number) {
   return arr.length > words ? arr.slice(0, words).join(' ') + '…' : text
 }
 
+function useIsMobile(breakpoint = 768) {
+  const [isMobile, setIsMobile] = useState(false)
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < breakpoint)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [breakpoint])
+  return isMobile
+}
+
 export default function ShopPreview() {
   const [games, setGames]         = useState<Game[]>([])
   const [loading, setLoading]     = useState(true)
   const [hoveredId, setHoveredId] = useState<string | null>(null)
+  const isMobile = useIsMobile()
 
   useEffect(() => {
     async function load() {
@@ -35,7 +47,7 @@ export default function ShopPreview() {
   }, [])
 
   return (
-    <section style={{ padding: '6rem 3rem' }}>
+    <section style={{ padding: isMobile ? '4rem 1.25rem' : '6rem 3rem' }}>
       <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
 
         <p style={{
@@ -49,7 +61,7 @@ export default function ShopPreview() {
 
         <h2 style={{
           fontFamily: 'var(--font-cinzel)',
-          fontSize: '2.8rem',
+          fontSize: isMobile ? '1.75rem' : '2.8rem',
           color: 'var(--offwhite)',
           lineHeight: 1.2,
           marginBottom: '1.5rem',
@@ -60,7 +72,7 @@ export default function ShopPreview() {
         <div style={{
           width: '60px', height: '2px',
           backgroundColor: 'var(--purple)',
-          marginBottom: '3rem',
+          marginBottom: isMobile ? '2rem' : '3rem',
         }} />
 
         {loading ? (
@@ -68,8 +80,8 @@ export default function ShopPreview() {
         ) : (
           <div style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(4, 1fr)',
-            gap: '1.5rem',
+            gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)',
+            gap: isMobile ? '0.75rem' : '1.5rem',
           }}>
 
             {/* Game Cards */}
@@ -118,8 +130,8 @@ export default function ShopPreview() {
                   {/* Image with white bg and zoom */}
                   <div style={{
                     backgroundColor: '#fff',
-                    padding: '1rem',
-                    height: '200px',
+                    padding: isMobile ? '0.6rem' : '1rem',
+                    height: isMobile ? '120px' : '200px',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -142,7 +154,7 @@ export default function ShopPreview() {
 
                   {/* Content */}
                   <div style={{
-                    padding: '1.2rem',
+                    padding: isMobile ? '0.8rem' : '1.2rem',
                     display: 'flex',
                     flexDirection: 'column',
                     flex: 1,
@@ -150,16 +162,18 @@ export default function ShopPreview() {
                   }}>
                     <h3 style={{
                       fontFamily: 'var(--font-cinzel)',
-                      fontSize: '1rem',
+                      fontSize: isMobile ? '0.85rem' : '1rem',
                       color: 'var(--offwhite)',
                     }}>{name}</h3>
 
-                    <p style={{
-                      fontFamily: 'var(--font-inter)',
-                      fontSize: '0.78rem',
-                      color: 'rgba(245,242,236,0.45)',
-                      lineHeight: 1.6,
-                    }}>{truncate(description, 10)}</p>
+                    {!isMobile && (
+                      <p style={{
+                        fontFamily: 'var(--font-inter)',
+                        fontSize: '0.78rem',
+                        color: 'rgba(245,242,236,0.45)',
+                        lineHeight: 1.6,
+                      }}>{truncate(description, 10)}</p>
+                    )}
 
                     {/* Price + Stock + Learn More */}
                     <div style={{
@@ -167,20 +181,22 @@ export default function ShopPreview() {
                       paddingTop: '0.6rem',
                       borderTop: '1px solid rgba(255,255,255,0.05)',
                       display: 'flex',
-                      alignItems: 'center',
+                      flexDirection: isMobile ? 'column' : 'row',
+                      alignItems: isMobile ? 'flex-start' : 'center',
                       justifyContent: 'space-between',
+                      gap: isMobile ? '0.4rem' : 0,
                     }}>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
                         {price > 0 && (
                           <span style={{
                             fontFamily: 'var(--font-cinzel)',
-                            fontSize: '1.2rem',
+                            fontSize: isMobile ? '1rem' : '1.2rem',
                             color: 'var(--purple)',
                           }}>${price}</span>
                         )}
                         <span style={{
                           fontFamily: 'var(--font-inter)',
-                          fontSize: '0.68rem',
+                          fontSize: isMobile ? '0.6rem' : '0.68rem',
                           color: outOfStock ? 'var(--red)' : 'var(--teal)',
                           letterSpacing: '0.08em',
                           textTransform: 'uppercase',
@@ -190,7 +206,7 @@ export default function ShopPreview() {
                       </div>
                       <span style={{
                         fontFamily: 'var(--font-inter)',
-                        fontSize: '0.72rem',
+                        fontSize: isMobile ? '0.65rem' : '0.72rem',
                         letterSpacing: '0.08em',
                         textTransform: 'uppercase',
                         color: hovered && !outOfStock ? 'var(--purple)' : 'rgba(245,242,236,0.35)',
@@ -214,35 +230,38 @@ export default function ShopPreview() {
               alignItems: 'center',
               justifyContent: 'center',
               textDecoration: 'none',
-              gap: '1rem',
-              padding: '2rem',
-              minHeight: '360px',
+              gap: isMobile ? '0.6rem' : '1rem',
+              padding: isMobile ? '1.25rem' : '2rem',
+              minHeight: isMobile ? '180px' : '360px',
             }}>
               <div style={{
-                width: '60px', height: '60px',
+                width: isMobile ? '40px' : '60px',
+                height: isMobile ? '40px' : '60px',
                 borderRadius: '50%',
                 border: '1px solid rgba(106,106,183,0.4)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontSize: '1.5rem',
+                fontSize: isMobile ? '1.1rem' : '1.5rem',
                 color: 'var(--purple)',
               }}>{'→'}</div>
               <p style={{
                 fontFamily: 'var(--font-cinzel)',
-                fontSize: '1rem',
+                fontSize: isMobile ? '0.85rem' : '1rem',
                 color: 'var(--offwhite)',
                 textAlign: 'center',
               }}>Browse Full Library</p>
-              <p style={{
-                fontFamily: 'var(--font-inter)',
-                fontSize: '0.75rem',
-                color: 'rgba(245,242,236,0.35)',
-                textAlign: 'center',
-                lineHeight: 1.6,
-              }}>
-                500+ games available to play in store and buy to take home
-              </p>
+              {!isMobile && (
+                <p style={{
+                  fontFamily: 'var(--font-inter)',
+                  fontSize: '0.75rem',
+                  color: 'rgba(245,242,236,0.35)',
+                  textAlign: 'center',
+                  lineHeight: 1.6,
+                }}>
+                  500+ games available to play in store and buy to take home
+                </p>
+              )}
             </Link>
 
           </div>

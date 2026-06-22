@@ -15,10 +15,22 @@ interface Campaign {
   order: number
 }
 
+function useIsMobile(breakpoint = 768) {
+  const [isMobile, setIsMobile] = useState(false)
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < breakpoint)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [breakpoint])
+  return isMobile
+}
+
 export default function DndPreview() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [current, setCurrent]     = useState(0)
   const [loading, setLoading]     = useState(true)
+  const isMobile = useIsMobile()
 
   useEffect(() => {
     async function load() {
@@ -44,7 +56,7 @@ export default function DndPreview() {
 
   return (
     <section style={{
-      padding: '6rem 3rem',
+      padding: isMobile ? '4rem 1.25rem' : '6rem 3rem',
       backgroundColor: 'rgba(50,50,124,0.08)',
       borderTop: '1px solid rgba(50,50,124,0.2)',
       borderBottom: '1px solid rgba(50,50,124,0.2)',
@@ -52,8 +64,8 @@ export default function DndPreview() {
       <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
         <div style={{
           display: 'grid',
-          gridTemplateColumns: '1fr 1fr',
-          gap: '5rem',
+          gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+          gap: isMobile ? '2.5rem' : '5rem',
           alignItems: 'center',
         }}>
 
@@ -70,7 +82,7 @@ export default function DndPreview() {
 
             <h2 style={{
               fontFamily: 'var(--font-cinzel)',
-              fontSize: '2.8rem',
+              fontSize: isMobile ? '1.75rem' : '2.8rem',
               color: 'var(--offwhite)',
               lineHeight: 1.2,
               marginBottom: '1.5rem',
@@ -89,6 +101,7 @@ export default function DndPreview() {
               lineHeight: 1.9,
               marginBottom: '1.2rem',
               fontFamily: 'var(--font-inter)',
+              fontSize: isMobile ? '0.88rem' : '1rem',
             }}>
               Onboard is Lebanon's home for Dungeons & Dragons. Whether you're a
               seasoned adventurer or picking up your first d20, our Dungeon Masters
@@ -98,15 +111,16 @@ export default function DndPreview() {
             <p style={{
               color: 'rgba(245,242,236,0.55)',
               lineHeight: 1.9,
-              marginBottom: '3rem',
+              marginBottom: isMobile ? '2rem' : '3rem',
               fontFamily: 'var(--font-inter)',
+              fontSize: isMobile ? '0.88rem' : '1rem',
             }}>
               We host weekly sessions, beginner one-shots, and full campaigns.
               All materials provided — just bring your imagination.
             </p>
 
             {/* Features */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '3rem' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: isMobile ? '2rem' : '3rem' }}>
               {[
                 { title: 'Weekly Sessions',        text: 'Regular games every week at all 3 branches' },
                 { title: 'All Levels Welcome',     text: 'Beginners to veterans — everyone has a seat at the table' },
@@ -159,7 +173,7 @@ export default function DndPreview() {
 
             {loading || campaigns.length === 0 ? (
               <div style={{
-                height: '480px',
+                height: isMobile ? '320px' : '480px',
                 borderRadius: '4px',
                 border: '1px solid rgba(106,106,183,0.2)',
                 background: 'rgba(50,50,124,0.1)',
@@ -176,7 +190,7 @@ export default function DndPreview() {
               <>
                 <div style={{
                   position: 'relative',
-                  height: '480px',
+                  height: isMobile ? '320px' : '480px',
                   borderRadius: '4px',
                   overflow: 'hidden',
                   border: '1px solid rgba(106,106,183,0.2)',
@@ -200,15 +214,17 @@ export default function DndPreview() {
                   {/* Badge */}
                   <div style={{
                     position: 'absolute',
-                    bottom: '2rem', left: '2rem', right: '2rem',
+                    bottom: isMobile ? '1rem' : '2rem',
+                    left: isMobile ? '1rem' : '2rem',
+                    right: isMobile ? '1rem' : '2rem',
                     background: 'rgba(10,10,10,0.85)',
                     border: `1px solid ${campaign.color}50`,
                     borderRadius: '4px',
-                    padding: '1.2rem 1.5rem',
+                    padding: isMobile ? '1rem 1.1rem' : '1.2rem 1.5rem',
                   }}>
                     <p style={{
                       fontFamily: 'var(--font-inter)',
-                      fontSize: '0.65rem',
+                      fontSize: isMobile ? '0.6rem' : '0.65rem',
                       letterSpacing: '0.15em',
                       textTransform: 'uppercase',
                       color: campaign.color,
@@ -216,13 +232,13 @@ export default function DndPreview() {
                     }}>{campaign.type}</p>
                     <p style={{
                       fontFamily: 'var(--font-cinzel)',
-                      fontSize: '1.1rem',
+                      fontSize: isMobile ? '0.95rem' : '1.1rem',
                       color: 'var(--offwhite)',
                       marginBottom: '0.3rem',
                     }}>{campaign.title}</p>
                     <p style={{
                       fontFamily: 'var(--font-inter)',
-                      fontSize: '0.78rem',
+                      fontSize: isMobile ? '0.72rem' : '0.78rem',
                       color: 'rgba(245,242,236,0.5)',
                     }}>{campaign.description?.split(' ').slice(0, 12).join(' ')}…</p>
                   </div>

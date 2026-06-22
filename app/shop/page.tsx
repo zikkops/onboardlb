@@ -27,6 +27,17 @@ function truncate(text: string, words: number) {
   return arr.length > words ? arr.slice(0, words).join(' ') + '…' : text
 }
 
+function useIsMobile(breakpoint = 768) {
+  const [isMobile, setIsMobile] = useState(false)
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < breakpoint)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [breakpoint])
+  return isMobile
+}
+
 export default function ShopPage() {
   const [games, setGames]               = useState<Game[]>([])
   const [loading, setLoading]           = useState(true)
@@ -38,6 +49,8 @@ export default function ShopPage() {
   const [dbCategories, setDbCategories] = useState<string[]>([])
   const [minPlayers, setMinPlayers] = useState<number>(1)
   const [maxPlayers, setMaxPlayers] = useState<number>(10)
+  const isMobile = useIsMobile()
+  const [filtersOpen, setFiltersOpen] = useState(false)
 
   useEffect(() => {
     async function load() {
@@ -94,6 +107,317 @@ export default function ShopPage() {
     setMaxPlayers(10)
   }
 
+  const filterFields = (
+    <>
+      {/* Search */}
+      <div>
+        <p style={{
+          fontSize: '0.65rem',
+          letterSpacing: '0.2em',
+          textTransform: 'uppercase',
+          color: 'rgba(245,242,236,0.3)',
+          fontFamily: 'var(--font-inter)',
+          marginBottom: '0.8rem',
+        }}>Search</p>
+        <div style={{ position: 'relative' }}>
+          <FontAwesomeIcon icon={faSearch} style={{
+            position: 'absolute',
+            left: '0.9rem',
+            top: '50%',
+            transform: 'translateY(-50%)',
+            width: '13px',
+            color: 'rgba(245,242,236,0.3)',
+            pointerEvents: 'none',
+          }} />
+          <input
+            type="search"
+            placeholder="Search games…"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            style={{
+              width: '100%',
+              backgroundColor: 'rgba(255,255,255,0.04)',
+              border: '1px solid rgba(255,255,255,0.1)',
+              color: 'var(--offwhite)',
+              padding: '0.75rem 1rem 0.75rem 2.5rem',
+              borderRadius: '4px',
+              fontSize: '0.85rem',
+              outline: 'none',
+              fontFamily: 'var(--font-inter)',
+            }}
+          />
+        </div>
+      </div>
+
+      <div style={{ height: '1px', backgroundColor: 'rgba(255,255,255,0.06)' }} />
+
+      {/* Category */}
+      <div>
+        <p style={{
+          fontSize: '0.65rem',
+          letterSpacing: '0.2em',
+          textTransform: 'uppercase',
+          color: 'rgba(245,242,236,0.3)',
+          fontFamily: 'var(--font-inter)',
+          marginBottom: '0.8rem',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.5rem',
+        }}>
+          <FontAwesomeIcon icon={faSliders} style={{ width: '12px' }} />
+          Category
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+          {CATEGORIES.map(cat => (
+            <button key={cat} onClick={() => setFilter(cat)} style={{
+              display: 'flex',
+              alignItems: 'center',
+              backgroundColor: 'transparent',
+              border: 'none',
+              borderLeft: `2px solid ${filter === cat ? 'var(--purple)' : 'transparent'}`,
+              color: filter === cat ? 'var(--offwhite)' : 'rgba(245,242,236,0.45)',
+              padding: '0.5rem 0.8rem',
+              fontSize: '0.82rem',
+              cursor: 'pointer',
+              fontFamily: 'var(--font-inter)',
+              textAlign: 'left',
+              transition: 'all 0.2s',
+              borderRadius: '0 4px 4px 0',
+              background: filter === cat ? 'rgba(106,106,183,0.08)' : 'transparent',
+            }}>{cat}</button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ height: '1px', backgroundColor: 'rgba(255,255,255,0.06)' }} />
+
+      {/* Price Range */}
+      <div>
+        <p style={{
+          fontSize: '0.65rem',
+          letterSpacing: '0.2em',
+          textTransform: 'uppercase',
+          color: 'rgba(245,242,236,0.3)',
+          fontFamily: 'var(--font-inter)',
+          marginBottom: '0.5rem',
+        }}>Max Price</p>
+        <p style={{
+          fontFamily: 'var(--font-cinzel)',
+          fontSize: '1.5rem',
+          color: 'var(--purple)',
+          marginBottom: '1rem',
+        }}>${maxPrice ?? sliderMax}</p>
+        <input
+          type="range"
+          min={0}
+          max={sliderMax}
+          value={maxPrice ?? sliderMax}
+          onChange={e => setMaxPrice(+e.target.value)}
+          style={{
+            width: '100%',
+            accentColor: 'var(--purple)',
+            cursor: 'pointer',
+            height: '4px',
+          }}
+        />
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          marginTop: '0.4rem',
+          fontSize: '0.68rem',
+          color: 'rgba(245,242,236,0.25)',
+          fontFamily: 'var(--font-inter)',
+        }}>
+          <span>$0</span>
+          <span>${sliderMax}</span>
+        </div>
+      </div>
+
+      <div style={{ height: '1px', backgroundColor: 'rgba(255,255,255,0.06)' }} />
+
+      {/* Players Filter */}
+      <div>
+        <p style={{
+          fontSize: '0.65rem',
+          letterSpacing: '0.2em',
+          textTransform: 'uppercase',
+          color: 'rgba(245,242,236,0.3)',
+          fontFamily: 'var(--font-inter)',
+          marginBottom: '0.8rem',
+        }}>Number of Players</p>
+
+        <p style={{
+          fontFamily: 'var(--font-cinzel)',
+          fontSize: '1.2rem',
+          color: 'var(--purple)',
+          marginBottom: '1rem',
+        }}>
+          {minPlayers === maxPlayers ? `${minPlayers} players` : `${minPlayers}–${maxPlayers} players`}
+        </p>
+
+        {/* Min Players */}
+        <div style={{ marginBottom: '0.8rem' }}>
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            fontSize: '0.65rem',
+            color: 'rgba(245,242,236,0.25)',
+            fontFamily: 'var(--font-inter)',
+            marginBottom: '0.3rem',
+          }}>
+            <span>Min players</span>
+            <span>{minPlayers}</span>
+          </div>
+          <input
+            type="range"
+            min={1}
+            max={10}
+            value={minPlayers}
+            onChange={e => {
+              const val = +e.target.value
+              setMinPlayers(val)
+              if (val > maxPlayers) setMaxPlayers(val)
+            }}
+            style={{
+              width: '100%',
+              accentColor: 'var(--purple)',
+              cursor: 'pointer',
+              height: '4px',
+            }}
+          />
+        </div>
+
+        {/* Max Players */}
+        <div>
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            fontSize: '0.65rem',
+            color: 'rgba(245,242,236,0.25)',
+            fontFamily: 'var(--font-inter)',
+            marginBottom: '0.3rem',
+          }}>
+            <span>Max players</span>
+            <span>{maxPlayers}</span>
+          </div>
+          <input
+            type="range"
+            min={1}
+            max={10}
+            value={maxPlayers}
+            onChange={e => {
+              const val = +e.target.value
+              setMaxPlayers(val)
+              if (val < minPlayers) setMinPlayers(val)
+            }}
+            style={{
+              width: '100%',
+              accentColor: 'var(--purple)',
+              cursor: 'pointer',
+              height: '4px',
+            }}
+          />
+        </div>
+
+        {/* Quick select */}
+        <div style={{
+          display: 'flex',
+          gap: '0.4rem',
+          flexWrap: 'wrap',
+          marginTop: '0.8rem',
+        }}>
+          {[
+            { label: 'Solo',    min: 1, max: 1 },
+            { label: '2',       min: 2, max: 2 },
+            { label: '2–4',     min: 2, max: 4 },
+            { label: '4+',      min: 4, max: 10 },
+            { label: 'Any',     min: 1, max: 10 },
+          ].map(({ label, min, max }) => (
+            <button
+              key={label}
+              onClick={() => { setMinPlayers(min); setMaxPlayers(max) }}
+              style={{
+                backgroundColor: minPlayers === min && maxPlayers === max
+                  ? 'var(--purple)'
+                  : 'transparent',
+                border: `1px solid ${minPlayers === min && maxPlayers === max
+                  ? 'var(--purple)'
+                  : 'rgba(255,255,255,0.1)'}`,
+                color: minPlayers === min && maxPlayers === max
+                  ? '#fff'
+                  : 'rgba(245,242,236,0.4)',
+                padding: '0.3rem 0.6rem',
+                borderRadius: '2px',
+                fontSize: '0.7rem',
+                cursor: 'pointer',
+                fontFamily: 'var(--font-inter)',
+                transition: 'all 0.2s',
+              }}
+            >{label}</button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ height: '1px', backgroundColor: 'rgba(255,255,255,0.06)' }} />
+
+      {/* Results + Reset */}
+      <div>
+        <p style={{
+          fontFamily: 'var(--font-inter)',
+          fontSize: '0.78rem',
+          color: 'rgba(245,242,236,0.35)',
+          marginBottom: '0.8rem',
+        }}>
+          <span style={{ color: 'var(--offwhite)', fontFamily: 'var(--font-cinzel)' }}>{filtered.length}</span> of {games.length} games
+        </p>
+        <button onClick={reset} style={{
+          width: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '0.5rem',
+          background: 'transparent',
+          border: '1px solid rgba(255,255,255,0.1)',
+          color: 'rgba(245,242,236,0.4)',
+          padding: '0.6rem',
+          borderRadius: '4px',
+          fontSize: '0.72rem',
+          letterSpacing: '0.08em',
+          textTransform: 'uppercase',
+          cursor: 'pointer',
+          fontFamily: 'var(--font-inter)',
+        }}>
+          <FontAwesomeIcon icon={faXmark} style={{ width: '12px' }} />
+          Reset Filters
+        </button>
+
+        {isMobile && (
+          <button onClick={() => setFiltersOpen(false)} style={{
+            width: '100%',
+            marginTop: '0.6rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '0.5rem',
+            background: 'var(--purple)',
+            border: 'none',
+            color: '#fff',
+            padding: '0.8rem',
+            borderRadius: '4px',
+            fontSize: '0.78rem',
+            letterSpacing: '0.08em',
+            textTransform: 'uppercase',
+            cursor: 'pointer',
+            fontFamily: 'var(--font-inter)',
+          }}>
+            <FontAwesomeIcon icon={faSearch} style={{ width: '12px' }} />
+            Search ({filtered.length})
+          </button>
+        )}
+      </div>
+    </>
+  )
+
   return (
     <>
       <Navbar />
@@ -140,305 +464,78 @@ export default function ShopPage() {
         <div style={{
           maxWidth: '1400px',
           margin: '0 auto',
-          padding: '5rem 3rem',
+          padding: isMobile ? '2.5rem 1.25rem' : '5rem 3rem',
           display: 'grid',
-          gridTemplateColumns: '260px 1fr',
-          gap: '3rem',
+          gridTemplateColumns: isMobile ? '1fr' : '260px 1fr',
+          gap: isMobile ? '1.5rem' : '3rem',
           alignItems: 'start',
         }}>
 
-          {/* LEFT SIDEBAR */}
-          <div style={{
-            position: 'sticky',
-            top: '90px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '2rem',
-          }}>
-
-            {/* Search */}
-            <div>
-              <p style={{
-                fontSize: '0.65rem',
-                letterSpacing: '0.2em',
-                textTransform: 'uppercase',
-                color: 'rgba(245,242,236,0.3)',
-                fontFamily: 'var(--font-inter)',
-                marginBottom: '0.8rem',
-              }}>Search</p>
-              <div style={{ position: 'relative' }}>
-                <FontAwesomeIcon icon={faSearch} style={{
-                  position: 'absolute',
-                  left: '0.9rem',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  width: '13px',
-                  color: 'rgba(245,242,236,0.3)',
-                  pointerEvents: 'none',
-                }} />
-                <input
-                  type="search"
-                  placeholder="Search games…"
-                  value={search}
-                  onChange={e => setSearch(e.target.value)}
-                  style={{
-                    width: '100%',
-                    backgroundColor: 'rgba(255,255,255,0.04)',
-                    border: '1px solid rgba(255,255,255,0.1)',
-                    color: 'var(--offwhite)',
-                    padding: '0.75rem 1rem 0.75rem 2.5rem',
-                    borderRadius: '4px',
-                    fontSize: '0.85rem',
-                    outline: 'none',
-                    fontFamily: 'var(--font-inter)',
-                  }}
-                />
-              </div>
+          {/* LEFT SIDEBAR — desktop only, always visible */}
+          {!isMobile && (
+            <div style={{
+              position: 'sticky',
+              top: '90px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '2rem',
+            }}>
+              {filterFields}
             </div>
+          )}
 
-            <div style={{ height: '1px', backgroundColor: 'rgba(255,255,255,0.06)' }} />
+          {/* Mobile filter tab — fixed, vertically centered on the left edge */}
+          {isMobile && !filtersOpen && (
+            <button onClick={() => setFiltersOpen(true)} style={{
+              position: 'fixed',
+              left: 0,
+              top: '50%',
+              transform: 'translateY(-50%)',
+              zIndex: 60,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: '0.4rem',
+              background: 'var(--purple)',
+              border: 'none',
+              color: '#fff',
+              padding: '1rem 0.6rem',
+              borderRadius: '0 6px 6px 0',
+              fontSize: '0.65rem',
+              letterSpacing: '0.08em',
+              textTransform: 'uppercase',
+              cursor: 'pointer',
+              fontFamily: 'var(--font-inter)',
+              boxShadow: '4px 0 12px rgba(0,0,0,0.4)',
+            }}>
+              <FontAwesomeIcon icon={faSliders} style={{ width: '13px' }} />
+              Filters
+            </button>
+          )}
 
-            {/* Category */}
-            <div>
-              <p style={{
-                fontSize: '0.65rem',
-                letterSpacing: '0.2em',
-                textTransform: 'uppercase',
-                color: 'rgba(245,242,236,0.3)',
-                fontFamily: 'var(--font-inter)',
-                marginBottom: '0.8rem',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.5rem',
-              }}>
-                <FontAwesomeIcon icon={faSliders} style={{ width: '12px' }} />
-                Category
-              </p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-                {CATEGORIES.map(cat => (
-                  <button key={cat} onClick={() => setFilter(cat)} style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    backgroundColor: 'transparent',
-                    border: 'none',
-                    borderLeft: `2px solid ${filter === cat ? 'var(--purple)' : 'transparent'}`,
-                    color: filter === cat ? 'var(--offwhite)' : 'rgba(245,242,236,0.45)',
-                    padding: '0.5rem 0.8rem',
-                    fontSize: '0.82rem',
-                    cursor: 'pointer',
-                    fontFamily: 'var(--font-inter)',
-                    textAlign: 'left',
-                    transition: 'all 0.2s',
-                    borderRadius: '0 4px 4px 0',
-                    background: filter === cat ? 'rgba(106,106,183,0.08)' : 'transparent',
-                  }}>{cat}</button>
-                ))}
-              </div>
+          {/* Mobile filter panel — slides in from the left, covers half the page */}
+          {isMobile && (
+            <div style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              bottom: 0,
+              width: '50%',
+              backgroundColor: 'var(--black)',
+              borderRight: '1px solid rgba(255,255,255,0.08)',
+              boxShadow: '8px 0 24px rgba(0,0,0,0.6)',
+              zIndex: 60,
+              overflowY: 'auto',
+              padding: '6rem 1.25rem 2rem',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '1.75rem',
+              transform: filtersOpen ? 'translateX(0)' : 'translateX(-100%)',
+              transition: 'transform 0.3s ease',
+            }}>
+              {filterFields}
             </div>
-
-            <div style={{ height: '1px', backgroundColor: 'rgba(255,255,255,0.06)' }} />
-
-            {/* Price Range */}
-            <div>
-              <p style={{
-                fontSize: '0.65rem',
-                letterSpacing: '0.2em',
-                textTransform: 'uppercase',
-                color: 'rgba(245,242,236,0.3)',
-                fontFamily: 'var(--font-inter)',
-                marginBottom: '0.5rem',
-              }}>Max Price</p>
-              <p style={{
-                fontFamily: 'var(--font-cinzel)',
-                fontSize: '1.5rem',
-                color: 'var(--purple)',
-                marginBottom: '1rem',
-              }}>${maxPrice ?? sliderMax}</p>
-              <input
-                type="range"
-                min={0}
-                max={sliderMax}
-                value={maxPrice ?? sliderMax}
-                onChange={e => setMaxPrice(+e.target.value)}
-                style={{
-                  width: '100%',
-                  accentColor: 'var(--purple)',
-                  cursor: 'pointer',
-                  height: '4px',
-                }}
-              />
-              <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                marginTop: '0.4rem',
-                fontSize: '0.68rem',
-                color: 'rgba(245,242,236,0.25)',
-                fontFamily: 'var(--font-inter)',
-              }}>
-                <span>$0</span>
-                <span>${sliderMax}</span>
-              </div>
-            </div>
-
-            <div style={{ height: '1px', backgroundColor: 'rgba(255,255,255,0.06)' }} />
-
-            {/* Players Filter */}
-            <div>
-              <p style={{
-                fontSize: '0.65rem',
-                letterSpacing: '0.2em',
-                textTransform: 'uppercase',
-                color: 'rgba(245,242,236,0.3)',
-                fontFamily: 'var(--font-inter)',
-                marginBottom: '0.8rem',
-              }}>Number of Players</p>
-
-              <p style={{
-                fontFamily: 'var(--font-cinzel)',
-                fontSize: '1.2rem',
-                color: 'var(--purple)',
-                marginBottom: '1rem',
-              }}>
-                {minPlayers === maxPlayers ? `${minPlayers} players` : `${minPlayers}–${maxPlayers} players`}
-              </p>
-
-              {/* Min Players */}
-              <div style={{ marginBottom: '0.8rem' }}>
-                <div style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  fontSize: '0.65rem',
-                  color: 'rgba(245,242,236,0.25)',
-                  fontFamily: 'var(--font-inter)',
-                  marginBottom: '0.3rem',
-                }}>
-                  <span>Min players</span>
-                  <span>{minPlayers}</span>
-                </div>
-                <input
-                  type="range"
-                  min={1}
-                  max={10}
-                  value={minPlayers}
-                  onChange={e => {
-                    const val = +e.target.value
-                    setMinPlayers(val)
-                    if (val > maxPlayers) setMaxPlayers(val)
-                  }}
-                  style={{
-                    width: '100%',
-                    accentColor: 'var(--purple)',
-                    cursor: 'pointer',
-                    height: '4px',
-                  }}
-                />
-              </div>
-
-              {/* Max Players */}
-              <div>
-                <div style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  fontSize: '0.65rem',
-                  color: 'rgba(245,242,236,0.25)',
-                  fontFamily: 'var(--font-inter)',
-                  marginBottom: '0.3rem',
-                }}>
-                  <span>Max players</span>
-                  <span>{maxPlayers}</span>
-                </div>
-                <input
-                  type="range"
-                  min={1}
-                  max={10}
-                  value={maxPlayers}
-                  onChange={e => {
-                    const val = +e.target.value
-                    setMaxPlayers(val)
-                    if (val < minPlayers) setMinPlayers(val)
-                  }}
-                  style={{
-                    width: '100%',
-                    accentColor: 'var(--purple)',
-                    cursor: 'pointer',
-                    height: '4px',
-                  }}
-                />
-              </div>
-
-              {/* Quick select */}
-              <div style={{
-                display: 'flex',
-                gap: '0.4rem',
-                flexWrap: 'wrap',
-                marginTop: '0.8rem',
-              }}>
-                {[
-                  { label: 'Solo',    min: 1, max: 1 },
-                  { label: '2',       min: 2, max: 2 },
-                  { label: '2–4',     min: 2, max: 4 },
-                  { label: '4+',      min: 4, max: 10 },
-                  { label: 'Any',     min: 1, max: 10 },
-                ].map(({ label, min, max }) => (
-                  <button
-                    key={label}
-                    onClick={() => { setMinPlayers(min); setMaxPlayers(max) }}
-                    style={{
-                      backgroundColor: minPlayers === min && maxPlayers === max
-                        ? 'var(--purple)'
-                        : 'transparent',
-                      border: `1px solid ${minPlayers === min && maxPlayers === max
-                        ? 'var(--purple)'
-                        : 'rgba(255,255,255,0.1)'}`,
-                      color: minPlayers === min && maxPlayers === max
-                        ? '#fff'
-                        : 'rgba(245,242,236,0.4)',
-                      padding: '0.3rem 0.6rem',
-                      borderRadius: '2px',
-                      fontSize: '0.7rem',
-                      cursor: 'pointer',
-                      fontFamily: 'var(--font-inter)',
-                      transition: 'all 0.2s',
-                    }}
-                  >{label}</button>
-                ))}
-              </div>
-            </div>
-
-            <div style={{ height: '1px', backgroundColor: 'rgba(255,255,255,0.06)' }} />
-
-            {/* Results + Reset */}
-            <div>
-              <p style={{
-                fontFamily: 'var(--font-inter)',
-                fontSize: '0.78rem',
-                color: 'rgba(245,242,236,0.35)',
-                marginBottom: '0.8rem',
-              }}>
-                <span style={{ color: 'var(--offwhite)', fontFamily: 'var(--font-cinzel)' }}>{filtered.length}</span> of {games.length} games
-              </p>
-              <button onClick={reset} style={{
-                width: '100%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '0.5rem',
-                background: 'transparent',
-                border: '1px solid rgba(255,255,255,0.1)',
-                color: 'rgba(245,242,236,0.4)',
-                padding: '0.6rem',
-                borderRadius: '4px',
-                fontSize: '0.72rem',
-                letterSpacing: '0.08em',
-                textTransform: 'uppercase',
-                cursor: 'pointer',
-                fontFamily: 'var(--font-inter)',
-              }}>
-                <FontAwesomeIcon icon={faXmark} style={{ width: '12px' }} />
-                Reset Filters
-              </button>
-            </div>
-          </div>
+          )}
 
           {/* RIGHT — Games Grid */}
           <div>
@@ -457,8 +554,8 @@ export default function ShopPage() {
             ) : (
               <div style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(3, 1fr)',
-                gap: '1.5rem',
+                gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(3, 1fr)',
+                gap: isMobile ? '0.75rem' : '1.5rem',
               }}>
                 {filtered.map(game => {
                   const outOfStock = game.stock === 0
@@ -505,8 +602,8 @@ export default function ShopPage() {
                       {/* Image */}
                       <div style={{
                         backgroundColor: '#fff',
-                        padding: '1rem',
-                        height: '200px',
+                        padding: isMobile ? '0.6rem' : '1rem',
+                        height: isMobile ? '120px' : '200px',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
@@ -529,7 +626,7 @@ export default function ShopPage() {
 
                       {/* Content */}
                       <div style={{
-                        padding: '1.2rem',
+                        padding: isMobile ? '0.8rem' : '1.2rem',
                         display: 'flex',
                         flexDirection: 'column',
                         flex: 1,
@@ -550,38 +647,42 @@ export default function ShopPage() {
 
                         <h3 style={{
                           fontFamily: 'var(--font-cinzel)',
-                          fontSize: '1rem',
+                          fontSize: isMobile ? '0.85rem' : '1rem',
                           color: 'var(--offwhite)',
                         }}>{game.name}</h3>
 
-                        <p style={{
-                          fontFamily: 'var(--font-inter)',
-                          fontSize: '0.78rem',
-                          color: 'rgba(245,242,236,0.4)',
-                          lineHeight: 1.6,
-                        }}>{truncate(game.description, 10)}</p>
+                        {!isMobile && (
+                          <p style={{
+                            fontFamily: 'var(--font-inter)',
+                            fontSize: '0.78rem',
+                            color: 'rgba(245,242,236,0.4)',
+                            lineHeight: 1.6,
+                          }}>{truncate(game.description, 10)}</p>
+                        )}
 
-                        <div style={{
-                          display: 'flex',
-                          gap: '0.8rem',
-                          fontSize: '0.68rem',
-                          color: 'rgba(245,242,236,0.35)',
-                          fontFamily: 'var(--font-inter)',
-                          flexWrap: 'wrap',
-                        }}>
-                          <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                            <FontAwesomeIcon icon={faUsers} style={{ width: '11px', color: 'white' }} />
-                            {game.players}
-                          </span>
-                          <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                            <FontAwesomeIcon icon={faClock} style={{ width: '11px', color: 'white' }} />
-                            {game.duration}
-                          </span>
-                          <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                            <FontAwesomeIcon icon={faCakeCandles} style={{ width: '11px', color: 'white' }} />
-                            {game.age}
-                          </span>
-                        </div>
+                        {!isMobile && (
+                          <div style={{
+                            display: 'flex',
+                            gap: '0.8rem',
+                            fontSize: '0.68rem',
+                            color: 'rgba(245,242,236,0.35)',
+                            fontFamily: 'var(--font-inter)',
+                            flexWrap: 'wrap',
+                          }}>
+                            <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                              <FontAwesomeIcon icon={faUsers} style={{ width: '11px', color: 'white' }} />
+                              {game.players}
+                            </span>
+                            <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                              <FontAwesomeIcon icon={faClock} style={{ width: '11px', color: 'white' }} />
+                              {game.duration}
+                            </span>
+                            <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                              <FontAwesomeIcon icon={faCakeCandles} style={{ width: '11px', color: 'white' }} />
+                              {game.age}
+                            </span>
+                          </div>
+                        )}
 
                         <div style={{
                           marginTop: 'auto',
@@ -595,13 +696,13 @@ export default function ShopPage() {
                             {game.price > 0 && (
                               <span style={{
                                 fontFamily: 'var(--font-cinzel)',
-                                fontSize: '1.2rem',
+                                fontSize: isMobile ? '1rem' : '1.2rem',
                                 color: 'var(--purple)',
                               }}>${game.price}</span>
                             )}
                             <span style={{
                               fontFamily: 'var(--font-inter)',
-                              fontSize: '0.68rem',
+                              fontSize: isMobile ? '0.6rem' : '0.68rem',
                               color: outOfStock ? 'var(--red)' : 'var(--teal)',
                               letterSpacing: '0.08em',
                               textTransform: 'uppercase',
@@ -609,16 +710,18 @@ export default function ShopPage() {
                               {outOfStock ? 'Out of stock' : `${game.stock} in stock`}
                             </span>
                           </div>
-                          <span style={{
-                            fontFamily: 'var(--font-inter)',
-                            fontSize: '0.7rem',
-                            letterSpacing: '0.08em',
-                            textTransform: 'uppercase',
-                            color: hovered && !outOfStock ? 'var(--purple)' : 'rgba(245,242,236,0.3)',
-                            transition: 'color 0.2s',
-                          }}>
-                            Learn More →
-                          </span>
+                          {!isMobile && (
+                            <span style={{
+                              fontFamily: 'var(--font-inter)',
+                              fontSize: '0.7rem',
+                              letterSpacing: '0.08em',
+                              textTransform: 'uppercase',
+                              color: hovered && !outOfStock ? 'var(--purple)' : 'rgba(245,242,236,0.3)',
+                              transition: 'color 0.2s',
+                            }}>
+                              Learn More →
+                            </span>
+                          )}
                         </div>
                       </div>
                     </Link>

@@ -13,10 +13,10 @@ export default function HomePage() {
       <Navbar />
       <Hero />
       <About />
-      <EventsPreview />
-      <ShopPreview />
-      <MenuPreview />
-      <DndPreview />
+      <div id="events-section"><EventsPreview /></div>
+      <div id="shop-section"><ShopPreview /></div>
+      <div id="menu-section"><MenuPreview /></div>
+      <div id="dnd-section"><DndPreview /></div>
       <Footer />
     </main>
   )

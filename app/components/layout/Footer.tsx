@@ -1,13 +1,29 @@
+'use client'
+
 import Image from 'next/image'
+import { useEffect, useState } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faInstagram, faFacebook, faWhatsapp } from '@fortawesome/free-brands-svg-icons'
 
+function useIsMobile(breakpoint = 768) {
+  const [isMobile, setIsMobile] = useState(false)
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < breakpoint)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [breakpoint])
+  return isMobile
+}
+
 export default function Footer() {
+  const isMobile = useIsMobile()
+
   return (
     <footer style={{
       backgroundColor: '#060606',
       borderTop: '1px solid rgba(255,255,255,0.05)',
-      padding: '4rem 3rem 2rem',
+      padding: isMobile ? '3rem 1.25rem 1.5rem' : '4rem 3rem 2rem',
     }}>
       <div style={{
         maxWidth: '1200px',
@@ -17,9 +33,9 @@ export default function Footer() {
         {/* Top grid */}
         <div style={{
           display: 'grid',
-          gridTemplateColumns: '2fr 1fr 1fr 1fr',
-          gap: '3rem',
-          marginBottom: '3rem',
+          gridTemplateColumns: isMobile ? '1fr' : '2fr 1fr 1fr 1fr',
+          gap: isMobile ? '2rem' : '3rem',
+          marginBottom: isMobile ? '2.5rem' : '3rem',
         }}>
 
           {/* Brand */}
@@ -35,7 +51,7 @@ export default function Footer() {
               fontSize: '0.82rem',
               color: 'rgba(245,242,236,0.35)',
               lineHeight: 1.7,
-              maxWidth: '240px',
+              maxWidth: isMobile ? '100%' : '240px',
               fontFamily: 'var(--font-inter)',
             }}>
               Lebanon's favourite board game café and restaurant. Where every table tells a story.
@@ -132,13 +148,13 @@ export default function Footer() {
         {/* Bottom */}
         <div style={{
           borderTop: '1px solid rgba(255,255,255,0.05)',
-          paddingTop: '1.5rem',
+          paddingTop: isMobile ? '1.25rem' : '1.5rem',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
         }}>
           <p style={{
-            fontSize: '0.74rem',
+            fontSize: isMobile ? '0.7rem' : '0.74rem',
             color: 'rgba(245,242,236,0.2)',
             fontFamily: 'var(--font-inter)',
           }}>

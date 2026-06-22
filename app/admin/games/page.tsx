@@ -33,8 +33,20 @@ const EMPTY = {
 
 const FALLBACK_CATEGORIES = ['Strategy', 'Party', 'Family', 'Cooperative', 'Card', 'Trivia', 'RPG', 'Puzzle']
 
+function useIsMobile(breakpoint = 768) {
+  const [isMobile, setIsMobile] = useState(false)
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < breakpoint)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [breakpoint])
+  return isMobile
+}
+
 export default function AdminGamesPage() {
   const router = useRouter()
+  const isMobile = useIsMobile()
   const [checking, setChecking]             = useState(true)
   const [games, setGames]                   = useState<Game[]>([])
   const [loading, setLoading]               = useState(true)
@@ -181,14 +193,16 @@ export default function AdminGamesPage() {
   if (checking) return null
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: 'var(--black)', padding: '3rem' }}>
+    <div style={{ minHeight: '100vh', backgroundColor: 'var(--black)', padding: isMobile ? '1.25rem' : '3rem' }}>
       <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
 
         {/* Header */}
         <div style={{
           display: 'flex',
+          flexDirection: isMobile ? 'column' : 'row',
           justifyContent: 'space-between',
-          alignItems: 'center',
+          alignItems: isMobile ? 'flex-start' : 'center',
+          gap: isMobile ? '1.25rem' : '0',
           marginBottom: '2rem',
         }}>
           <div>
@@ -329,8 +343,9 @@ export default function AdminGamesPage() {
             border: '1px solid rgba(255,255,255,0.06)',
             borderRadius: '4px',
             overflow: 'hidden',
+            overflowX: 'auto',
           }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <table style={{ width: '100%', minWidth: isMobile ? '640px' : undefined, borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
                   {['Image', 'Name', 'Category', 'Players', 'Price', 'Stock', 'Actions'].map(h => (
@@ -423,11 +438,11 @@ export default function AdminGamesPage() {
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            padding: '1.5rem 3rem',
+            padding: isMobile ? '1.25rem 1.5rem' : '1.5rem 3rem',
             borderBottom: '1px solid rgba(255,255,255,0.06)',
             flexShrink: 0,
           }}>
-            <h2 style={{ fontFamily: 'var(--font-cinzel)', fontSize: '1.5rem', color: 'var(--offwhite)' }}>
+            <h2 style={{ fontFamily: 'var(--font-cinzel)', fontSize: isMobile ? '1.1rem' : '1.5rem', color: 'var(--offwhite)' }}>
               {editing ? 'Edit Game' : 'Add New Game'}
             </h2>
             <button onClick={() => setOpen(false)} style={{
@@ -448,19 +463,20 @@ export default function AdminGamesPage() {
           <form onSubmit={handleSave} style={{
             flex: 1,
             display: 'grid',
-            gridTemplateColumns: '1fr 1fr',
+            gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
             gap: '0',
-            overflow: 'hidden',
+            overflow: isMobile ? 'auto' : 'hidden',
           }}>
 
             {/* Left Column */}
             <div style={{
-              padding: '2.5rem 3rem',
-              borderRight: '1px solid rgba(255,255,255,0.06)',
+              padding: isMobile ? '1.5rem' : '2.5rem 3rem',
+              borderRight: isMobile ? 'none' : '1px solid rgba(255,255,255,0.06)',
+              borderBottom: isMobile ? '1px solid rgba(255,255,255,0.06)' : 'none',
               display: 'flex',
               flexDirection: 'column',
               gap: '1.5rem',
-              overflowY: 'auto',
+              overflowY: isMobile ? 'visible' : 'auto',
             }}>
               <p style={{
                 fontSize: '0.68rem',
@@ -495,7 +511,7 @@ export default function AdminGamesPage() {
                   style={{ ...inputStyle, resize: 'none' }} />
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '1rem' }}>
                 <div>
                   <label style={labelStyle}>Players (e.g. 2–4)</label>
                   <input type="text" value={form.players} required
@@ -510,7 +526,7 @@ export default function AdminGamesPage() {
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr', gap: '1rem' }}>
                 <div>
                   <label style={labelStyle}>Min Age (e.g. 8+)</label>
                   <input type="text" value={form.age} required
@@ -534,7 +550,7 @@ export default function AdminGamesPage() {
 
             {/* Right Column */}
             <div style={{
-              padding: '2.5rem 3rem',
+              padding: isMobile ? '1.5rem' : '2.5rem 3rem',
               display: 'flex',
               flexDirection: 'column',
               gap: '1.5rem',
@@ -577,7 +593,7 @@ export default function AdminGamesPage() {
                   alignItems: 'center',
                   justifyContent: 'center',
                   padding: '1rem',
-                  minHeight: '300px',
+                  minHeight: isMobile ? '200px' : '300px',
                 }}>
                   <img src={form.image} alt="Preview" style={{
                     maxWidth: '100%',
@@ -588,7 +604,7 @@ export default function AdminGamesPage() {
               ) : (
                 <div style={{
                   flex: 1,
-                  minHeight: '300px',
+                  minHeight: isMobile ? '200px' : '300px',
                   border: '1px dashed rgba(255,255,255,0.1)',
                   borderRadius: '4px',
                   display: 'flex',

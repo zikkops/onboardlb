@@ -76,6 +76,17 @@ const FALLBACK_CAMPAIGNS: Campaign[] = [
   },
 ]
 
+function useIsMobile(breakpoint = 768) {
+  const [isMobile, setIsMobile] = useState(false)
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < breakpoint)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [breakpoint])
+  return isMobile
+}
+
 const faqs = [
   {
     q: 'Do I need experience to join?',
@@ -104,6 +115,7 @@ export default function DndPage() {
   const [loading, setLoading]         = useState(true)
   const [hoveredBtn, setHoveredBtn]   = useState<string | null>(null)
   const [openFaq, setOpenFaq]         = useState<number | null>(null)
+  const isMobile = useIsMobile()
 
   useEffect(() => {
     async function load() {
@@ -138,12 +150,13 @@ export default function DndPage() {
         {/* Hero */}
         <section style={{
           position: 'relative',
-          height: '60vh',
+          minHeight: isMobile ? '50vh' : '60vh',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
           textAlign: 'center',
+          paddingBottom: isMobile ? '3rem' : '4rem',
           overflow: 'hidden',
         }}>
           <div style={{
@@ -157,7 +170,7 @@ export default function DndPage() {
             background: 'linear-gradient(to top, rgba(10,10,10,1) 0%, rgba(50,50,124,0.3) 100%)',
           }} />
 
-          <div style={{ position: 'relative', zIndex: 1, paddingTop: '5rem' }}>
+          <div style={{ position: 'relative', zIndex: 1, paddingTop: isMobile ? '11rem' : '10rem' }}>
             <p style={{
               fontSize: '0.7rem',
               letterSpacing: '0.3em',
@@ -169,7 +182,7 @@ export default function DndPage() {
 
             <h1 style={{
               fontFamily: 'var(--font-cinzel)',
-              fontSize: '4rem',
+              fontSize: isMobile ? '2.2rem' : '4rem',
               color: 'var(--offwhite)',
               lineHeight: 1.2,
               marginBottom: '1rem',
@@ -179,9 +192,9 @@ export default function DndPage() {
 
             <p style={{
               fontFamily: 'var(--font-inter)',
-              fontSize: '1rem',
+              fontSize: isMobile ? '0.85rem' : '1rem',
               color: 'rgba(245,242,236,0.55)',
-              maxWidth: '480px',
+              maxWidth: isMobile ? '300px' : '480px',
               lineHeight: 1.8,
               marginBottom: '2.5rem',
             }}>
@@ -189,7 +202,7 @@ export default function DndPage() {
             </p>
 
             {/* Scroll Buttons */}
-            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
+            <div style={{ display: 'flex', gap: isMobile ? '0.6rem' : '1rem', justifyContent: 'center' }}>
               {([
                 { key: 'campaigns', label: 'Campaigns' },
                 { key: 'faq',       label: 'FAQ' },
@@ -204,16 +217,17 @@ export default function DndPage() {
                     style={{
                       position: 'relative',
                       overflow: 'hidden',
-                      width: '160px',
+                      width: isMobile ? '130px' : '160px',
                       backgroundColor: isHovered
                         ? 'rgba(106,106,183,0.2)'
                         : 'rgba(106,106,183,0.1)',
                       color: '#fff',
-                      padding: '0.7rem 2rem',
+                      padding: isMobile ? '0.7rem 0.5rem' : '0.7rem 2rem',
                       borderRadius: '2px',
                       fontSize: '0.78rem',
                       letterSpacing: '0.12em',
                       textTransform: 'uppercase',
+                      textAlign: 'center',
                       border: `1px solid ${isHovered ? 'var(--purple)' : 'rgba(106,106,183,0.35)'}`,
                       backdropFilter: 'blur(10px)',
                       cursor: 'pointer',
@@ -242,14 +256,14 @@ export default function DndPage() {
           </div>
         </section>
 
-        <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '5rem 3rem' }}>
+        <div style={{ maxWidth: '1200px', margin: '0 auto', padding: isMobile ? '3rem 1.25rem' : '5rem 3rem' }}>
 
           {/* Features */}
           <div style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(2, 1fr)',
-            gap: '1.5rem',
-            marginBottom: '6rem',
+            gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, 1fr)',
+            gap: isMobile ? '1rem' : '1.5rem',
+            marginBottom: isMobile ? '3rem' : '6rem',
           }}>
             {[
               { title: 'Weekly Sessions',        text: 'Regular games every week at all 3 branches' },
@@ -292,7 +306,7 @@ export default function DndPage() {
           </div>
 
           {/* Campaigns */}
-          <div id="campaigns" style={{ marginBottom: '6rem', scrollMarginTop: '80px' }}>
+          <div id="campaigns" style={{ marginBottom: isMobile ? '3rem' : '6rem', scrollMarginTop: '80px' }}>
             <p style={{
               fontSize: '0.7rem',
               letterSpacing: '0.3em',
@@ -304,7 +318,7 @@ export default function DndPage() {
 
             <h2 style={{
               fontFamily: 'var(--font-cinzel)',
-              fontSize: '2.5rem',
+              fontSize: isMobile ? '1.75rem' : '2.5rem',
               color: 'var(--offwhite)',
               marginBottom: '1.5rem',
             }}>Choose Your Adventure</h2>
@@ -312,17 +326,17 @@ export default function DndPage() {
             <div style={{
               width: '60px', height: '2px',
               backgroundColor: 'var(--purple)',
-              marginBottom: '3rem',
+              marginBottom: isMobile ? '2rem' : '3rem',
             }} />
 
             {loading ? (
               <p style={{ color: 'rgba(245,242,236,0.3)', fontFamily: 'var(--font-inter)' }}>Loading…</p>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: isMobile ? '1.5rem' : '2rem' }}>
                 {displayCampaigns.map(campaign => (
                   <div key={campaign.id} style={{
                     display: 'grid',
-                    gridTemplateColumns: '380px 1fr',
+                    gridTemplateColumns: isMobile ? '1fr' : '380px 1fr',
                     border: '1px solid rgba(255,255,255,0.06)',
                     borderRadius: '4px',
                     overflow: 'hidden',
@@ -335,7 +349,7 @@ export default function DndPage() {
                       backgroundImage: `url(${campaign.image})`,
                       backgroundSize: 'cover',
                       backgroundPosition: 'center',
-                      minHeight: '300px',
+                      minHeight: isMobile ? '180px' : '300px',
                     }}>
                       <div style={{
                         position: 'absolute', inset: 0,
@@ -357,21 +371,21 @@ export default function DndPage() {
 
                     {/* Content */}
                     <div style={{
-                      padding: '2rem',
+                      padding: isMobile ? '1.25rem' : '2rem',
                       background: 'rgba(255,255,255,0.02)',
                       display: 'flex',
                       flexDirection: 'column',
                     }}>
                       <h3 style={{
                         fontFamily: 'var(--font-cinzel)',
-                        fontSize: '1.6rem',
+                        fontSize: isMobile ? '1.2rem' : '1.6rem',
                         color: 'var(--offwhite)',
                         marginBottom: '0.8rem',
                       }}>{campaign.title}</h3>
 
                       <p style={{
                         fontFamily: 'var(--font-inter)',
-                        fontSize: '0.88rem',
+                        fontSize: isMobile ? '0.82rem' : '0.88rem',
                         color: 'rgba(245,242,236,0.5)',
                         lineHeight: 1.8,
                         marginBottom: '1.5rem',
@@ -380,7 +394,7 @@ export default function DndPage() {
                       {/* Details */}
                       <div style={{
                         display: 'flex',
-                        gap: '2rem',
+                        gap: isMobile ? '1rem 1.5rem' : '2rem',
                         flexWrap: 'wrap',
                         marginBottom: '1.5rem',
                       }}>
@@ -480,7 +494,7 @@ export default function DndPage() {
 
             <h2 style={{
               fontFamily: 'var(--font-cinzel)',
-              fontSize: '2.5rem',
+              fontSize: isMobile ? '1.75rem' : '2.5rem',
               color: 'var(--offwhite)',
               marginBottom: '1.5rem',
             }}>Frequently Asked</h2>
@@ -488,7 +502,7 @@ export default function DndPage() {
             <div style={{
               width: '60px', height: '2px',
               backgroundColor: 'var(--purple)',
-              marginBottom: '3rem',
+              marginBottom: isMobile ? '2rem' : '3rem',
             }} />
 
             <div style={{ maxWidth: '800px', display: 'flex', flexDirection: 'column' }}>
@@ -504,7 +518,7 @@ export default function DndPage() {
                       display: 'flex',
                       justifyContent: 'space-between',
                       alignItems: 'center',
-                      padding: '1.8rem 0',
+                      padding: isMobile ? '1.4rem 0' : '1.8rem 0',
                       background: 'transparent',
                       border: 'none',
                       cursor: 'pointer',
@@ -513,7 +527,7 @@ export default function DndPage() {
                     }}>
                     <p style={{
                       fontFamily: 'var(--font-cinzel)',
-                      fontSize: '1rem',
+                      fontSize: isMobile ? '0.9rem' : '1rem',
                       color: 'var(--offwhite)',
                     }}>{q}</p>
                     <span style={{

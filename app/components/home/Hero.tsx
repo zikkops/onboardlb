@@ -1,15 +1,20 @@
 'use client'
 
 import Image from 'next/image'
-import Link from 'next/link'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
-function HeroButton({ href, label, color }: { href: string, label: string, color: string }) {
+function HeroButton({
+  label, color, onClick
+}: {
+  label: string
+  color: string
+  onClick: () => void
+}) {
   const [hovered, setHovered] = useState(false)
 
   return (
-    <Link
-      href={href}
+    <button
+      onClick={onClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
@@ -22,7 +27,6 @@ function HeroButton({ href, label, color }: { href: string, label: string, color
         fontSize: '0.78rem',
         letterSpacing: '0.12em',
         textTransform: 'uppercase',
-        textDecoration: 'none',
         fontFamily: 'var(--font-inter)',
         border: `1px solid ${hovered ? color : `${color}60`}`,
         backdropFilter: 'blur(10px)',
@@ -30,12 +34,9 @@ function HeroButton({ href, label, color }: { href: string, label: string, color
         boxShadow: hovered
           ? `0 0 20px ${color}50, inset 0 0 20px ${color}15`
           : 'none',
-        display: 'block',
-        textAlign: 'center',
+        cursor: 'pointer',
         whiteSpace: 'nowrap',
       }}>
-
-      {/* Shine sweep */}
       <span style={{
         position: 'absolute',
         top: 0,
@@ -47,13 +48,26 @@ function HeroButton({ href, label, color }: { href: string, label: string, color
         transition: 'left 0.5s ease',
         pointerEvents: 'none',
       }} />
-
       {label}
-    </Link>
+    </button>
   )
 }
 
 export default function Hero() {
+  const [isMobile, setIsMobile] = useState(false)
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth <= 768)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [])
+
+  function scrollTo(id: string) {
+    const el = document.getElementById(id)
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
   return (
     <section style={{
       position: 'relative',
@@ -63,7 +77,7 @@ export default function Hero() {
       alignItems: 'center',
       justifyContent: 'center',
       textAlign: 'center',
-      padding: '6rem 2rem 4rem',
+      padding: isMobile ? '5rem 1.5rem 3rem' : '6rem 2rem 4rem',
       overflow: 'hidden',
     }}>
 
@@ -77,10 +91,7 @@ export default function Hero() {
       />
 
       {/* Dark overlay */}
-      <div style={{
-        position: 'absolute', inset: 0,
-        background: 'rgba(0,0,0,0.7)',
-      }} />
+      <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.7)' }} />
 
       {/* Color glows */}
       <div style={{
@@ -94,73 +105,92 @@ export default function Hero() {
       {/* Eyebrow */}
       <p style={{
         position: 'relative', zIndex: 1,
-        fontSize: '0.7rem',
+        fontSize: isMobile ? '0.6rem' : '0.7rem',
         letterSpacing: '0.3em',
         textTransform: 'uppercase',
         color: 'var(--teal)',
-        marginBottom: '2rem',
+        marginBottom: '1.5rem',
         display: 'flex',
         alignItems: 'center',
         gap: '0.8rem',
       }}>
-        <span style={{ display: 'block', width: '40px', height: '1px', background: 'var(--teal)', opacity: 0.5 }} />
+        <span style={{ display: 'block', width: '30px', height: '1px', background: 'var(--teal)', opacity: 0.5 }} />
         Lebanon's Favourite Game Café
-        <span style={{ display: 'block', width: '40px', height: '1px', background: 'var(--teal)', opacity: 0.5 }} />
+        <span style={{ display: 'block', width: '30px', height: '1px', background: 'var(--teal)', opacity: 0.5 }} />
       </p>
 
       {/* Logo */}
       <Image
         src="/images/logo.png"
         alt="Onboard Games & Tales"
-        width={340}
-        height={227}
+        width={isMobile ? 200 : 340}
+        height={isMobile ? 134 : 227}
         priority
-        style={{ position: 'relative', zIndex: 1, marginBottom: '2rem' }}
+        style={{ position: 'relative', zIndex: 1, marginBottom: '1.5rem' }}
       />
 
       {/* Tagline */}
       <p style={{
         position: 'relative', zIndex: 1,
         fontFamily: 'var(--font-inter)',
-        fontSize: '1rem',
+        fontSize: isMobile ? '0.85rem' : '1rem',
         fontWeight: 300,
         letterSpacing: '0.05em',
         color: 'rgba(245,242,236,0.6)',
-        maxWidth: '480px',
+        maxWidth: isMobile ? '300px' : '480px',
         lineHeight: 1.9,
-        marginBottom: '3rem',
+        marginBottom: '2.5rem',
       }}>
         Where every meal comes with a story and every story begins with a game.
         Three branches across Lebanon.
       </p>
 
-      {/* Buttons — 3 x 2 layout */}
+      {/* Buttons */}
       <div style={{
         position: 'relative', zIndex: 1,
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        gap: '1rem',
+        gap: '0.8rem',
+        width: '100%',
+        maxWidth: isMobile ? '320px' : '600px',
       }}>
 
-        {/* Row 1 — 3 buttons */}
-        <div style={{ display: 'flex', gap: '1rem' }}>
-          <HeroButton href="/menu"   label="Our Menu" color="#00A098" />
-          <HeroButton href="/shop"   label="Shop"      color="#6A6AB7" />
-          <HeroButton href="/events" label="Events"    color="#E43329" />
-        </div>
-
-        {/* Row 2 — 2 buttons */}
-        <div style={{ display: 'flex', gap: '1rem' }}>
-          <HeroButton href="#reserve" label="Reserve a Spot"     color="#32327C" />
-          <HeroButton href="/dnd"     label="Dungeons & Dragons" color="#6A6AB7" />
-        </div>
+        {isMobile ? (
+          // Mobile — 2 columns
+          <>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem', width: '100%' }}>
+              <HeroButton label="Our Menu"  color="#00A098" onClick={() => scrollTo('menu-section')} />
+              <HeroButton label="Shop"      color="#6A6AB7" onClick={() => scrollTo('shop-section')} />
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem', width: '100%' }}>
+              <HeroButton label="Events"    color="#E43329" onClick={() => scrollTo('events-section')} />
+              <HeroButton label="Reserve"   color="#32327C" onClick={() => scrollTo('reserve-section')} />
+            </div>
+            <div style={{ width: '50%' }}>
+              <HeroButton label="D&D"       color="#6A6AB7" onClick={() => scrollTo('dnd-section')} />
+            </div>
+          </>
+        ) : (
+          // Desktop — 3 x 2
+          <>
+            <div style={{ display: 'flex', gap: '1rem' }}>
+              <HeroButton label="Our Menu"          color="#00A098" onClick={() => scrollTo('menu-section')} />
+              <HeroButton label="Shop"              color="#6A6AB7" onClick={() => scrollTo('shop-section')} />
+              <HeroButton label="Events"            color="#E43329" onClick={() => scrollTo('events-section')} />
+            </div>
+            <div style={{ display: 'flex', gap: '1rem' }}>
+              <HeroButton label="Reserve a Spot"     color="#32327C" onClick={() => scrollTo('reserve-section')} />
+              <HeroButton label="Dungeons & Dragons" color="#6A6AB7" onClick={() => scrollTo('dnd-section')} />
+            </div>
+          </>
+        )}
       </div>
 
       {/* Scroll hint */}
       <div style={{
         position: 'absolute', zIndex: 1,
-        bottom: '2.5rem',
+        bottom: '2rem',
         left: '50%',
         transform: 'translateX(-50%)',
         display: 'flex',
@@ -168,14 +198,13 @@ export default function Hero() {
         alignItems: 'center',
         gap: '0.5rem',
         color: 'rgba(245,242,236,0.2)',
-        fontSize: '0.65rem',
+        fontSize: '0.6rem',
         letterSpacing: '0.2em',
         textTransform: 'uppercase',
       }}>
-        <div style={{ width: '1px', height: '40px', background: 'linear-gradient(to bottom, rgba(0,160,152,0.6), transparent)' }} />
+        <div style={{ width: '1px', height: '35px', background: 'linear-gradient(to bottom, rgba(0,160,152,0.6), transparent)' }} />
         Scroll
       </div>
-
     </section>
   )
 }

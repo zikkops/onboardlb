@@ -54,8 +54,20 @@ const BRANCH_NUMBERS = [
 ]
 const ALL_LOCATIONS = ['Beirut — Hamra', 'Zouk', 'Broummana']
 
+function useIsMobile(breakpoint = 768) {
+  const [isMobile, setIsMobile] = useState(false)
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < breakpoint)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [breakpoint])
+  return isMobile
+}
+
 export default function AdminDndPage() {
   const router = useRouter()
+  const isMobile = useIsMobile()
   const [checking, setChecking]   = useState(true)
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [loading, setLoading]     = useState(true)
@@ -202,14 +214,16 @@ export default function AdminDndPage() {
   if (checking) return null
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: 'var(--black)', padding: '3rem' }}>
+    <div style={{ minHeight: '100vh', backgroundColor: 'var(--black)', padding: isMobile ? '1.25rem' : '3rem' }}>
       <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
 
         {/* Header */}
         <div style={{
           display: 'flex',
+          flexDirection: isMobile ? 'column' : 'row',
           justifyContent: 'space-between',
-          alignItems: 'center',
+          alignItems: isMobile ? 'flex-start' : 'center',
+          gap: isMobile ? '1.25rem' : '0',
           marginBottom: '2rem',
         }}>
           <div>
@@ -258,7 +272,7 @@ export default function AdminDndPage() {
             {campaigns.map((campaign, index) => (
               <div key={campaign.id} style={{
                 display: 'grid',
-                gridTemplateColumns: '120px 1fr auto',
+                gridTemplateColumns: isMobile ? '1fr' : '120px 1fr auto',
                 border: '1px solid rgba(255,255,255,0.06)',
                 borderRadius: '4px',
                 overflow: 'hidden',
@@ -267,12 +281,14 @@ export default function AdminDndPage() {
                 {/* Image */}
                 {campaign.image ? (
                   <div style={{
+                    height: isMobile ? '160px' : undefined,
                     backgroundImage: `url(${campaign.image})`,
                     backgroundSize: 'cover',
                     backgroundPosition: 'center',
                   }} />
                 ) : (
                   <div style={{
+                    height: isMobile ? '160px' : undefined,
                     backgroundColor: 'rgba(255,255,255,0.02)',
                     display: 'flex',
                     alignItems: 'center',
@@ -284,7 +300,7 @@ export default function AdminDndPage() {
                 )}
 
                 {/* Info */}
-                <div style={{ padding: '1.2rem 1.5rem' }}>
+                <div style={{ padding: isMobile ? '1rem 1.25rem' : '1.2rem 1.5rem' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '0.4rem' }}>
                     <h3 style={{
                       fontFamily: 'var(--font-cinzel)',
@@ -339,15 +355,15 @@ export default function AdminDndPage() {
                 {/* Actions */}
                 <div style={{
                   display: 'flex',
-                  flexDirection: 'column',
+                  flexDirection: isMobile ? 'row' : 'column',
                   gap: '0.4rem',
-                  padding: '1rem',
-                  justifyContent: 'center',
-                  alignItems: 'flex-end',
-                  minWidth: '160px',
+                  padding: isMobile ? '0 1.25rem 1.25rem' : '1rem',
+                  justifyContent: isMobile ? 'space-between' : 'center',
+                  alignItems: isMobile ? 'center' : 'flex-end',
+                  minWidth: isMobile ? undefined : '160px',
                 }}>
                   {/* Order buttons */}
-                  <div style={{ display: 'flex', gap: '0.3rem', marginBottom: '0.4rem' }}>
+                  <div style={{ display: 'flex', gap: '0.3rem', marginBottom: isMobile ? 0 : '0.4rem' }}>
                     <button onClick={() => moveUp(index)} disabled={index === 0} style={{
                       background: 'transparent',
                       border: '1px solid rgba(255,255,255,0.1)',
@@ -411,11 +427,11 @@ export default function AdminDndPage() {
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            padding: '1.5rem 3rem',
+            padding: isMobile ? '1.25rem 1.5rem' : '1.5rem 3rem',
             borderBottom: '1px solid rgba(255,255,255,0.06)',
             flexShrink: 0,
           }}>
-            <h2 style={{ fontFamily: 'var(--font-cinzel)', fontSize: '1.5rem', color: 'var(--offwhite)' }}>
+            <h2 style={{ fontFamily: 'var(--font-cinzel)', fontSize: isMobile ? '1.1rem' : '1.5rem', color: 'var(--offwhite)' }}>
               {editing ? 'Edit Campaign' : 'Add New Campaign'}
             </h2>
             <button onClick={() => setOpen(false)} style={{
@@ -435,18 +451,19 @@ export default function AdminDndPage() {
           <form onSubmit={handleSave} style={{
             flex: 1,
             display: 'grid',
-            gridTemplateColumns: '1fr 1fr',
-            overflow: 'hidden',
+            gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+            overflow: isMobile ? 'auto' : 'hidden',
           }}>
 
             {/* Left */}
             <div style={{
-              padding: '2.5rem 3rem',
-              borderRight: '1px solid rgba(255,255,255,0.06)',
+              padding: isMobile ? '1.5rem' : '2.5rem 3rem',
+              borderRight: isMobile ? 'none' : '1px solid rgba(255,255,255,0.06)',
+              borderBottom: isMobile ? '1px solid rgba(255,255,255,0.06)' : 'none',
               display: 'flex',
               flexDirection: 'column',
               gap: '1.5rem',
-              overflowY: 'auto',
+              overflowY: isMobile ? 'visible' : 'auto',
             }}>
               <p style={{
                 fontSize: '0.68rem',
@@ -477,7 +494,7 @@ export default function AdminDndPage() {
                   style={{ ...inputStyle, resize: 'none' }} />
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '1rem' }}>
                 <div>
                   <label style={labelStyle}>Duration</label>
                   <input type="text" value={form.duration} required
@@ -492,7 +509,7 @@ export default function AdminDndPage() {
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '1rem' }}>
                 <div>
                   <label style={labelStyle}>Players</label>
                   <input type="text" value={form.players} required
@@ -584,11 +601,11 @@ export default function AdminDndPage() {
 
             {/* Right */}
             <div style={{
-              padding: '2.5rem 3rem',
+              padding: isMobile ? '1.5rem' : '2.5rem 3rem',
               display: 'flex',
               flexDirection: 'column',
               gap: '1.5rem',
-              overflowY: 'auto',
+              overflowY: isMobile ? 'visible' : 'auto',
             }}>
               <p style={{
                 fontSize: '0.68rem',

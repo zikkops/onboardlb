@@ -20,9 +20,21 @@ interface GameEvent {
   image?: string
 }
 
+function useIsMobile(breakpoint = 768) {
+  const [isMobile, setIsMobile] = useState(false)
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < breakpoint)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [breakpoint])
+  return isMobile
+}
+
 export default function EventsPreview() {
-  const [events, setEvents]     = useState<GameEvent[]>([])
-  const [loading, setLoading]   = useState(true)
+  const [events, setEvents] = useState<GameEvent[]>([])
+  const [loading, setLoading] = useState(true)
+  const isMobile = useIsMobile()
 
   useEffect(() => {
     async function load() {
@@ -43,18 +55,18 @@ export default function EventsPreview() {
       backgroundColor: 'rgba(50,50,124,0.06)',
       borderTop: '1px solid rgba(50,50,124,0.15)',
       borderBottom: '1px solid rgba(50,50,124,0.15)',
-      padding: '6rem 3rem',
+      padding: isMobile ? '4rem 1.25rem' : '6rem 3rem',
     }}>
       <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
 
         {/* Header */}
         <div style={{
           display: 'flex',
-          alignItems: 'flex-end',
+          flexDirection: isMobile ? 'column' : 'row',
+          alignItems: isMobile ? 'flex-start' : 'flex-end',
           justifyContent: 'space-between',
           marginBottom: '1.5rem',
-          flexWrap: 'wrap',
-          gap: '1rem',
+          gap: isMobile ? '1.25rem' : '1rem',
         }}>
           <div>
             <p style={{
@@ -67,7 +79,7 @@ export default function EventsPreview() {
             }}>Upcoming Events</p>
             <h2 style={{
               fontFamily: 'var(--font-cinzel)',
-              fontSize: '2.8rem',
+              fontSize: isMobile ? '1.75rem' : '2.8rem',
               color: 'var(--offwhite)',
               lineHeight: 1.2,
             }}>
@@ -85,6 +97,7 @@ export default function EventsPreview() {
             textTransform: 'uppercase',
             textDecoration: 'none',
             fontFamily: 'var(--font-inter)',
+            alignSelf: isMobile ? 'flex-start' : 'auto',
           }}>
             View All Events
           </Link>
@@ -105,8 +118,8 @@ export default function EventsPreview() {
         ) : (
           <div style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(3, 1fr)',
-            gap: '1.5rem',
+            gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)',
+            gap: isMobile ? '1.25rem' : '1.5rem',
           }}>
             {events.map(ev => {
               const d = new Date(ev.date)
@@ -119,14 +132,14 @@ export default function EventsPreview() {
                   {/* Image */}
                   {ev.image ? (
                     <div style={{
-                      height: '160px',
+                      height: '140px',
                       backgroundImage: `url(${ev.image})`,
                       backgroundSize: 'cover',
                       backgroundPosition: 'center',
                     }} />
                   ) : (
                     <div style={{
-                      height: '160px',
+                      height: '140px',
                       background: 'rgba(50,50,124,0.2)',
                       display: 'flex',
                       alignItems: 'center',
@@ -142,7 +155,7 @@ export default function EventsPreview() {
                     </div>
                   )}
 
-                  <div style={{ padding: '1.5rem' }}>
+                  <div style={{ padding: isMobile ? '1.25rem' : '1.5rem' }}>
                     {/* Date + Type */}
                     <div style={{
                       display: 'flex',

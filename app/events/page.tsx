@@ -28,6 +28,17 @@ function truncate(text: string, words: number) {
   return arr.length > words ? arr.slice(0, words).join(' ') + '…' : text
 }
 
+function useIsMobile(breakpoint = 768) {
+  const [isMobile, setIsMobile] = useState(false)
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < breakpoint)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [breakpoint])
+  return isMobile
+}
+
 export default function EventsPage() {
   const [upcoming, setUpcoming]   = useState<GameEvent[]>([])
   const [completed, setCompleted] = useState<GameEvent[]>([])
@@ -35,6 +46,7 @@ export default function EventsPage() {
   const [filter, setFilter]       = useState('All')
   const [branches, setBranches]   = useState<string[]>([])
   const [selected, setSelected]   = useState<GameEvent | null>(null)
+  const isMobile = useIsMobile()
 
   useEffect(() => {
     async function load() {
@@ -236,7 +248,7 @@ export default function EventsPage() {
         {/* Hero */}
         <section style={{
           position: 'relative',
-          height: '40vh',
+          height: isMobile ? '32vh' : '40vh',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -264,14 +276,14 @@ export default function EventsPage() {
             }}>What's On</p>
             <h1 style={{
               fontFamily: 'var(--font-cinzel)',
-              fontSize: '3.5rem',
+              fontSize: isMobile ? '2.2rem' : '3.5rem',
               color: 'var(--offwhite)',
               lineHeight: 1.2,
             }}>Events & Tournaments</h1>
           </div>
         </section>
 
-        <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '5rem 3rem' }}>
+        <div style={{ maxWidth: '1200px', margin: '0 auto', padding: isMobile ? '3rem 1.25rem' : '5rem 3rem' }}>
 
           {/* Branch Filter */}
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '4rem' }}>
@@ -306,7 +318,7 @@ export default function EventsPage() {
                 }}>Upcoming</p>
                 <h2 style={{
                   fontFamily: 'var(--font-cinzel)',
-                  fontSize: '2rem',
+                  fontSize: isMobile ? '1.5rem' : '2rem',
                   color: 'var(--offwhite)',
                   marginBottom: '1.5rem',
                 }}>Don't Miss Out</h2>
@@ -322,8 +334,8 @@ export default function EventsPage() {
                 ) : (
                   <div style={{
                     display: 'grid',
-                    gridTemplateColumns: 'repeat(3, 1fr)',
-                    gap: '1.5rem',
+                    gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)',
+                    gap: isMobile ? '1.25rem' : '1.5rem',
                   }}>
                     {filteredUpcoming.map(ev => <EventCard key={ev.id} ev={ev} />)}
                   </div>
@@ -343,7 +355,7 @@ export default function EventsPage() {
                   }}>Past Events</p>
                   <h2 style={{
                     fontFamily: 'var(--font-cinzel)',
-                    fontSize: '2rem',
+                    fontSize: isMobile ? '1.5rem' : '2rem',
                     color: 'rgba(245,242,236,0.4)',
                     marginBottom: '1.5rem',
                   }}>Completed</h2>
@@ -354,8 +366,8 @@ export default function EventsPage() {
                   }} />
                   <div style={{
                     display: 'grid',
-                    gridTemplateColumns: 'repeat(3, 1fr)',
-                    gap: '1.5rem',
+                    gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)',
+                    gap: isMobile ? '1.25rem' : '1.5rem',
                   }}>
                     {filteredCompleted.map(ev => <EventCard key={ev.id} ev={ev} dimmed />)}
                   </div>
@@ -379,7 +391,7 @@ export default function EventsPage() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            padding: '2rem',
+            padding: isMobile ? '1rem' : '2rem',
           }}
         >
           <div
@@ -393,14 +405,14 @@ export default function EventsPage() {
               maxHeight: '90vh',
               overflowY: 'auto',
               display: 'grid',
-              gridTemplateColumns: '1fr 1.2fr',
+              gridTemplateColumns: isMobile ? '1fr' : '1fr 1.2fr',
             }}
           >
             {/* Left — Image */}
             <div style={{
               position: 'relative',
-              minHeight: '550px',
-              borderRadius: '8px 0 0 8px',
+              minHeight: isMobile ? '220px' : '550px',
+              borderRadius: isMobile ? '8px 8px 0 0' : '8px 0 0 8px',
               overflow: 'hidden',
             }}>
               {selected.image ? (
@@ -452,7 +464,7 @@ export default function EventsPage() {
             </div>
 
             {/* Right — Info */}
-            <div style={{ padding: '2.5rem' }}>
+            <div style={{ padding: isMobile ? '1.5rem' : '2.5rem' }}>
 
               {/* Close */}
               <button onClick={() => setSelected(null)} style={{
@@ -500,7 +512,7 @@ export default function EventsPage() {
               {/* Details grid */}
               <div style={{
                 display: 'grid',
-                gridTemplateColumns: '1fr 1fr',
+                gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
                 gap: '1rem',
                 marginBottom: '1.5rem',
               }}>
