@@ -108,6 +108,7 @@ export default function AdminPage() {
             { label: 'Manage Games',  desc: 'Add, edit or remove games from the shop', href: '/admin/games',  color: 'var(--purple)' },
             { label: 'Manage Menu',   desc: 'Update food and drink items',              href: '/admin/menu',   color: 'var(--teal)' },
             { label: 'Manage Events', desc: 'Create and manage D&D sessions and events', href: '/admin/events', color: 'var(--red)' },
+            { label: 'D&D Campaigns', desc: 'Add and manage D&D campaigns', href: '/admin/dnd', color: 'var(--navy)' },
           ].map(({ label, desc, href, color }) => (
             <a key={label} href={href} style={{
               display: 'block',

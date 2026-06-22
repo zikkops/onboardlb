@@ -2,37 +2,43 @@
 
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
+import { collection, getDocs } from 'firebase/firestore'
+import { db } from '../../lib/firebase'
 
-const campaigns = [
-  {
-    title: 'Curse of Strahd',
-    subtitle: 'Delve into Barovia and uncover its secrets',
-    image: 'https://images.unsplash.com/photo-1520763185298-1b434c919102?w=800&q=80',
-    color: 'rgba(180,30,30,0.3)',
-  },
-  {
-    title: 'Eve of Ruin — Vecna',
-    subtitle: 'Face the undying lich lord before he unmakes reality',
-    image: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=800&q=80',
-    color: 'rgba(50,50,124,0.4)',
-  },
-  {
-    title: 'The Rise of Tiamat',
-    subtitle: 'Stop the Dragon Queen from descending upon the world',
-    image: 'https://images.unsplash.com/photo-1579547621113-e4bb2a19bdd6?w=800&q=80',
-    color: 'rgba(180,80,0,0.3)',
-  },
-]
+interface Campaign {
+  id: string
+  title: string
+  type: string
+  description: string
+  image: string
+  color: string
+  order: number
+}
 
 export default function DndPreview() {
-  const [current, setCurrent] = useState(0)
+  const [campaigns, setCampaigns] = useState<Campaign[]>([])
+  const [current, setCurrent]     = useState(0)
+  const [loading, setLoading]     = useState(true)
 
   useEffect(() => {
+    async function load() {
+      const snap = await getDocs(collection(db, 'dndCampaigns'))
+      const data = snap.docs
+        .map(d => ({ id: d.id, ...d.data() } as Campaign))
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+      setCampaigns(data)
+      setLoading(false)
+    }
+    load()
+  }, [])
+
+  useEffect(() => {
+    if (campaigns.length === 0) return
     const timer = setInterval(() => {
       setCurrent(prev => (prev + 1) % campaigns.length)
     }, 4000)
     return () => clearInterval(timer)
-  }, [])
+  }, [campaigns])
 
   const campaign = campaigns[current]
 
@@ -44,7 +50,6 @@ export default function DndPreview() {
       borderBottom: '1px solid rgba(50,50,124,0.2)',
     }}>
       <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-
         <div style={{
           display: 'grid',
           gridTemplateColumns: '1fr 1fr',
@@ -61,9 +66,7 @@ export default function DndPreview() {
               color: 'var(--purple)',
               marginBottom: '1rem',
               fontFamily: 'var(--font-inter)',
-            }}>
-              Dungeons & Dragons
-            </p>
+            }}>Dungeons & Dragons</p>
 
             <h2 style={{
               fontFamily: 'var(--font-cinzel)',
@@ -103,12 +106,7 @@ export default function DndPreview() {
             </p>
 
             {/* Features */}
-            <div style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '1rem',
-              marginBottom: '3rem',
-            }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '3rem' }}>
               {[
                 { title: 'Weekly Sessions',        text: 'Regular games every week at all 3 branches' },
                 { title: 'All Levels Welcome',     text: 'Beginners to veterans — everyone has a seat at the table' },
@@ -158,77 +156,99 @@ export default function DndPreview() {
 
           {/* Right — Carousel */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <div style={{
-              position: 'relative',
-              height: '480px',
-              borderRadius: '4px',
-              overflow: 'hidden',
-              border: '1px solid rgba(106,106,183,0.2)',
-              transition: 'all 0.6s ease',
-            }}>
-              {/* Background image */}
-              <div style={{
-                position: 'absolute', inset: 0,
-                backgroundImage: `url(${campaign.image})`,
-                backgroundSize: 'cover',
-                backgroundPosition: 'center',
-                transition: 'all 0.6s ease',
-              }} />
 
-              {/* Color overlay per campaign */}
+            {loading || campaigns.length === 0 ? (
               <div style={{
-                position: 'absolute', inset: 0,
-                background: `linear-gradient(to top, rgba(10,10,10,0.95) 0%, ${campaign.color} 100%)`,
-                transition: 'all 0.6s ease',
-              }} />
-
-              {/* Badge */}
-              <div style={{
-                position: 'absolute',
-                bottom: '2rem', left: '2rem', right: '2rem',
-                background: 'rgba(10,10,10,0.85)',
-                border: '1px solid rgba(106,106,183,0.3)',
+                height: '480px',
                 borderRadius: '4px',
-                padding: '1.2rem 1.5rem',
+                border: '1px solid rgba(106,106,183,0.2)',
+                background: 'rgba(50,50,124,0.1)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'rgba(245,242,236,0.2)',
+                fontFamily: 'var(--font-inter)',
+                fontSize: '0.85rem',
               }}>
-                <p style={{
-                  fontFamily: 'var(--font-cinzel)',
-                  fontSize: '1rem',
-                  color: 'var(--offwhite)',
-                  marginBottom: '0.3rem',
-                }}>
-                  {campaign.title}
-                </p>
-                <p style={{
-                  fontFamily: 'var(--font-inter)',
-                  fontSize: '0.78rem',
-                  color: 'rgba(245,242,236,0.5)',
-                }}>
-                  {campaign.subtitle}
-                </p>
+                {loading ? 'Loading campaigns…' : 'No campaigns yet'}
               </div>
-            </div>
+            ) : (
+              <>
+                <div style={{
+                  position: 'relative',
+                  height: '480px',
+                  borderRadius: '4px',
+                  overflow: 'hidden',
+                  border: '1px solid rgba(106,106,183,0.2)',
+                }}>
+                  {/* Background image */}
+                  <div style={{
+                    position: 'absolute', inset: 0,
+                    backgroundImage: `url(${campaign.image})`,
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center',
+                    transition: 'all 0.6s ease',
+                  }} />
 
-            {/* Dots */}
-            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
-              {campaigns.map((_, i) => (
-                <button
-                  key={i}
-                  onClick={() => setCurrent(i)}
-                  style={{
-                    width: i === current ? '24px' : '8px',
-                    height: '8px',
+                  {/* Color overlay */}
+                  <div style={{
+                    position: 'absolute', inset: 0,
+                    background: `linear-gradient(to top, rgba(10,10,10,0.95) 0%, ${campaign.color}40 100%)`,
+                    transition: 'all 0.6s ease',
+                  }} />
+
+                  {/* Badge */}
+                  <div style={{
+                    position: 'absolute',
+                    bottom: '2rem', left: '2rem', right: '2rem',
+                    background: 'rgba(10,10,10,0.85)',
+                    border: `1px solid ${campaign.color}50`,
                     borderRadius: '4px',
-                    backgroundColor: i === current ? 'var(--purple)' : 'rgba(255,255,255,0.2)',
-                    border: 'none',
-                    cursor: 'pointer',
-                    transition: 'all 0.3s ease',
-                    padding: 0,
-                  }}
-                />
-              ))}
-            </div>
+                    padding: '1.2rem 1.5rem',
+                  }}>
+                    <p style={{
+                      fontFamily: 'var(--font-inter)',
+                      fontSize: '0.65rem',
+                      letterSpacing: '0.15em',
+                      textTransform: 'uppercase',
+                      color: campaign.color,
+                      marginBottom: '0.4rem',
+                    }}>{campaign.type}</p>
+                    <p style={{
+                      fontFamily: 'var(--font-cinzel)',
+                      fontSize: '1.1rem',
+                      color: 'var(--offwhite)',
+                      marginBottom: '0.3rem',
+                    }}>{campaign.title}</p>
+                    <p style={{
+                      fontFamily: 'var(--font-inter)',
+                      fontSize: '0.78rem',
+                      color: 'rgba(245,242,236,0.5)',
+                    }}>{campaign.description?.split(' ').slice(0, 12).join(' ')}…</p>
+                  </div>
+                </div>
 
+                {/* Dots */}
+                <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
+                  {campaigns.map((_, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setCurrent(i)}
+                      style={{
+                        width: i === current ? '24px' : '8px',
+                        height: '8px',
+                        borderRadius: '4px',
+                        backgroundColor: i === current ? 'var(--purple)' : 'rgba(255,255,255,0.2)',
+                        border: 'none',
+                        cursor: 'pointer',
+                        transition: 'all 0.3s ease',
+                        padding: 0,
+                      }}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>

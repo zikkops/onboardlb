@@ -22,48 +22,76 @@ interface Game {
   image: string
 }
 
-const CATEGORIES = ['All', 'Strategy', 'Party', 'Family', 'Cooperative', 'Card', 'Trivia', 'RPG', 'Puzzle']
-
 function truncate(text: string, words: number) {
   const arr = text.split(' ')
   return arr.length > words ? arr.slice(0, words).join(' ') + '…' : text
 }
 
 export default function ShopPage() {
-  const [games, setGames]         = useState<Game[]>([])
-  const [loading, setLoading]     = useState(true)
-  const [filter, setFilter]       = useState('All')
-  const [search, setSearch]       = useState('')
-  const [maxPrice, setMaxPrice]   = useState(200)
-  const [hoveredId, setHoveredId] = useState<string | null>(null)
+  const [games, setGames]               = useState<Game[]>([])
+  const [loading, setLoading]           = useState(true)
+  const [filter, setFilter]             = useState('All')
+  const [search, setSearch]             = useState('')
+  const [maxPrice, setMaxPrice]         = useState<number | null>(null)
+  const [sliderMax, setSliderMax]       = useState<number>(200)
+  const [hoveredId, setHoveredId]       = useState<string | null>(null)
+  const [dbCategories, setDbCategories] = useState<string[]>([])
+  const [minPlayers, setMinPlayers] = useState<number>(1)
+  const [maxPlayers, setMaxPlayers] = useState<number>(10)
 
   useEffect(() => {
     async function load() {
-      const snap = await getDocs(collection(db, 'games'))
-      setGames(snap.docs.map(d => ({ id: d.id, ...d.data() } as Game)))
+      const [gamesSnap, catSnap] = await Promise.all([
+        getDocs(collection(db, 'games')),
+        getDocs(collection(db, 'gameCategories')),
+      ])
+
+      const loadedGames = gamesSnap.docs.map(d => ({ id: d.id, ...d.data() } as Game))
+      const cats        = catSnap.docs.map(d => (d.data() as any).name as string)
+
+      const highestPrice = loadedGames.length > 0
+        ? Math.max(...loadedGames.map(g => g.price ?? 0))
+        : 200
+
+      setGames(loadedGames)
+      setDbCategories(cats)
+      setSliderMax(highestPrice)
+      setMaxPrice(highestPrice)
       setLoading(false)
     }
     load()
   }, [])
 
-  const maxPriceInDb = useMemo(() => {
-    if (games.length === 0) return 200
-    return Math.max(...games.map(g => g.price ?? 0))
-  }, [games])
+  const CATEGORIES = useMemo(() => {
+    const cats = dbCategories.length > 0
+      ? dbCategories
+      : ['Strategy', 'Party', 'Family', 'Cooperative', 'Card', 'Trivia', 'RPG', 'Puzzle']
+    return ['All', ...cats]
+  }, [dbCategories])
 
   const filtered = useMemo(() => {
     return games.filter(g => {
       const matchCat    = filter === 'All' || g.category === filter
       const matchSearch = !search || g.name.toLowerCase().includes(search.toLowerCase()) || g.category.toLowerCase().includes(search.toLowerCase())
-      const matchPrice  = (g.price ?? 0) <= maxPrice
-      return matchCat && matchSearch && matchPrice
+      const matchPrice  = maxPrice === null || (g.price ?? 0) <= maxPrice
+
+      // Parse players range e.g. "2-4" or "2–4"
+      const playersStr  = g.players ?? ''
+      const nums        = playersStr.match(/\d+/g)?.map(Number) ?? []
+      const gameMin     = nums[0] ?? 1
+      const gameMax     = nums[1] ?? gameMin
+      const matchPlayers = gameMax >= minPlayers && gameMin <= maxPlayers
+
+      return matchCat && matchSearch && matchPrice && matchPlayers
     })
-  }, [games, filter, search, maxPrice])
+  }, [games, filter, search, maxPrice, minPlayers, maxPlayers])
 
   function reset() {
     setSearch('')
     setFilter('All')
-    setMaxPrice(maxPriceInDb)
+    setMaxPrice(sliderMax)
+    setMinPlayers(1)
+    setMaxPlayers(10)
   }
 
   return (
@@ -88,7 +116,7 @@ export default function ShopPage() {
             backgroundPosition: 'center',
           }} />
           <div style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.75)' }} />
-          <div style={{ position: 'relative', zIndex: 1, paddingTop: '10rem' }}>
+          <div style={{ position: 'relative', zIndex: 1, paddingTop: '4rem' }}>
             <p style={{
               fontSize: '0.7rem',
               letterSpacing: '0.3em',
@@ -108,7 +136,7 @@ export default function ShopPage() {
           </div>
         </section>
 
-        {/* Main content — sidebar + grid */}
+        {/* Main content */}
         <div style={{
           maxWidth: '1400px',
           margin: '0 auto',
@@ -119,7 +147,7 @@ export default function ShopPage() {
           alignItems: 'start',
         }}>
 
-          {/* LEFT SIDEBAR — Filters */}
+          {/* LEFT SIDEBAR */}
           <div style={{
             position: 'sticky',
             top: '90px',
@@ -168,7 +196,6 @@ export default function ShopPage() {
               </div>
             </div>
 
-            {/* Divider */}
             <div style={{ height: '1px', backgroundColor: 'rgba(255,255,255,0.06)' }} />
 
             {/* Category */}
@@ -192,7 +219,6 @@ export default function ShopPage() {
                   <button key={cat} onClick={() => setFilter(cat)} style={{
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'space-between',
                     backgroundColor: 'transparent',
                     border: 'none',
                     borderLeft: `2px solid ${filter === cat ? 'var(--purple)' : 'transparent'}`,
@@ -210,10 +236,9 @@ export default function ShopPage() {
               </div>
             </div>
 
-            {/* Divider */}
             <div style={{ height: '1px', backgroundColor: 'rgba(255,255,255,0.06)' }} />
 
-            {/* Price Range — single slider */}
+            {/* Price Range */}
             <div>
               <p style={{
                 fontSize: '0.65rem',
@@ -228,12 +253,12 @@ export default function ShopPage() {
                 fontSize: '1.5rem',
                 color: 'var(--purple)',
                 marginBottom: '1rem',
-              }}>${maxPrice}</p>
+              }}>${maxPrice ?? sliderMax}</p>
               <input
                 type="range"
                 min={0}
-                max={maxPriceInDb || 200}
-                value={maxPrice}
+                max={sliderMax}
+                value={maxPrice ?? sliderMax}
                 onChange={e => setMaxPrice(+e.target.value)}
                 style={{
                   width: '100%',
@@ -251,11 +276,135 @@ export default function ShopPage() {
                 fontFamily: 'var(--font-inter)',
               }}>
                 <span>$0</span>
-                <span>${maxPriceInDb || 200}</span>
+                <span>${sliderMax}</span>
               </div>
             </div>
 
-            {/* Divider */}
+            <div style={{ height: '1px', backgroundColor: 'rgba(255,255,255,0.06)' }} />
+
+            {/* Players Filter */}
+            <div>
+              <p style={{
+                fontSize: '0.65rem',
+                letterSpacing: '0.2em',
+                textTransform: 'uppercase',
+                color: 'rgba(245,242,236,0.3)',
+                fontFamily: 'var(--font-inter)',
+                marginBottom: '0.8rem',
+              }}>Number of Players</p>
+
+              <p style={{
+                fontFamily: 'var(--font-cinzel)',
+                fontSize: '1.2rem',
+                color: 'var(--purple)',
+                marginBottom: '1rem',
+              }}>
+                {minPlayers === maxPlayers ? `${minPlayers} players` : `${minPlayers}–${maxPlayers} players`}
+              </p>
+
+              {/* Min Players */}
+              <div style={{ marginBottom: '0.8rem' }}>
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  fontSize: '0.65rem',
+                  color: 'rgba(245,242,236,0.25)',
+                  fontFamily: 'var(--font-inter)',
+                  marginBottom: '0.3rem',
+                }}>
+                  <span>Min players</span>
+                  <span>{minPlayers}</span>
+                </div>
+                <input
+                  type="range"
+                  min={1}
+                  max={10}
+                  value={minPlayers}
+                  onChange={e => {
+                    const val = +e.target.value
+                    setMinPlayers(val)
+                    if (val > maxPlayers) setMaxPlayers(val)
+                  }}
+                  style={{
+                    width: '100%',
+                    accentColor: 'var(--purple)',
+                    cursor: 'pointer',
+                    height: '4px',
+                  }}
+                />
+              </div>
+
+              {/* Max Players */}
+              <div>
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  fontSize: '0.65rem',
+                  color: 'rgba(245,242,236,0.25)',
+                  fontFamily: 'var(--font-inter)',
+                  marginBottom: '0.3rem',
+                }}>
+                  <span>Max players</span>
+                  <span>{maxPlayers}</span>
+                </div>
+                <input
+                  type="range"
+                  min={1}
+                  max={10}
+                  value={maxPlayers}
+                  onChange={e => {
+                    const val = +e.target.value
+                    setMaxPlayers(val)
+                    if (val < minPlayers) setMinPlayers(val)
+                  }}
+                  style={{
+                    width: '100%',
+                    accentColor: 'var(--purple)',
+                    cursor: 'pointer',
+                    height: '4px',
+                  }}
+                />
+              </div>
+
+              {/* Quick select */}
+              <div style={{
+                display: 'flex',
+                gap: '0.4rem',
+                flexWrap: 'wrap',
+                marginTop: '0.8rem',
+              }}>
+                {[
+                  { label: 'Solo',    min: 1, max: 1 },
+                  { label: '2',       min: 2, max: 2 },
+                  { label: '2–4',     min: 2, max: 4 },
+                  { label: '4+',      min: 4, max: 10 },
+                  { label: 'Any',     min: 1, max: 10 },
+                ].map(({ label, min, max }) => (
+                  <button
+                    key={label}
+                    onClick={() => { setMinPlayers(min); setMaxPlayers(max) }}
+                    style={{
+                      backgroundColor: minPlayers === min && maxPlayers === max
+                        ? 'var(--purple)'
+                        : 'transparent',
+                      border: `1px solid ${minPlayers === min && maxPlayers === max
+                        ? 'var(--purple)'
+                        : 'rgba(255,255,255,0.1)'}`,
+                      color: minPlayers === min && maxPlayers === max
+                        ? '#fff'
+                        : 'rgba(245,242,236,0.4)',
+                      padding: '0.3rem 0.6rem',
+                      borderRadius: '2px',
+                      fontSize: '0.7rem',
+                      cursor: 'pointer',
+                      fontFamily: 'var(--font-inter)',
+                      transition: 'all 0.2s',
+                    }}
+                  >{label}</button>
+                ))}
+              </div>
+            </div>
+
             <div style={{ height: '1px', backgroundColor: 'rgba(255,255,255,0.06)' }} />
 
             {/* Results + Reset */}
@@ -439,8 +588,17 @@ export default function ShopPage() {
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'space-between',
+                          paddingTop: '0.6rem',
+                          borderTop: '1px solid rgba(255,255,255,0.05)',
                         }}>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                            {game.price > 0 && (
+                              <span style={{
+                                fontFamily: 'var(--font-cinzel)',
+                                fontSize: '1.2rem',
+                                color: 'var(--purple)',
+                              }}>${game.price}</span>
+                            )}
                             <span style={{
                               fontFamily: 'var(--font-inter)',
                               fontSize: '0.68rem',
@@ -450,13 +608,6 @@ export default function ShopPage() {
                             }}>
                               {outOfStock ? 'Out of stock' : `${game.stock} in stock`}
                             </span>
-                            {game.price > 0 && (
-                              <span style={{
-                                fontFamily: 'var(--font-cinzel)',
-                                fontSize: '1rem',
-                                color: 'var(--purple)',
-                              }}>${game.price}</span>
-                            )}
                           </div>
                           <span style={{
                             fontFamily: 'var(--font-inter)',

@@ -1,4 +1,57 @@
+'use client'
+
 import Image from 'next/image'
+import Link from 'next/link'
+import { useState } from 'react'
+
+function HeroButton({ href, label, color }: { href: string, label: string, color: string }) {
+  const [hovered, setHovered] = useState(false)
+
+  return (
+    <Link
+      href={href}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        position: 'relative',
+        overflow: 'hidden',
+        backgroundColor: hovered ? `${color}30` : `${color}15`,
+        color: '#fff',
+        padding: '0.75rem 1.5rem',
+        borderRadius: '2px',
+        fontSize: '0.78rem',
+        letterSpacing: '0.12em',
+        textTransform: 'uppercase',
+        textDecoration: 'none',
+        fontFamily: 'var(--font-inter)',
+        border: `1px solid ${hovered ? color : `${color}60`}`,
+        backdropFilter: 'blur(10px)',
+        transition: 'all 0.3s ease',
+        boxShadow: hovered
+          ? `0 0 20px ${color}50, inset 0 0 20px ${color}15`
+          : 'none',
+        display: 'block',
+        textAlign: 'center',
+        whiteSpace: 'nowrap',
+      }}>
+
+      {/* Shine sweep */}
+      <span style={{
+        position: 'absolute',
+        top: 0,
+        left: hovered ? '120%' : '-60%',
+        width: '40%',
+        height: '100%',
+        background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent)',
+        transform: 'skewX(-20deg)',
+        transition: 'left 0.5s ease',
+        pointerEvents: 'none',
+      }} />
+
+      {label}
+    </Link>
+  )
+}
 
 export default function Hero() {
   return (
@@ -29,7 +82,7 @@ export default function Hero() {
         background: 'rgba(0,0,0,0.7)',
       }} />
 
-      {/* Color glows on top of overlay */}
+      {/* Color glows */}
       <div style={{
         position: 'absolute', inset: 0, pointerEvents: 'none',
         background: `
@@ -72,7 +125,7 @@ export default function Hero() {
         fontSize: '1rem',
         fontWeight: 300,
         letterSpacing: '0.05em',
-        color: 'rgba(245,242,236,0.7)',
+        color: 'rgba(245,242,236,0.6)',
         maxWidth: '480px',
         lineHeight: 1.9,
         marginBottom: '3rem',
@@ -81,37 +134,28 @@ export default function Hero() {
         Three branches across Lebanon.
       </p>
 
-      {/* Buttons */}
-        <div style={{
+      {/* Buttons — 3 x 2 layout */}
+      <div style={{
         position: 'relative', zIndex: 1,
-        display: 'grid',
-        gridTemplateColumns: '1fr 1fr',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
         gap: '1rem',
-        maxWidth: '500px',
-        width: '100%',
-        }}>
-        {[
-            { href: '/menu',    label: 'Our Menu',         bg: 'var(--teal)' },
-            { href: '/shop',    label: 'Buy Board Games',  bg: 'var(--purple)' },
-            { href: '#reserve', label: 'Reserve a Spot',   bg: 'var(--red)' },
-            { href: '/dnd',     label: 'Dungeons & Dragons', bg: 'var(--navy)' },
-        ].map(({ href, label, bg }) => (
-            <a key={href} href={href} style={{
-            backgroundColor: bg,
-            color: '#fff',
-            padding: '0.9rem 1rem',
-            borderRadius: '2px',
-            fontSize: '0.75rem',
-            letterSpacing: '0.1em',
-            textTransform: 'uppercase',
-            textDecoration: 'none',
-            fontFamily: 'var(--font-inter)',
-            textAlign: 'center',
-            }}>
-            {label}
-            </a>
-        ))}
+      }}>
+
+        {/* Row 1 — 3 buttons */}
+        <div style={{ display: 'flex', gap: '1rem' }}>
+          <HeroButton href="/menu"   label="Our Menu" color="#00A098" />
+          <HeroButton href="/shop"   label="Shop"      color="#6A6AB7" />
+          <HeroButton href="/events" label="Events"    color="#E43329" />
         </div>
+
+        {/* Row 2 — 2 buttons */}
+        <div style={{ display: 'flex', gap: '1rem' }}>
+          <HeroButton href="#reserve" label="Reserve a Spot"     color="#32327C" />
+          <HeroButton href="/dnd"     label="Dungeons & Dragons" color="#6A6AB7" />
+        </div>
+      </div>
 
       {/* Scroll hint */}
       <div style={{

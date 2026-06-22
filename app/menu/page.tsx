@@ -46,7 +46,12 @@ export default function MenuPage() {
   const [items, setItems]                         = useState<MenuItem[]>([])
   const [loading, setLoading]                     = useState(true)
   const [activeCategory, setActiveCategory]       = useState<string>('')
-  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({})
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({
+  Food:     true,
+  Beverage: true,
+  Sweets:   true,
+  })
+
 
   function toggleSection(s: string) {
     setCollapsedSections(prev => ({ ...prev, [s]: !prev[s] }))
@@ -179,14 +184,19 @@ export default function MenuPage() {
                         color: sectionColors[s],
                         fontSize: '0.65rem',
                         display: 'block',
-                        transition: 'transform 0.3s',
+                        transition: 'transform 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
                         transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)',
                       }}>▼</span>
                     </button>
 
                     {/* Subcategories — collapsible */}
-                    {!isCollapsed && (
-                      <div style={{ marginBottom: '1rem' }}>
+                    
+                      <div style={{
+                            maxHeight: isCollapsed ? '0' : '500px',
+                            overflow: 'hidden',
+                            transition: 'max-height 0.4s ease',
+                            marginBottom: isCollapsed ? '0' : '1rem',
+                          }}>
                         {sectionCats.length === 0 ? (
                           <p style={{
                             fontFamily: 'var(--font-inter)',
@@ -270,7 +280,7 @@ export default function MenuPage() {
                           </button>
                         ))}
                       </div>
-                    )}
+                    
                   </div>
                 )
               })}

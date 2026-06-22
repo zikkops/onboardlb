@@ -1,8 +1,36 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import { collection, getDocs } from 'firebase/firestore'
+import { db } from '../lib/firebase'
 import Navbar from '../components/layout/Navbar'
 import Footer from '../components/layout/Footer'
 
-const campaigns = [
+interface Campaign {
+  id: string
+  title: string
+  type: string
+  description: string
+  duration: string
+  sessions: string
+  players: string
+  level: string
+  image: string
+  color: string
+  locations: string[]
+  contactNumber?: string
+  order: number
+}
+
+const LOCATION_NUMBERS: Record<string, string> = {
+  'Beirut — Hamra': '96181950042',
+  'Zouk':           '96170973242',
+  'Broummana':      '96176648054',
+}
+
+const FALLBACK_CAMPAIGNS: Campaign[] = [
   {
+    id: '1',
     title: 'Curse of Strahd',
     type: 'Horror Campaign',
     description: 'Delve into the dark land of Barovia, ruled by the vampire lord Strahd von Zarovich. A gothic horror adventure for those who dare.',
@@ -11,9 +39,13 @@ const campaigns = [
     players: '4–6',
     level: 'Intermediate',
     image: 'https://images.unsplash.com/photo-1520763185298-1b434c919102?w=800&q=80',
-    color: 'var(--red)',
+    color: '#E43329',
+    locations: ['Beirut — Hamra', 'Zouk'],
+    contactNumber: '+96181950042',
+    order: 0,
   },
   {
+    id: '2',
     title: 'Eve of Ruin — Vecna',
     type: 'Epic Campaign',
     description: 'Face the undying lich lord Vecna before he unmakes reality itself. A multiverse-spanning adventure for seasoned adventurers.',
@@ -22,9 +54,13 @@ const campaigns = [
     players: '4–6',
     level: 'Advanced',
     image: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=800&q=80',
-    color: 'var(--purple)',
+    color: '#6A6AB7',
+    locations: ['Beirut — Hamra'],
+    contactNumber: '+96181950042',
+    order: 1,
   },
   {
+    id: '3',
     title: 'The Rise of Tiamat',
     type: 'Dragon Campaign',
     description: 'Stop the Cult of the Dragon from summoning Tiamat, the five-headed Dragon Queen, from her prison in the Nine Hells.',
@@ -33,7 +69,10 @@ const campaigns = [
     players: '4–6',
     level: 'Beginner Friendly',
     image: 'https://images.unsplash.com/photo-1579547621113-e4bb2a19bdd6?w=800&q=80',
-    color: 'var(--teal)',
+    color: '#00A098',
+    locations: ['Beirut — Hamra', 'Zouk', 'Broummana'],
+    contactNumber: '+96181950042',
+    order: 2,
   },
 ]
 
@@ -61,6 +100,36 @@ const faqs = [
 ]
 
 export default function DndPage() {
+  const [campaigns, setCampaigns]     = useState<Campaign[]>([])
+  const [loading, setLoading]         = useState(true)
+  const [hoveredBtn, setHoveredBtn]   = useState<string | null>(null)
+  const [openFaq, setOpenFaq]         = useState<number | null>(null)
+
+  useEffect(() => {
+    async function load() {
+      const snap = await getDocs(collection(db, 'dndCampaigns'))
+      const data = snap.docs
+        .map(d => ({ id: d.id, ...d.data() } as Campaign))
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+      setCampaigns(data.length > 0 ? data : FALLBACK_CAMPAIGNS)
+      setLoading(false)
+    }
+    load()
+  }, [])
+
+  function scrollTo(id: string) {
+    const el = document.getElementById(id)
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  function waLink(campaign: Campaign, location: string) {
+    const number = LOCATION_NUMBERS[location] ?? (campaign.contactNumber ?? '96181950042').replace(/\+/g, '')
+    const message = encodeURIComponent(`Hello, I would like to know more about the ${campaign.title} campaign and how to start it.`)
+    return `https://wa.me/${number}?text=${message}`
+  }
+
+  const displayCampaigns = campaigns.length > 0 ? campaigns : FALLBACK_CAMPAIGNS
+
   return (
     <>
       <Navbar />
@@ -71,6 +140,7 @@ export default function DndPage() {
           position: 'relative',
           height: '60vh',
           display: 'flex',
+          flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
           textAlign: 'center',
@@ -78,7 +148,7 @@ export default function DndPage() {
         }}>
           <div style={{
             position: 'absolute', inset: 0,
-            backgroundImage: 'url(https://images.unsplash.com/photo-1605870445919-838d190e8e1b?w=1200&q=80)',
+            backgroundImage: 'url(/images/bg-dnd.webp)',
             backgroundSize: 'cover',
             backgroundPosition: 'center',
           }} />
@@ -86,7 +156,8 @@ export default function DndPage() {
             position: 'absolute', inset: 0,
             background: 'linear-gradient(to top, rgba(10,10,10,1) 0%, rgba(50,50,124,0.3) 100%)',
           }} />
-          <div style={{ position: 'relative', zIndex: 1 }}>
+
+          <div style={{ position: 'relative', zIndex: 1, paddingTop: '5rem' }}>
             <p style={{
               fontSize: '0.7rem',
               letterSpacing: '0.3em',
@@ -94,9 +165,8 @@ export default function DndPage() {
               color: 'var(--purple)',
               marginBottom: '1rem',
               fontFamily: 'var(--font-inter)',
-            }}>
-              Dungeons & Dragons
-            </p>
+            }}>Dungeons & Dragons</p>
+
             <h1 style={{
               fontFamily: 'var(--font-cinzel)',
               fontSize: '4rem',
@@ -106,170 +176,123 @@ export default function DndPage() {
             }}>
               Enter the Realm<br />of Adventure
             </h1>
+
             <p style={{
               fontFamily: 'var(--font-inter)',
               fontSize: '1rem',
               color: 'rgba(245,242,236,0.55)',
               maxWidth: '480px',
               lineHeight: 1.8,
+              marginBottom: '2.5rem',
             }}>
               Lebanon's home for Dungeons & Dragons. Epic campaigns, expert Dungeon Masters, all materials provided.
             </p>
-          </div>
-        </section>
 
-        {/* Campaigns */}
-        <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '5rem 3rem' }}>
-
-          <p style={{
-            fontSize: '0.7rem',
-            letterSpacing: '0.3em',
-            textTransform: 'uppercase',
-            color: 'var(--purple)',
-            marginBottom: '1rem',
-            fontFamily: 'var(--font-inter)',
-          }}>
-            Active Campaigns
-          </p>
-
-          <h2 style={{
-            fontFamily: 'var(--font-cinzel)',
-            fontSize: '2.5rem',
-            color: 'var(--offwhite)',
-            marginBottom: '1.5rem',
-          }}>
-            Choose Your Adventure
-          </h2>
-
-          <div style={{
-            width: '60px', height: '2px',
-            backgroundColor: 'var(--purple)',
-            marginBottom: '3rem',
-          }} />
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-            {campaigns.map(({ title, type, description, duration, sessions, players, level, image, color }) => (
-              <div key={title} style={{
-                display: 'grid',
-                gridTemplateColumns: '350px 1fr',
-                border: '1px solid rgba(255,255,255,0.06)',
-                borderRadius: '4px',
-                overflow: 'hidden',
-              }}>
-
-                {/* Image */}
-                <div style={{
-                  position: 'relative',
-                  backgroundImage: `url(${image})`,
-                  backgroundSize: 'cover',
-                  backgroundPosition: 'center',
-                  minHeight: '280px',
-                }}>
-                  <div style={{
-                    position: 'absolute', inset: 0,
-                    background: 'linear-gradient(to right, transparent, rgba(10,10,10,0.3))',
-                  }} />
-                  <div style={{
-                    position: 'absolute',
-                    top: '1.2rem',
-                    left: '1.2rem',
-                    backgroundColor: color,
-                    color: '#fff',
-                    padding: '0.3rem 0.8rem',
-                    borderRadius: '2px',
-                    fontSize: '0.7rem',
-                    letterSpacing: '0.1em',
-                    textTransform: 'uppercase',
-                    fontFamily: 'var(--font-inter)',
-                  }}>
-                    {type}
-                  </div>
-                </div>
-
-                {/* Content */}
-                <div style={{
-                  padding: '2rem',
-                  background: 'rgba(255,255,255,0.02)',
-                }}>
-                  <h3 style={{
-                    fontFamily: 'var(--font-cinzel)',
-                    fontSize: '1.5rem',
-                    color: 'var(--offwhite)',
-                    marginBottom: '0.8rem',
-                  }}>{title}</h3>
-
-                  <p style={{
-                    fontFamily: 'var(--font-inter)',
-                    fontSize: '0.85rem',
-                    color: 'rgba(245,242,236,0.5)',
-                    lineHeight: 1.8,
-                    marginBottom: '1.5rem',
-                  }}>{description}</p>
-
-                  {/* Details */}
-                  <div style={{
-                    display: 'flex',
-                    gap: '2rem',
-                    flexWrap: 'wrap',
-                    marginBottom: '1.5rem',
-                  }}>
-                    {[
-                      { label: 'Duration',  value: duration },
-                      { label: 'Sessions',  value: sessions },
-                      { label: 'Players',   value: players },
-                      { label: 'Level',     value: level },
-                    ].map(({ label, value }) => (
-                      <div key={label}>
-                        <p style={{
-                          fontSize: '0.65rem',
-                          letterSpacing: '0.15em',
-                          textTransform: 'uppercase',
-                          color: 'rgba(245,242,236,0.3)',
-                          fontFamily: 'var(--font-inter)',
-                          marginBottom: '0.2rem',
-                        }}>{label}</p>
-                        <p style={{
-                          fontFamily: 'var(--font-cinzel)',
-                          fontSize: '0.85rem',
-                          color: 'var(--offwhite)',
-                        }}>{value}</p>
-                      </div>
-                    ))}
-                  </div>
-
-                  <a
-                    href="https://wa.me/96100000000"
-                    target="_blank"
-                    rel="noopener noreferrer"
+            {/* Scroll Buttons */}
+            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
+              {([
+                { key: 'campaigns', label: 'Campaigns' },
+                { key: 'faq',       label: 'FAQ' },
+              ] as const).map(({ key, label }) => {
+                const isHovered = hoveredBtn === key
+                return (
+                  <button
+                    key={key}
+                    onClick={() => scrollTo(key)}
+                    onMouseEnter={() => setHoveredBtn(key)}
+                    onMouseLeave={() => setHoveredBtn(null)}
                     style={{
-                      display: 'inline-block',
-                      backgroundColor: color,
+                      position: 'relative',
+                      overflow: 'hidden',
+                      width: '160px',
+                      backgroundColor: isHovered
+                        ? 'rgba(106,106,183,0.2)'
+                        : 'rgba(106,106,183,0.1)',
                       color: '#fff',
                       padding: '0.7rem 2rem',
                       borderRadius: '2px',
-                      fontSize: '0.75rem',
-                      letterSpacing: '0.1em',
+                      fontSize: '0.78rem',
+                      letterSpacing: '0.12em',
                       textTransform: 'uppercase',
-                      textDecoration: 'none',
+                      border: `1px solid ${isHovered ? 'var(--purple)' : 'rgba(106,106,183,0.35)'}`,
+                      backdropFilter: 'blur(10px)',
+                      cursor: 'pointer',
                       fontFamily: 'var(--font-inter)',
-                    }}
-                  >
-                    Join This Campaign
-                  </a>
+                      transition: 'all 0.3s ease',
+                      boxShadow: isHovered
+                        ? '0 0 20px rgba(106,106,183,0.3), inset 0 0 20px rgba(106,106,183,0.1)'
+                        : 'none',
+                    }}>
+                    <span style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: isHovered ? '120%' : '-60%',
+                      width: '40%',
+                      height: '100%',
+                      background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent)',
+                      transform: 'skewX(-20deg)',
+                      transition: 'left 0.5s ease',
+                      pointerEvents: 'none',
+                    }} />
+                    {label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        </section>
+
+        <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '5rem 3rem' }}>
+
+          {/* Features */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(2, 1fr)',
+            gap: '1.5rem',
+            marginBottom: '6rem',
+          }}>
+            {[
+              { title: 'Weekly Sessions',        text: 'Regular games every week at all 3 branches' },
+              { title: 'All Levels Welcome',     text: 'Beginners to veterans — everyone has a seat at the table' },
+              { title: 'Expert Dungeon Masters', text: 'Our DMs craft stories you will never forget' },
+              { title: 'All Materials Provided', text: 'Dice, character sheets, rulebooks — all included' },
+            ].map(({ title, text }) => (
+              <div key={title} style={{
+                display: 'flex',
+                gap: '1rem',
+                alignItems: 'flex-start',
+                padding: '1.5rem',
+                border: '1px solid rgba(106,106,183,0.15)',
+                borderRadius: '4px',
+                background: 'rgba(50,50,124,0.05)',
+              }}>
+                <div style={{
+                  width: '8px', height: '8px',
+                  borderRadius: '50%',
+                  backgroundColor: 'var(--purple)',
+                  marginTop: '6px',
+                  flexShrink: 0,
+                }} />
+                <div>
+                  <p style={{
+                    fontFamily: 'var(--font-cinzel)',
+                    fontSize: '0.9rem',
+                    color: 'var(--offwhite)',
+                    marginBottom: '0.3rem',
+                  }}>{title}</p>
+                  <p style={{
+                    fontFamily: 'var(--font-inter)',
+                    fontSize: '0.8rem',
+                    color: 'rgba(245,242,236,0.45)',
+                    lineHeight: 1.7,
+                  }}>{text}</p>
                 </div>
               </div>
             ))}
           </div>
-        </div>
 
-        {/* FAQ */}
-        <div style={{
-          backgroundColor: 'rgba(50,50,124,0.08)',
-          borderTop: '1px solid rgba(50,50,124,0.2)',
-          padding: '5rem 3rem',
-        }}>
-          <div style={{ maxWidth: '800px', margin: '0 auto' }}>
-
+          {/* Campaigns */}
+          <div id="campaigns" style={{ marginBottom: '6rem', scrollMarginTop: '80px' }}>
             <p style={{
               fontSize: '0.7rem',
               letterSpacing: '0.3em',
@@ -277,18 +300,14 @@ export default function DndPage() {
               color: 'var(--purple)',
               marginBottom: '1rem',
               fontFamily: 'var(--font-inter)',
-            }}>
-              Got Questions?
-            </p>
+            }}>Active Campaigns</p>
 
             <h2 style={{
               fontFamily: 'var(--font-cinzel)',
               fontSize: '2.5rem',
               color: 'var(--offwhite)',
               marginBottom: '1.5rem',
-            }}>
-              Frequently Asked
-            </h2>
+            }}>Choose Your Adventure</h2>
 
             <div style={{
               width: '60px', height: '2px',
@@ -296,31 +315,233 @@ export default function DndPage() {
               marginBottom: '3rem',
             }} />
 
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-              {faqs.map(({ q, a }) => (
+            {loading ? (
+              <p style={{ color: 'rgba(245,242,236,0.3)', fontFamily: 'var(--font-inter)' }}>Loading…</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+                {displayCampaigns.map(campaign => (
+                  <div key={campaign.id} style={{
+                    display: 'grid',
+                    gridTemplateColumns: '380px 1fr',
+                    border: '1px solid rgba(255,255,255,0.06)',
+                    borderRadius: '4px',
+                    overflow: 'hidden',
+                    borderTop: `3px solid ${campaign.color}`,
+                  }}>
+
+                    {/* Image */}
+                    <div style={{
+                      position: 'relative',
+                      backgroundImage: `url(${campaign.image})`,
+                      backgroundSize: 'cover',
+                      backgroundPosition: 'center',
+                      minHeight: '300px',
+                    }}>
+                      <div style={{
+                        position: 'absolute', inset: 0,
+                        background: 'linear-gradient(to right, transparent, rgba(10,10,10,0.3))',
+                      }} />
+                      <div style={{
+                        position: 'absolute',
+                        top: '1.2rem', left: '1.2rem',
+                        backgroundColor: campaign.color,
+                        color: '#fff',
+                        padding: '0.3rem 0.8rem',
+                        borderRadius: '2px',
+                        fontSize: '0.7rem',
+                        letterSpacing: '0.1em',
+                        textTransform: 'uppercase',
+                        fontFamily: 'var(--font-inter)',
+                      }}>{campaign.type}</div>
+                    </div>
+
+                    {/* Content */}
+                    <div style={{
+                      padding: '2rem',
+                      background: 'rgba(255,255,255,0.02)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                    }}>
+                      <h3 style={{
+                        fontFamily: 'var(--font-cinzel)',
+                        fontSize: '1.6rem',
+                        color: 'var(--offwhite)',
+                        marginBottom: '0.8rem',
+                      }}>{campaign.title}</h3>
+
+                      <p style={{
+                        fontFamily: 'var(--font-inter)',
+                        fontSize: '0.88rem',
+                        color: 'rgba(245,242,236,0.5)',
+                        lineHeight: 1.8,
+                        marginBottom: '1.5rem',
+                      }}>{campaign.description}</p>
+
+                      {/* Details */}
+                      <div style={{
+                        display: 'flex',
+                        gap: '2rem',
+                        flexWrap: 'wrap',
+                        marginBottom: '1.5rem',
+                      }}>
+                        {[
+                          { label: 'Duration',  value: campaign.duration },
+                          { label: 'Sessions',  value: campaign.sessions },
+                          { label: 'Players',   value: campaign.players },
+                          { label: 'Level',     value: campaign.level },
+                        ].map(({ label, value }) => (
+                          <div key={label}>
+                            <p style={{
+                              fontSize: '0.62rem',
+                              letterSpacing: '0.15em',
+                              textTransform: 'uppercase',
+                              color: 'rgba(245,242,236,0.3)',
+                              fontFamily: 'var(--font-inter)',
+                              marginBottom: '0.2rem',
+                            }}>{label}</p>
+                            <p style={{
+                              fontFamily: 'var(--font-cinzel)',
+                              fontSize: '0.85rem',
+                              color: 'var(--offwhite)',
+                            }}>{value}</p>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Locations */}
+                      {campaign.locations?.length > 0 && (
+                        <div style={{ marginTop: 'auto' }}>
+                          <p style={{
+                            fontSize: '0.65rem',
+                            letterSpacing: '0.2em',
+                            textTransform: 'uppercase',
+                            color: 'rgba(245,242,236,0.3)',
+                            fontFamily: 'var(--font-inter)',
+                            marginBottom: '0.8rem',
+                          }}>Available at — click to join</p>
+                          <div style={{
+                            display: 'flex',
+                            gap: '0.6rem',
+                            flexWrap: 'wrap',
+                          }}>
+                            {campaign.locations.map(loc => (
+                              <a
+                                key={loc}
+                                href={waLink(campaign, loc)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '0.4rem',
+                                  backgroundColor: `${campaign.color}15`,
+                                  border: `1px solid ${campaign.color}50`,
+                                  color: campaign.color,
+                                  padding: '0.5rem 1rem',
+                                  borderRadius: '2px',
+                                  fontSize: '0.78rem',
+                                  letterSpacing: '0.05em',
+                                  textDecoration: 'none',
+                                  fontFamily: 'var(--font-inter)',
+                                  transition: 'all 0.2s',
+                                }}
+                                onMouseEnter={e => {
+                                  (e.currentTarget as HTMLAnchorElement).style.backgroundColor = `${campaign.color}30`
+                                  ;(e.currentTarget as HTMLAnchorElement).style.borderColor = campaign.color
+                                }}
+                                onMouseLeave={e => {
+                                  (e.currentTarget as HTMLAnchorElement).style.backgroundColor = `${campaign.color}15`
+                                  ;(e.currentTarget as HTMLAnchorElement).style.borderColor = `${campaign.color}50`
+                                }}
+                              >
+                                📍 {loc}
+                              </a>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* FAQ */}
+          <div id="faq" style={{ scrollMarginTop: '80px' }}>
+            <p style={{
+              fontSize: '0.7rem',
+              letterSpacing: '0.3em',
+              textTransform: 'uppercase',
+              color: 'var(--purple)',
+              marginBottom: '1rem',
+              fontFamily: 'var(--font-inter)',
+            }}>Got Questions?</p>
+
+            <h2 style={{
+              fontFamily: 'var(--font-cinzel)',
+              fontSize: '2.5rem',
+              color: 'var(--offwhite)',
+              marginBottom: '1.5rem',
+            }}>Frequently Asked</h2>
+
+            <div style={{
+              width: '60px', height: '2px',
+              backgroundColor: 'var(--purple)',
+              marginBottom: '3rem',
+            }} />
+
+            <div style={{ maxWidth: '800px', display: 'flex', flexDirection: 'column' }}>
+              {faqs.map(({ q, a }, i) => (
                 <div key={q} style={{
                   borderBottom: '1px solid rgba(255,255,255,0.06)',
-                  padding: '1.8rem 0',
+                  overflow: 'hidden',
                 }}>
-                  <p style={{
-                    fontFamily: 'var(--font-cinzel)',
-                    fontSize: '1rem',
-                    color: 'var(--offwhite)',
-                    marginBottom: '0.8rem',
-                  }}>{q}</p>
-                  <p style={{
-                    fontFamily: 'var(--font-inter)',
-                    fontSize: '0.85rem',
-                    color: 'rgba(245,242,236,0.5)',
-                    lineHeight: 1.8,
-                  }}>{a}</p>
+                  <button
+                    onClick={() => setOpenFaq(openFaq === i ? null : i)}
+                    style={{
+                      width: '100%',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      padding: '1.8rem 0',
+                      background: 'transparent',
+                      border: 'none',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      gap: '1rem',
+                    }}>
+                    <p style={{
+                      fontFamily: 'var(--font-cinzel)',
+                      fontSize: '1rem',
+                      color: 'var(--offwhite)',
+                    }}>{q}</p>
+                    <span style={{
+                      color: 'var(--purple)',
+                      fontSize: '0.8rem',
+                      transition: 'transform 0.3s',
+                      transform: openFaq === i ? 'rotate(180deg)' : 'rotate(0deg)',
+                      flexShrink: 0,
+                    }}>▼</span>
+                  </button>
+                  <div style={{
+                    maxHeight: openFaq === i ? '200px' : '0',
+                    overflow: 'hidden',
+                    transition: 'max-height 0.3s ease',
+                  }}>
+                    <p style={{
+                      fontFamily: 'var(--font-inter)',
+                      fontSize: '0.88rem',
+                      color: 'rgba(245,242,236,0.5)',
+                      lineHeight: 1.8,
+                      paddingBottom: '1.8rem',
+                    }}>{a}</p>
+                  </div>
                 </div>
               ))}
             </div>
-
           </div>
         </div>
-
       </main>
       <Footer />
     </>
