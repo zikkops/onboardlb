@@ -1,10 +1,23 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import Navbar from '../components/layout/Navbar'
 import Footer from '../components/layout/Footer'
 import Image from 'next/image'
 
+function useIsMobile(breakpoint = 768) {
+  const [isMobile, setIsMobile] = useState(false)
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < breakpoint)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [breakpoint])
+  return isMobile
+}
+
 export default function AboutPage() {
+  const isMobile = useIsMobile()
   return (
     <>
       <Navbar />
@@ -13,7 +26,7 @@ export default function AboutPage() {
         {/* Hero */}
         <section style={{
           position: 'relative',
-          height: '50vh',
+          height: isMobile ? '32vh' : '50vh',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -41,7 +54,7 @@ export default function AboutPage() {
             }}>Our Story</p>
             <h1 style={{
               fontFamily: 'var(--font-cinzel)',
-              fontSize: '3.5rem',
+              fontSize: isMobile ? '2.2rem' : '3.5rem',
               color: 'var(--offwhite)',
               lineHeight: 1.2,
             }}>About Onboard</h1>
@@ -49,13 +62,13 @@ export default function AboutPage() {
         </section>
 
         {/* Story Section */}
-        <section style={{ maxWidth: '1200px', margin: '0 auto', padding: '6rem 3rem' }}>
+        <section style={{ maxWidth: '1200px', margin: '0 auto', padding: isMobile ? '3rem 1.25rem' : '6rem 3rem' }}>
           <div style={{
             display: 'grid',
-            gridTemplateColumns: '1fr 1fr',
-            gap: '5rem',
+            gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+            gap: isMobile ? '2rem' : '5rem',
             alignItems: 'center',
-            marginBottom: '6rem',
+            marginBottom: isMobile ? '3rem' : '6rem',
           }}>
             <div>
               <p style={{
@@ -68,7 +81,7 @@ export default function AboutPage() {
               }}>Who We Are</p>
               <h2 style={{
                 fontFamily: 'var(--font-cinzel)',
-                fontSize: '2.5rem',
+                fontSize: isMobile ? '1.75rem' : '2.5rem',
                 color: 'var(--offwhite)',
                 lineHeight: 1.2,
                 marginBottom: '1.5rem',
@@ -112,7 +125,7 @@ export default function AboutPage() {
 
             <div style={{
               position: 'relative',
-              height: '500px',
+              height: isMobile ? '260px' : '500px',
               borderRadius: '4px',
               overflow: 'hidden',
               border: '1px solid rgba(255,255,255,0.06)',
@@ -129,13 +142,13 @@ export default function AboutPage() {
           {/* Stats */}
           <div style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(4, 1fr)',
+            gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)',
             gap: '1px',
             backgroundColor: 'rgba(255,255,255,0.06)',
             border: '1px solid rgba(255,255,255,0.06)',
             borderRadius: '4px',
             overflow: 'hidden',
-            marginBottom: '6rem',
+            marginBottom: isMobile ? '3rem' : '6rem',
           }}>
             {[
               { num: '500+', label: 'Games in Library' },
@@ -144,13 +157,13 @@ export default function AboutPage() {
               { num: '∞',    label: 'Good Times' },
             ].map(({ num, label }) => (
               <div key={label} style={{
-                padding: '3rem 2rem',
+                padding: isMobile ? '2rem 1rem' : '3rem 2rem',
                 textAlign: 'center',
                 backgroundColor: 'var(--black)',
               }}>
                 <p style={{
                   fontFamily: 'var(--font-cinzel)',
-                  fontSize: '2.5rem',
+                  fontSize: isMobile ? '1.8rem' : '2.5rem',
                   color: 'var(--teal)',
                   marginBottom: '0.5rem',
                 }}>{num}</p>
@@ -166,7 +179,7 @@ export default function AboutPage() {
           </div>
 
           {/* What We Offer */}
-          <div style={{ marginBottom: '6rem' }}>
+          <div style={{ marginBottom: isMobile ? '3rem' : '6rem' }}>
             <p style={{
               fontSize: '0.7rem',
               letterSpacing: '0.3em',
@@ -177,19 +190,19 @@ export default function AboutPage() {
             }}>What We Offer</p>
             <h2 style={{
               fontFamily: 'var(--font-cinzel)',
-              fontSize: '2.5rem',
+              fontSize: isMobile ? '1.75rem' : '2.5rem',
               color: 'var(--offwhite)',
               marginBottom: '1.5rem',
             }}>Everything Under One Roof</h2>
             <div style={{
               width: '60px', height: '2px',
               backgroundColor: 'var(--teal)',
-              marginBottom: '3rem',
+              marginBottom: isMobile ? '2rem' : '3rem',
             }} />
             <div style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(2, 1fr)',
-              gap: '1.5rem',
+              gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, 1fr)',
+              gap: isMobile ? '1rem' : '1.5rem',
             }}>
               {[
                 {
@@ -220,7 +233,7 @@ export default function AboutPage() {
                 <div key={title} style={{
                   display: 'flex',
                   gap: '1.5rem',
-                  padding: '2rem',
+                  padding: isMobile ? '1.5rem' : '2rem',
                   border: '1px solid rgba(255,255,255,0.06)',
                   borderRadius: '4px',
                   background: 'rgba(255,255,255,0.02)',
@@ -260,7 +273,7 @@ export default function AboutPage() {
           backgroundColor: 'rgba(255,255,255,0.015)',
           borderTop: '1px solid rgba(255,255,255,0.05)',
           borderBottom: '1px solid rgba(255,255,255,0.05)',
-          padding: '6rem 3rem',
+          padding: isMobile ? '3rem 1.25rem' : '6rem 3rem',
         }}>
           <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
             <p style={{
@@ -273,20 +286,20 @@ export default function AboutPage() {
             }}>Find Us</p>
             <h2 style={{
               fontFamily: 'var(--font-cinzel)',
-              fontSize: '2.5rem',
+              fontSize: isMobile ? '1.75rem' : '2.5rem',
               color: 'var(--offwhite)',
               marginBottom: '1.5rem',
             }}>Three Branches,<br />One Community</h2>
             <div style={{
               width: '60px', height: '2px',
               backgroundColor: 'var(--teal)',
-              marginBottom: '3rem',
+              marginBottom: isMobile ? '2rem' : '3rem',
             }} />
 
             <div style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(3, 1fr)',
-              gap: '1.5rem',
+              gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)',
+              gap: isMobile ? '1.25rem' : '1.5rem',
             }}>
               {[
                 {
@@ -320,7 +333,7 @@ export default function AboutPage() {
                   overflow: 'hidden',
                 }}>
                   <div style={{ height: '4px', backgroundColor: color }} />
-                  <div style={{ padding: '2rem 1.8rem' }}>
+                  <div style={{ padding: isMobile ? '1.5rem' : '2rem 1.8rem' }}>
                     <h3 style={{
                       fontFamily: 'var(--font-cinzel)',
                       fontSize: '1.8rem',
@@ -393,7 +406,7 @@ export default function AboutPage() {
         <section id="contact" style={{
           maxWidth: '1200px',
           margin: '0 auto',
-          padding: '6rem 3rem',
+          padding: isMobile ? '3rem 1.25rem' : '6rem 3rem',
         }}>
           <p style={{
             fontSize: '0.7rem',
@@ -405,20 +418,20 @@ export default function AboutPage() {
           }}>Get in Touch</p>
           <h2 style={{
             fontFamily: 'var(--font-cinzel)',
-            fontSize: '2.5rem',
+            fontSize: isMobile ? '1.75rem' : '2.5rem',
             color: 'var(--offwhite)',
             marginBottom: '1.5rem',
           }}>Contact Us</h2>
           <div style={{
             width: '60px', height: '2px',
             backgroundColor: 'var(--teal)',
-            marginBottom: '3rem',
+            marginBottom: isMobile ? '2rem' : '3rem',
           }} />
 
           <div style={{
             display: 'grid',
-            gridTemplateColumns: '1fr 1fr',
-            gap: '5rem',
+            gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+            gap: isMobile ? '2.5rem' : '5rem',
             alignItems: 'start',
           }}>
 
@@ -487,7 +500,7 @@ export default function AboutPage() {
               background: 'rgba(255,255,255,0.02)',
               border: '1px solid rgba(255,255,255,0.06)',
               borderRadius: '4px',
-              padding: '2.5rem',
+              padding: isMobile ? '1.5rem' : '2.5rem',
             }}>
               <h3 style={{
                 fontFamily: 'var(--font-cinzel)',

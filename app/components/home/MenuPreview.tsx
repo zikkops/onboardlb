@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { useEffect, useState } from 'react'
 import { collection, getDocs } from 'firebase/firestore'
 import { db } from '../../lib/firebase'
@@ -110,12 +111,13 @@ export default function MenuPreview() {
                 }}>
                   {/* Background image or color */}
                   {image ? (
-                    <div style={{
-                      position: 'absolute', inset: 0,
-                      backgroundImage: `url(${image})`,
-                      backgroundSize: 'cover',
-                      backgroundPosition: 'center',
-                    }} />
+                    <Image
+                      src={image}
+                      alt={name}
+                      fill
+                      sizes="(max-width: 768px) 45vw, 20vw"
+                      style={{ objectFit: 'cover' }}
+                    />
                   ) : (
                     <div style={{
                       position: 'absolute', inset: 0,

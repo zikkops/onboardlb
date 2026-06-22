@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Image from 'next/image'
 import { collection, getDocs } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import Navbar from '../components/layout/Navbar'
@@ -335,16 +336,20 @@ export default function MenuPage() {
                             }} />
 
                             {cat.image && (
-                              <div style={{
-                                width: '24px', height: '24px',
-                                borderRadius: '2px',
-                                backgroundImage: `url(${cat.image})`,
-                                backgroundSize: 'cover',
-                                backgroundPosition: 'center',
-                                flexShrink: 0,
-                                opacity: activeCategory === cat.id ? 1 : 0.5,
-                                transition: 'opacity 0.2s',
-                              }} />
+                              <Image
+                                src={cat.image}
+                                alt={cat.name}
+                                width={24}
+                                height={24}
+                                style={{
+                                  width: '24px', height: '24px',
+                                  borderRadius: '2px',
+                                  objectFit: 'cover',
+                                  flexShrink: 0,
+                                  opacity: activeCategory === cat.id ? 1 : 0.5,
+                                  transition: 'opacity 0.2s',
+                                }}
+                              />
                             )}
                             {cat.name}
                           </button>
@@ -404,16 +409,20 @@ export default function MenuPage() {
                               marginBottom: '1.5rem',
                             }}>
                               {cat.image && (
-                                <div style={{
-                                  width: isMobile ? '40px' : '50px',
-                                  height: isMobile ? '40px' : '50px',
-                                  borderRadius: '4px',
-                                  backgroundImage: `url(${cat.image})`,
-                                  backgroundSize: 'cover',
-                                  backgroundPosition: 'center',
-                                  border: `1px solid ${sectionColors[s]}40`,
-                                  flexShrink: 0,
-                                }} />
+                                <Image
+                                  src={cat.image}
+                                  alt={cat.name}
+                                  width={50}
+                                  height={50}
+                                  style={{
+                                    width: isMobile ? '40px' : '50px',
+                                    height: isMobile ? '40px' : '50px',
+                                    borderRadius: '4px',
+                                    objectFit: 'cover',
+                                    border: `1px solid ${sectionColors[s]}40`,
+                                    flexShrink: 0,
+                                  }}
+                                />
                               )}
                               <div>
                                 <p style={{

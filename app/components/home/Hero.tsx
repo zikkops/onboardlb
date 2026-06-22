@@ -1,6 +1,7 @@
 'use client'
 
 import Image from 'next/image'
+import { useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
 
 function HeroButton({
@@ -54,6 +55,7 @@ function HeroButton({
 }
 
 export default function Hero() {
+  const router = useRouter()
   const [isMobile, setIsMobile] = useState(false)
 
   useEffect(() => {
@@ -165,7 +167,7 @@ export default function Hero() {
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem', width: '100%' }}>
               <HeroButton label="Events"    color="#E43329" onClick={() => scrollTo('events-section')} />
-              <HeroButton label="Reserve"   color="#32327C" onClick={() => scrollTo('reserve-section')} />
+              <HeroButton label="Reserve"   color="#32327C" onClick={() => router.push('/about#contact')} />
             </div>
             <div style={{ width: '50%' }}>
               <HeroButton label="D&D"       color="#6A6AB7" onClick={() => scrollTo('dnd-section')} />
@@ -180,7 +182,7 @@ export default function Hero() {
               <HeroButton label="Events"            color="#E43329" onClick={() => scrollTo('events-section')} />
             </div>
             <div style={{ display: 'flex', gap: '1rem' }}>
-              <HeroButton label="Reserve a Spot"     color="#32327C" onClick={() => scrollTo('reserve-section')} />
+              <HeroButton label="Reserve a Spot"     color="#32327C" onClick={() => router.push('/about#contact')} />
               <HeroButton label="Dungeons & Dragons" color="#6A6AB7" onClick={() => scrollTo('dnd-section')} />
             </div>
           </>
