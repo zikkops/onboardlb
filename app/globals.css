@@ -28,3 +28,35 @@ body {
 html {
   background-color: #0a0a0a;
 }
+
+@keyframes skeletonShine {
+  0%   { left: -60%; }
+  100% { left: 130%; }
+}
+
+/* Custom scrollbar — purple-tinted to match the site's accent color */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(106, 106, 183, 0.5) rgba(255, 255, 255, 0.04);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: rgba(106, 106, 183, 0.5);
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(106, 106, 183, 0.8);
+  background-clip: content-box;
+}

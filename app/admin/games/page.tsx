@@ -1,9 +1,15 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useMemo } from 'react'
 import { collection, getDocs, addDoc, deleteDoc, doc, updateDoc, serverTimestamp } from 'firebase/firestore'
 import { db } from '../../lib/firebase'
 import { useRequireRole, SECTION_ACCESS } from '../../lib/adminAuth'
+import { logActivity, logCreate, logUpdate, logDelete } from '../../lib/activityLog'
+import { BRANCHES, emptyStock, normalizeStock, totalStock } from '../../lib/branches'
+import { recordMediaUpload } from '../../lib/media'
+import MediaPickerModal from '../../components/admin/MediaPickerModal'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faSearch } from '@fortawesome/free-solid-svg-icons'
 
 interface Game {
   id: string
@@ -14,7 +20,7 @@ interface Game {
   duration: string
   age: string
   price: number
-  stock: number
+  stock: Record<string, number>
   image: string
 }
 
@@ -26,7 +32,6 @@ const EMPTY = {
   duration: '',
   age: '',
   price: 0,
-  stock: 0,
   image: '',
 }
 
@@ -50,14 +55,26 @@ export default function AdminGamesPage() {
   const [loading, setLoading]               = useState(true)
   const [open, setOpen]                     = useState(false)
   const [editing, setEditing]               = useState<Game | null>(null)
-  const [form, setForm]                     = useState({ ...EMPTY })
+  const [form, setForm]                     = useState({ ...EMPTY, stock: emptyStock() })
   const [saving, setSaving]                 = useState(false)
   const [uploading, setUploading]           = useState(false)
   const [categories, setCategories]         = useState<string[]>([])
   const [newCategory, setNewCategory]       = useState('')
   const [addingCat, setAddingCat]           = useState(false)
   const [showCatManager, setShowCatManager] = useState(false)
+  const [showPicker, setShowPicker]         = useState(false)
+  const [search, setSearch]                 = useState('')
+  const [categoryFilter, setCategoryFilter] = useState('All')
   const catFileRef                          = useRef<HTMLInputElement>(null)
+
+  const filteredGames = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return games.filter(g => {
+      const matchesCategory = categoryFilter === 'All' || g.category === categoryFilter
+      const matchesSearch   = !q || g.name.toLowerCase().includes(q) || g.category.toLowerCase().includes(q)
+      return matchesCategory && matchesSearch
+    })
+  }, [games, search, categoryFilter])
 
   async function loadGames() {
     const snap = await getDocs(collection(db, 'games'))
@@ -82,6 +99,7 @@ export default function AdminGamesPage() {
       name: newCategory.trim(),
       createdAt: serverTimestamp(),
     })
+    await logActivity('create', 'Game Category', newCategory.trim())
     setNewCategory('')
     setAddingCat(false)
     loadCategories()
@@ -91,12 +109,13 @@ export default function AdminGamesPage() {
     const snap = await getDocs(collection(db, 'gameCategories'))
     const docToDelete = snap.docs.find(d => (d.data() as any).name === name)
     if (docToDelete) await deleteDoc(doc(db, 'gameCategories', docToDelete.id))
+    await logActivity('delete', 'Game Category', name)
     loadCategories()
   }
 
   function openNew() {
     setEditing(null)
-    setForm({ ...EMPTY, category: categories[0] ?? FALLBACK_CATEGORIES[0] })
+    setForm({ ...EMPTY, stock: emptyStock(), category: categories[0] ?? FALLBACK_CATEGORIES[0] })
     setOpen(true)
   }
 
@@ -110,7 +129,7 @@ export default function AdminGamesPage() {
       duration:    game.duration,
       age:         game.age,
       price:       game.price,
-      stock:       game.stock,
+      stock:       normalizeStock(game.stock),
       image:       game.image,
     })
     setOpen(true)
@@ -126,6 +145,7 @@ export default function AdminGamesPage() {
     const res  = await fetch('https://api.imgbb.com/1/upload', { method: 'POST', body: formData })
     const data = await res.json()
     setForm(f => ({ ...f, image: data.data.url }))
+    await recordMediaUpload({ url: data.data.url, deleteUrl: data.data.delete_url, fileName: file.name })
     setUploading(false)
   }
 
@@ -137,12 +157,14 @@ export default function AdminGamesPage() {
         ...form,
         updatedAt: serverTimestamp(),
       })
+      await logUpdate('Game', form.name, editing, form)
     } else {
       await addDoc(collection(db, 'games'), {
         ...form,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       })
+      await logCreate('Game', form.name, form)
     }
     setSaving(false)
     setOpen(false)
@@ -152,7 +174,9 @@ export default function AdminGamesPage() {
 
   async function handleDelete(id: string) {
     if (!confirm('Delete this game?')) return
+    const game = games.find(g => g.id === id)
     await deleteDoc(doc(db, 'games', id))
+    await logDelete('Game', game?.name ?? id, game)
     loadGames()
   }
 
@@ -210,18 +234,35 @@ export default function AdminGamesPage() {
               Game Library
             </h1>
           </div>
-          <button onClick={openNew} style={{
-            backgroundColor: 'var(--purple)',
-            color: '#fff',
-            padding: '0.7rem 1.5rem',
-            border: 'none',
-            borderRadius: '2px',
-            fontSize: '0.75rem',
-            letterSpacing: '0.1em',
-            textTransform: 'uppercase',
-            cursor: 'pointer',
-            fontFamily: 'var(--font-inter)',
-          }}>+ Add Game</button>
+          <div style={{ display: 'flex', gap: '0.8rem' }}>
+            <a href="/admin/games/import" style={{
+              display: 'flex',
+              alignItems: 'center',
+              backgroundColor: 'transparent',
+              border: '1px solid rgba(255,255,255,0.1)',
+              color: 'rgba(245,242,236,0.6)',
+              padding: '0.7rem 1.5rem',
+              borderRadius: '2px',
+              fontSize: '0.75rem',
+              letterSpacing: '0.1em',
+              textTransform: 'uppercase',
+              cursor: 'pointer',
+              fontFamily: 'var(--font-inter)',
+              textDecoration: 'none',
+            }}>Bulk Import</a>
+            <button onClick={openNew} style={{
+              backgroundColor: 'var(--purple)',
+              color: '#fff',
+              padding: '0.7rem 1.5rem',
+              border: 'none',
+              borderRadius: '2px',
+              fontSize: '0.75rem',
+              letterSpacing: '0.1em',
+              textTransform: 'uppercase',
+              cursor: 'pointer',
+              fontFamily: 'var(--font-inter)',
+            }}>+ Add Game</button>
+          </div>
         </div>
 
         {/* Category Manager */}
@@ -324,9 +365,81 @@ export default function AdminGamesPage() {
           )}
         </div>
 
+        {/* Search + Category Filter */}
+        {!loading && (
+          <div style={{
+            display: 'flex',
+            flexDirection: isMobile ? 'column' : 'row',
+            gap: '0.8rem',
+            marginBottom: '1.5rem',
+          }}>
+            <div style={{ position: 'relative', flex: isMobile ? 'auto' : 2 }}>
+              <FontAwesomeIcon icon={faSearch} style={{
+                position: 'absolute',
+                left: '1.1rem',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                width: '15px',
+                color: 'rgba(245,242,236,0.35)',
+                pointerEvents: 'none',
+              }} />
+              <input
+                type="text"
+                placeholder="Search by name or category…"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                style={{
+                  ...inputStyle,
+                  width: '100%',
+                  padding: '1rem 1.2rem 1rem 2.8rem',
+                  fontSize: '0.95rem',
+                  borderRadius: '4px',
+                }}
+              />
+            </div>
+            <select
+              value={categoryFilter}
+              onChange={e => setCategoryFilter(e.target.value)}
+              style={{
+                ...inputStyle,
+                color: '#F5F2EC',
+                backgroundColor: '#1a1a1a',
+                flex: isMobile ? 'auto' : '0 0 220px',
+                padding: '1rem 1.2rem',
+                fontSize: '0.95rem',
+                borderRadius: '4px',
+              }}
+            >
+              <option value="All">All Categories</option>
+              {displayCategories.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+            <p style={{
+              fontFamily: 'var(--font-inter)',
+              fontSize: '0.78rem',
+              color: 'rgba(245,242,236,0.35)',
+              whiteSpace: 'nowrap',
+              display: 'flex',
+              alignItems: 'center',
+              flex: '0 0 auto',
+            }}>
+              <span style={{ color: 'var(--offwhite)', fontFamily: 'var(--font-cinzel)', marginRight: '0.3rem' }}>{filteredGames.length}</span> of {games.length}
+            </p>
+          </div>
+        )}
+
         {/* Table */}
         {loading ? (
           <p style={{ color: 'rgba(245,242,236,0.3)', fontFamily: 'var(--font-inter)' }}>Loading…</p>
+        ) : filteredGames.length === 0 ? (
+          <div style={{
+            border: '1px dashed rgba(255,255,255,0.08)',
+            borderRadius: '4px',
+            padding: '3rem',
+            textAlign: 'center',
+            color: 'rgba(245,242,236,0.2)',
+            fontFamily: 'var(--font-inter)',
+            fontSize: '0.85rem',
+          }}>No games match these filters.</div>
         ) : (
           <div style={{
             background: 'rgba(255,255,255,0.02)',
@@ -353,7 +466,7 @@ export default function AdminGamesPage() {
                 </tr>
               </thead>
               <tbody>
-                {games.map(game => (
+                {filteredGames.map(game => (
                   <tr key={game.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
                     <td style={{ padding: '0.8rem 1.2rem' }}>
                       {game.image && (
@@ -370,16 +483,21 @@ export default function AdminGamesPage() {
                       {game.price > 0 ? `$${game.price}` : '—'}
                     </td>
                     <td style={{ padding: '1rem 1.2rem' }}>
-                      <span style={{
-                        fontSize: '0.72rem',
-                        padding: '0.25rem 0.7rem',
-                        borderRadius: '2px',
-                        backgroundColor: game.stock > 0 ? 'rgba(0,160,152,0.15)' : 'rgba(228,51,41,0.15)',
-                        color: game.stock > 0 ? 'var(--teal)' : 'var(--red)',
-                        fontFamily: 'var(--font-inter)',
-                      }}>
-                        {game.stock > 0 ? `${game.stock} in stock` : 'Out of stock'}
-                      </span>
+                      {(() => {
+                        const stock = totalStock(game.stock)
+                        return (
+                          <span style={{
+                            fontSize: '0.72rem',
+                            padding: '0.25rem 0.7rem',
+                            borderRadius: '2px',
+                            backgroundColor: stock > 0 ? 'rgba(0,160,152,0.15)' : 'rgba(228,51,41,0.15)',
+                            color: stock > 0 ? 'var(--teal)' : 'var(--red)',
+                            fontFamily: 'var(--font-inter)',
+                          }}>
+                            {stock > 0 ? `${stock} in stock` : 'Out of stock'}
+                          </span>
+                        )
+                      })()}
                     </td>
                     <td style={{ padding: '1rem 1.2rem' }}>
                       <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -516,7 +634,7 @@ export default function AdminGamesPage() {
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr', gap: '1rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : '1fr 1fr', gap: '1rem' }}>
                 <div>
                   <label style={labelStyle}>Min Age (e.g. 8+)</label>
                   <input type="text" value={form.age} required
@@ -529,12 +647,33 @@ export default function AdminGamesPage() {
                     onChange={e => setForm(f => ({ ...f, price: +e.target.value }))}
                     style={inputStyle} />
                 </div>
-                <div>
-                  <label style={labelStyle}>Stock</label>
-                  <input type="number" value={form.stock} required min={0}
-                    onChange={e => setForm(f => ({ ...f, stock: +e.target.value }))}
-                    style={inputStyle} />
+              </div>
+
+              <div>
+                <label style={labelStyle}>Stock by Branch</label>
+                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : `repeat(${BRANCHES.length}, 1fr)`, gap: '1rem' }}>
+                  {BRANCHES.map(branch => (
+                    <div key={branch}>
+                      <p style={{
+                        fontSize: '0.7rem',
+                        color: 'rgba(245,242,236,0.4)',
+                        fontFamily: 'var(--font-inter)',
+                        marginBottom: '0.4rem',
+                      }}>{branch}</p>
+                      <input type="number" value={form.stock[branch] ?? 0} required min={0}
+                        onChange={e => setForm(f => ({ ...f, stock: { ...f.stock, [branch]: +e.target.value } }))}
+                        style={inputStyle} />
+                    </div>
+                  ))}
                 </div>
+                <p style={{
+                  fontSize: '0.72rem',
+                  color: 'rgba(245,242,236,0.3)',
+                  fontFamily: 'var(--font-inter)',
+                  marginTop: '0.6rem',
+                }}>
+                  Total: {Object.values(form.stock).reduce((a, b) => a + (Number(b) || 0), 0)} across all branches
+                </p>
               </div>
             </div>
 
@@ -555,13 +694,28 @@ export default function AdminGamesPage() {
 
               <div>
                 <label style={labelStyle}>Upload Image</label>
-                <input
-                  ref={catFileRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImageUpload}
-                  style={{ ...inputStyle, cursor: 'pointer' }}
-                />
+                <div style={{ display: 'flex', gap: '0.6rem' }}>
+                  <input
+                    ref={catFileRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                    style={{ ...inputStyle, cursor: 'pointer', flex: 1 }}
+                  />
+                  <button type="button" onClick={() => setShowPicker(true)} style={{
+                    background: 'transparent',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    color: 'rgba(245,242,236,0.6)',
+                    padding: '0.6rem 1rem',
+                    borderRadius: '2px',
+                    fontSize: '0.72rem',
+                    letterSpacing: '0.05em',
+                    textTransform: 'uppercase',
+                    cursor: 'pointer',
+                    fontFamily: 'var(--font-inter)',
+                    whiteSpace: 'nowrap',
+                  }}>Choose from Media</button>
+                </div>
                 {uploading && (
                   <p style={{
                     marginTop: '0.5rem',
@@ -643,6 +797,12 @@ export default function AdminGamesPage() {
           </form>
         </div>
       )}
+
+      <MediaPickerModal
+        open={showPicker}
+        onClose={() => setShowPicker(false)}
+        onSelect={url => setForm(f => ({ ...f, image: url }))}
+      />
     </div>
   )
 }

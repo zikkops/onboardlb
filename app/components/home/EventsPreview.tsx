@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { collection, getDocs } from 'firebase/firestore'
 import { db } from '../../lib/firebase'
+import Skeleton from '../Skeleton'
 
 interface GameEvent {
   id: string
@@ -17,7 +18,9 @@ interface GameEvent {
   price: number
   minPlayers: number
   maxPlayers: number
+  registrationLink?: string
   image?: string
+  contactNumber?: string
 }
 
 function useIsMobile(breakpoint = 768) {
@@ -34,6 +37,7 @@ function useIsMobile(breakpoint = 768) {
 export default function EventsPreview() {
   const [events, setEvents] = useState<GameEvent[]>([])
   const [loading, setLoading] = useState(true)
+  const [selected, setSelected] = useState<GameEvent | null>(null)
   const isMobile = useIsMobile()
 
   useEffect(() => {
@@ -110,7 +114,23 @@ export default function EventsPreview() {
         }} />
 
         {loading ? (
-          <p style={{ color: 'rgba(245,242,236,0.3)', fontFamily: 'var(--font-inter)' }}>Loading…</p>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)',
+            gap: isMobile ? '1.25rem' : '1.5rem',
+          }}>
+            {[0, 1, 2].map(i => (
+              <div key={i} style={{ border: '1px solid rgba(106,106,183,0.2)', borderRadius: '4px', overflow: 'hidden' }}>
+                <Skeleton height="140px" borderRadius="0" />
+                <div style={{ padding: isMobile ? '1.25rem' : '1.5rem' }}>
+                  <Skeleton width="40%" height="1.8rem" style={{ marginBottom: '0.8rem' }} />
+                  <Skeleton width="75%" height="1rem" style={{ marginBottom: '0.6rem' }} />
+                  <Skeleton width="55%" height="0.8rem" style={{ marginBottom: '1.2rem' }} />
+                  <Skeleton height="2.4rem" />
+                </div>
+              </div>
+            ))}
+          </div>
         ) : events.length === 0 ? (
           <p style={{ color: 'rgba(245,242,236,0.3)', fontFamily: 'var(--font-inter)' }}>
             No upcoming events right now. Check back soon!
@@ -124,11 +144,16 @@ export default function EventsPreview() {
             {events.map(ev => {
               const d = new Date(ev.date)
               return (
-                <div key={ev.id} style={{
+                <div key={ev.id} onClick={() => setSelected(ev)} style={{
                   border: '1px solid rgba(106,106,183,0.2)',
                   borderRadius: '4px',
                   overflow: 'hidden',
-                }}>
+                  cursor: 'pointer',
+                  transition: 'border-color 0.2s',
+                }}
+                onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(106,106,183,0.5)' }}
+                onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(106,106,183,0.2)' }}
+                >
                   {/* Image */}
                   {ev.image ? (
                     <div style={{
@@ -228,9 +253,11 @@ export default function EventsPreview() {
                       </span>
                     </div>
 
-                    <Link href="/events" style={{
+                    <button onClick={() => setSelected(ev)} style={{
                       display: 'block',
+                      width: '100%',
                       textAlign: 'center',
+                      background: 'transparent',
                       border: '1px solid rgba(106,106,183,0.3)',
                       color: 'var(--offwhite)',
                       padding: '0.6rem',
@@ -238,11 +265,11 @@ export default function EventsPreview() {
                       fontSize: '0.72rem',
                       letterSpacing: '0.1em',
                       textTransform: 'uppercase',
-                      textDecoration: 'none',
+                      cursor: 'pointer',
                       fontFamily: 'var(--font-inter)',
                     }}>
                       Learn More
-                    </Link>
+                    </button>
                   </div>
                 </div>
               )
@@ -250,6 +277,218 @@ export default function EventsPreview() {
           </div>
         )}
       </div>
+
+      {/* Event Detail Popup */}
+      {selected && (
+        <div
+          onClick={() => setSelected(null)}
+          style={{
+            position: 'fixed', inset: 0,
+            backgroundColor: 'rgba(0,0,0,0.85)',
+            backdropFilter: 'blur(8px)',
+            zIndex: 200,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: isMobile ? '1rem' : '2rem',
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              backgroundColor: '#111',
+              border: '1px solid rgba(106,106,183,0.3)',
+              borderRadius: '8px',
+              width: '100%',
+              maxWidth: '1100px',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+              display: 'grid',
+              gridTemplateColumns: isMobile ? '1fr' : '1fr 1.2fr',
+            }}
+          >
+            {/* Left — Image */}
+            <div style={{
+              position: 'relative',
+              minHeight: isMobile ? '220px' : '550px',
+              borderRadius: isMobile ? '8px 8px 0 0' : '8px 0 0 8px',
+              overflow: 'hidden',
+            }}>
+              {selected.image ? (
+                <div style={{
+                  position: 'absolute', inset: 0,
+                  backgroundImage: `url(${selected.image})`,
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center',
+                }} />
+              ) : (
+                <div style={{
+                  position: 'absolute', inset: 0,
+                  background: 'rgba(50,50,124,0.2)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}>
+                  <span style={{
+                    fontFamily: 'var(--font-cinzel)',
+                    fontSize: '5rem',
+                    color: 'rgba(106,106,183,0.3)',
+                  }}>{new Date(selected.date).getDate()}</span>
+                </div>
+              )}
+
+              {/* Date overlay */}
+              <div style={{
+                position: 'absolute',
+                bottom: 0, left: 0, right: 0,
+                background: 'linear-gradient(to top, rgba(0,0,0,0.9), transparent)',
+                padding: '2rem 1.5rem 1.5rem',
+              }}>
+                <p style={{
+                  fontFamily: 'var(--font-cinzel)',
+                  fontSize: '3rem',
+                  color: '#fff',
+                  lineHeight: 1,
+                }}>{new Date(selected.date).getDate()}</p>
+                <p style={{
+                  fontFamily: 'var(--font-inter)',
+                  fontSize: '0.75rem',
+                  color: 'rgba(255,255,255,0.6)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.1em',
+                }}>
+                  {new Date(selected.date).toLocaleString('en', { month: 'long', year: 'numeric' })}
+                </p>
+              </div>
+            </div>
+
+            {/* Right — Info */}
+            <div style={{ padding: isMobile ? '1.5rem' : '2.5rem' }}>
+
+              {/* Close */}
+              <button onClick={() => setSelected(null)} style={{
+                float: 'right',
+                background: 'transparent',
+                border: 'none',
+                color: 'rgba(245,242,236,0.4)',
+                fontSize: '1.2rem',
+                cursor: 'pointer',
+                marginBottom: '1rem',
+              }}>✕</button>
+
+              {/* Type badge */}
+              <span style={{
+                display: 'block',
+                width: 'fit-content',
+                fontSize: '0.65rem',
+                padding: '0.25rem 0.8rem',
+                borderRadius: '2px',
+                backgroundColor: 'rgba(106,106,183,0.15)',
+                color: 'var(--purple)',
+                fontFamily: 'var(--font-inter)',
+                letterSpacing: '0.1em',
+                textTransform: 'uppercase',
+                marginBottom: '1rem',
+                clear: 'both',
+              }}>{selected.type}</span>
+
+              <h2 style={{
+                fontFamily: 'var(--font-cinzel)',
+                fontSize: '1.8rem',
+                color: 'var(--offwhite)',
+                marginBottom: '1rem',
+                lineHeight: 1.3,
+              }}>{selected.title}</h2>
+
+              <p style={{
+                fontFamily: 'var(--font-inter)',
+                fontSize: '0.88rem',
+                color: 'rgba(245,242,236,0.55)',
+                lineHeight: 1.8,
+                marginBottom: '1.5rem',
+              }}>{selected.description}</p>
+
+              {/* Details grid */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+                gap: '1rem',
+                marginBottom: '1.5rem',
+              }}>
+                {[
+                  { label: 'Branch',  value: selected.branch },
+                  { label: 'Date',    value: new Date(selected.date).toLocaleDateString('en', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) },
+                  { label: 'Time',    value: `${selected.timeStart} – ${selected.timeEnd}` },
+                  { label: 'Players', value: `${selected.minPlayers}–${selected.maxPlayers} players` },
+                  { label: 'Price',   value: selected.price === 0 ? 'Free entry' : `$${selected.price} per person` },
+                  { label: 'Contact', value: selected.contactNumber ?? '+96181950042' },
+                ].map(({ label, value }) => (
+                  <div key={label} style={{
+                    background: 'rgba(255,255,255,0.03)',
+                    border: '1px solid rgba(255,255,255,0.06)',
+                    borderRadius: '4px',
+                    padding: '0.8rem 1rem',
+                  }}>
+                    <p style={{
+                      fontFamily: 'var(--font-inter)',
+                      fontSize: '0.62rem',
+                      letterSpacing: '0.15em',
+                      textTransform: 'uppercase',
+                      color: 'rgba(245,242,236,0.3)',
+                      marginBottom: '0.3rem',
+                    }}>{label}</p>
+                    <p style={{
+                      fontFamily: 'var(--font-cinzel)',
+                      fontSize: '0.85rem',
+                      color: 'var(--offwhite)',
+                    }}>{value}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* CTAs */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                {selected.registrationLink && (
+                  <a href={selected.registrationLink} target="_blank" rel="noopener noreferrer"
+                    style={{
+                      display: 'block',
+                      textAlign: 'center',
+                      backgroundColor: 'var(--purple)',
+                      color: '#fff',
+                      padding: '0.9rem',
+                      borderRadius: '2px',
+                      fontSize: '0.78rem',
+                      letterSpacing: '0.12em',
+                      textTransform: 'uppercase',
+                      textDecoration: 'none',
+                      fontFamily: 'var(--font-inter)',
+                    }}>Register Now</a>
+                )}
+                <a
+                  href={`https://wa.me/${(selected.contactNumber ?? '96181950042').replace(/\+/g, '')}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: 'block',
+                    textAlign: 'center',
+                    backgroundColor: 'var(--teal)',
+                    color: '#fff',
+                    padding: '0.9rem',
+                    borderRadius: '2px',
+                    fontSize: '0.78rem',
+                    letterSpacing: '0.12em',
+                    textTransform: 'uppercase',
+                    textDecoration: 'none',
+                    fontFamily: 'var(--font-inter)',
+                  }}
+                >
+                  Contact Us on WhatsApp
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   )
 }

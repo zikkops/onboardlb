@@ -7,6 +7,9 @@ import {
 } from 'firebase/firestore'
 import { db } from '../../lib/firebase'
 import { useRequireRole, SECTION_ACCESS } from '../../lib/adminAuth'
+import { logActivity, logCreate, logUpdate, logDelete } from '../../lib/activityLog'
+import { recordMediaUpload } from '../../lib/media'
+import MediaPickerModal from '../../components/admin/MediaPickerModal'
 
 interface GameEvent {
   id: string
@@ -79,6 +82,7 @@ export default function AdminEventsPage() {
   const [newType, setNewType]                 = useState('')
   const [addingType, setAddingType]           = useState(false)
   const [showTypeManager, setShowTypeManager] = useState(false)
+  const [showPicker, setShowPicker]           = useState(false)
 
   async function loadData() {
     const [evSnap, typeSnap] = await Promise.all([
@@ -103,6 +107,7 @@ export default function AdminEventsPage() {
       name: newType.trim(),
       createdAt: serverTimestamp(),
     })
+    await logActivity('create', 'Event Type', newType.trim())
     setNewType('')
     setAddingType(false)
     loadData()
@@ -110,7 +115,9 @@ export default function AdminEventsPage() {
 
   async function deleteEventType(id: string) {
     if (!confirm('Delete this event type?')) return
+    const name = eventTypes.find(t => t.id === id)?.name ?? id
     await deleteDoc(doc(db, 'eventTypes', id))
+    await logActivity('delete', 'Event Type', name)
     loadData()
   }
 
@@ -124,6 +131,7 @@ export default function AdminEventsPage() {
     const res  = await fetch('https://api.imgbb.com/1/upload', { method: 'POST', body: formData })
     const data = await res.json()
     setForm(f => ({ ...f, image: data.data.url }))
+    await recordMediaUpload({ url: data.data.url, deleteUrl: data.data.delete_url, fileName: file.name })
     setUploading(false)
   }
 
@@ -161,12 +169,14 @@ export default function AdminEventsPage() {
         ...form,
         updatedAt: serverTimestamp(),
       })
+      await logUpdate('Event', form.title, editing, form)
     } else {
       await addDoc(collection(db, 'events'), {
         ...form,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       })
+      await logCreate('Event', form.title, form)
     }
     setSaving(false)
     setOpen(false)
@@ -175,7 +185,9 @@ export default function AdminEventsPage() {
 
   async function handleDelete(id: string) {
     if (!confirm('Delete this event?')) return
+    const ev = events.find(e => e.id === id)
     await deleteDoc(doc(db, 'events', id))
+    await logDelete('Event', ev?.title ?? id, ev)
     loadData()
   }
 
@@ -647,8 +659,23 @@ export default function AdminEventsPage() {
               {/* Image Upload */}
               <div>
                 <label style={labelStyle}>Upload Image</label>
-                <input type="file" accept="image/*" onChange={handleImageUpload}
-                  style={{ ...inputStyle, cursor: 'pointer' }} />
+                <div style={{ display: 'flex', gap: '0.6rem' }}>
+                  <input type="file" accept="image/*" onChange={handleImageUpload}
+                    style={{ ...inputStyle, cursor: 'pointer', flex: 1 }} />
+                  <button type="button" onClick={() => setShowPicker(true)} style={{
+                    background: 'transparent',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    color: 'rgba(245,242,236,0.6)',
+                    padding: '0.6rem 1rem',
+                    borderRadius: '2px',
+                    fontSize: '0.72rem',
+                    letterSpacing: '0.05em',
+                    textTransform: 'uppercase',
+                    cursor: 'pointer',
+                    fontFamily: 'var(--font-inter)',
+                    whiteSpace: 'nowrap',
+                  }}>Choose from Media</button>
+                </div>
                 {uploading && (
                   <p style={{
                     marginTop: '0.5rem',
@@ -821,6 +848,12 @@ export default function AdminEventsPage() {
           </form>
         </div>
       )}
+
+      <MediaPickerModal
+        open={showPicker}
+        onClose={() => setShowPicker(false)}
+        onSelect={url => setForm(f => ({ ...f, image: url }))}
+      />
     </div>
   )
 }

@@ -1,7 +1,6 @@
 import type { Metadata } from 'next'
 import { Inter, Cinzel } from 'next/font/google'
 import './globals.css'
-import PageTransition from './components/PageTransition'
 
 const inter = Inter({
   subsets: ['latin'],
@@ -28,7 +27,6 @@ export default function RootLayout({
     <html lang="en" className={`${inter.variable} ${cinzel.variable}`}>
       <body>
         {children}
-        <PageTransition />
       </body>
     </html>
   )

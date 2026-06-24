@@ -5,9 +5,12 @@ import { collection, getDocs } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import Navbar from '../components/layout/Navbar'
 import Footer from '../components/layout/Footer'
+import Skeleton from '../components/Skeleton'
 import Link from 'next/link'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faUsers, faClock, faCakeCandles, faSearch, faSliders, faXmark } from '@fortawesome/free-solid-svg-icons'
+import type { IconDefinition } from '@fortawesome/fontawesome-svg-core'
+import { totalStock } from '../lib/branches'
 
 interface Game {
   id: string
@@ -17,7 +20,7 @@ interface Game {
   players: string
   duration: string
   age: string
-  stock: number
+  stock: Record<string, number>
   price: number
   image: string
 }
@@ -38,6 +41,62 @@ function useIsMobile(breakpoint = 768) {
   return isMobile
 }
 
+function FilterSection({
+  title, icon, collapsed, onToggle, children, maxHeight = '500px',
+}: {
+  title: string
+  icon?: IconDefinition
+  collapsed: boolean
+  onToggle: () => void
+  children: React.ReactNode
+  maxHeight?: string
+}) {
+  return (
+    <div>
+      <button onClick={onToggle} style={{
+        width: '100%',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: '0.5rem',
+        background: 'transparent',
+        border: 'none',
+        borderBottom: '1px solid rgba(255,255,255,0.06)',
+        padding: '0 0 0.8rem',
+        marginBottom: collapsed ? '0' : '0.8rem',
+        cursor: 'pointer',
+      }}>
+        <span style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.5rem',
+          fontSize: '0.65rem',
+          letterSpacing: '0.2em',
+          textTransform: 'uppercase',
+          color: 'rgba(245,242,236,0.3)',
+          fontFamily: 'var(--font-inter)',
+        }}>
+          {icon && <FontAwesomeIcon icon={icon} style={{ width: '12px' }} />}
+          {title}
+        </span>
+        <span style={{
+          color: 'var(--purple)',
+          fontSize: '0.6rem',
+          transition: 'transform 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+          transform: collapsed ? 'rotate(-90deg)' : 'rotate(0deg)',
+        }}>▼</span>
+      </button>
+      <div style={{
+        maxHeight: collapsed ? '0' : maxHeight,
+        overflow: 'hidden',
+        transition: 'max-height 0.4s ease',
+      }}>
+        {children}
+      </div>
+    </div>
+  )
+}
+
 export default function ShopPage() {
   const [games, setGames]               = useState<Game[]>([])
   const [loading, setLoading]           = useState(true)
@@ -51,6 +110,16 @@ export default function ShopPage() {
   const [maxPlayers, setMaxPlayers] = useState<number>(10)
   const isMobile = useIsMobile()
   const [filtersOpen, setFiltersOpen] = useState(false)
+  const [collapsedFilters, setCollapsedFilters] = useState<Record<string, boolean>>({
+    search: true,
+    category: true,
+    price: true,
+    players: true,
+  })
+
+  function toggleFilter(key: string) {
+    setCollapsedFilters(prev => ({ ...prev, [key]: !prev[key] }))
+  }
 
   useEffect(() => {
     async function load() {
@@ -110,15 +179,8 @@ export default function ShopPage() {
   const filterFields = (
     <>
       {/* Search */}
-      <div>
-        <p style={{
-          fontSize: '0.65rem',
-          letterSpacing: '0.2em',
-          textTransform: 'uppercase',
-          color: 'rgba(245,242,236,0.3)',
-          fontFamily: 'var(--font-inter)',
-          marginBottom: '0.8rem',
-        }}>Search</p>
+      <FilterSection title="Search" icon={faSearch} maxHeight="100px"
+        collapsed={collapsedFilters.search} onToggle={() => toggleFilter('search')}>
         <div style={{ position: 'relative' }}>
           <FontAwesomeIcon icon={faSearch} style={{
             position: 'absolute',
@@ -147,27 +209,25 @@ export default function ShopPage() {
             }}
           />
         </div>
-      </div>
-
-      <div style={{ height: '1px', backgroundColor: 'rgba(255,255,255,0.06)' }} />
+      </FilterSection>
 
       {/* Category */}
-      <div>
-        <p style={{
-          fontSize: '0.65rem',
-          letterSpacing: '0.2em',
-          textTransform: 'uppercase',
-          color: 'rgba(245,242,236,0.3)',
-          fontFamily: 'var(--font-inter)',
-          marginBottom: '0.8rem',
+      <FilterSection title="Category" icon={faSliders} maxHeight="320px"
+        collapsed={collapsedFilters.category} onToggle={() => toggleFilter('category')}>
+        <div style={{
           display: 'flex',
-          alignItems: 'center',
-          gap: '0.5rem',
+          flexDirection: 'column',
+          gap: '0.3rem',
+          maxHeight: '260px',
+          overflowY: 'auto',
+          scrollbarWidth: 'thin',
+          padding: '0.6rem',
+          borderRadius: '8px',
+          background: 'rgba(106,106,183,0.1)',
+          backdropFilter: 'blur(10px)',
+          WebkitBackdropFilter: 'blur(10px)',
+          border: '1px solid rgba(106,106,183,0.25)',
         }}>
-          <FontAwesomeIcon icon={faSliders} style={{ width: '12px' }} />
-          Category
-        </p>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
           {CATEGORIES.map(cat => (
             <button key={cat} onClick={() => setFilter(cat)} style={{
               display: 'flex',
@@ -175,7 +235,7 @@ export default function ShopPage() {
               backgroundColor: 'transparent',
               border: 'none',
               borderLeft: `2px solid ${filter === cat ? 'var(--purple)' : 'transparent'}`,
-              color: filter === cat ? 'var(--offwhite)' : 'rgba(245,242,236,0.45)',
+              color: filter === cat ? 'var(--offwhite)' : 'rgba(245,242,236,0.55)',
               padding: '0.5rem 0.8rem',
               fontSize: '0.82rem',
               cursor: 'pointer',
@@ -183,24 +243,16 @@ export default function ShopPage() {
               textAlign: 'left',
               transition: 'all 0.2s',
               borderRadius: '0 4px 4px 0',
-              background: filter === cat ? 'rgba(106,106,183,0.08)' : 'transparent',
+              background: filter === cat ? 'rgba(106,106,183,0.25)' : 'transparent',
+              flexShrink: 0,
             }}>{cat}</button>
           ))}
         </div>
-      </div>
-
-      <div style={{ height: '1px', backgroundColor: 'rgba(255,255,255,0.06)' }} />
+      </FilterSection>
 
       {/* Price Range */}
-      <div>
-        <p style={{
-          fontSize: '0.65rem',
-          letterSpacing: '0.2em',
-          textTransform: 'uppercase',
-          color: 'rgba(245,242,236,0.3)',
-          fontFamily: 'var(--font-inter)',
-          marginBottom: '0.5rem',
-        }}>Max Price</p>
+      <FilterSection title="Max Price" maxHeight="200px"
+        collapsed={collapsedFilters.price} onToggle={() => toggleFilter('price')}>
         <p style={{
           fontFamily: 'var(--font-cinzel)',
           fontSize: '1.5rem',
@@ -231,21 +283,11 @@ export default function ShopPage() {
           <span>$0</span>
           <span>${sliderMax}</span>
         </div>
-      </div>
-
-      <div style={{ height: '1px', backgroundColor: 'rgba(255,255,255,0.06)' }} />
+      </FilterSection>
 
       {/* Players Filter */}
-      <div>
-        <p style={{
-          fontSize: '0.65rem',
-          letterSpacing: '0.2em',
-          textTransform: 'uppercase',
-          color: 'rgba(245,242,236,0.3)',
-          fontFamily: 'var(--font-inter)',
-          marginBottom: '0.8rem',
-        }}>Number of Players</p>
-
+      <FilterSection title="Number of Players" maxHeight="380px"
+        collapsed={collapsedFilters.players} onToggle={() => toggleFilter('players')}>
         <p style={{
           fontFamily: 'var(--font-cinzel)',
           fontSize: '1.2rem',
@@ -356,7 +398,7 @@ export default function ShopPage() {
             >{label}</button>
           ))}
         </div>
-      </div>
+      </FilterSection>
 
       <div style={{ height: '1px', backgroundColor: 'rgba(255,255,255,0.06)' }} />
 
@@ -540,7 +582,21 @@ export default function ShopPage() {
           {/* RIGHT — Games Grid */}
           <div>
             {loading ? (
-              <p style={{ color: 'rgba(245,242,236,0.3)', fontFamily: 'var(--font-inter)' }}>Loading games…</p>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(3, 1fr)',
+                gap: isMobile ? '0.75rem' : '1.5rem',
+              }}>
+                {Array.from({ length: isMobile ? 4 : 6 }).map((_, i) => (
+                  <div key={i} style={{ border: '1px solid rgba(255,255,255,0.06)', borderRadius: '4px', overflow: 'hidden' }}>
+                    <Skeleton height={isMobile ? '120px' : '200px'} borderRadius="0" />
+                    <div style={{ padding: isMobile ? '0.8rem' : '1.2rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                      <Skeleton width="70%" height="1rem" />
+                      <Skeleton width="45%" height="0.8rem" />
+                    </div>
+                  </div>
+                ))}
+              </div>
             ) : filtered.length === 0 ? (
               <div style={{
                 textAlign: 'center',
@@ -558,8 +614,9 @@ export default function ShopPage() {
                 gap: isMobile ? '0.75rem' : '1.5rem',
               }}>
                 {filtered.map(game => {
-                  const outOfStock = game.stock === 0
-                  const hovered    = hoveredId === game.id
+                  const stock       = totalStock(game.stock)
+                  const outOfStock  = stock === 0
+                  const hovered     = hoveredId === game.id
                   return (
                     <Link key={game.id} href={`/shop/${game.id}`}
                       onMouseEnter={() => setHoveredId(game.id)}
@@ -707,7 +764,7 @@ export default function ShopPage() {
                               letterSpacing: '0.08em',
                               textTransform: 'uppercase',
                             }}>
-                              {outOfStock ? 'Out of stock' : `${game.stock} in stock`}
+                              {outOfStock ? 'Out of stock' : `${stock} in stock`}
                             </span>
                           </div>
                           {!isMobile && (

@@ -11,30 +11,33 @@ import {
   collection, doc, getDoc, getDocs, setDoc, serverTimestamp,
 } from 'firebase/firestore'
 import { auth, db, firebaseConfig } from './firebase'
+import { logActivity } from './activityLog'
 
-export type Role = 'admin' | 'manager' | 'social' | 'gamer'
+export type Role = 'admin' | 'manager' | 'social' | 'gamer' | 'dungeonmaster'
 
-export const ALL_ROLES: Role[] = ['admin', 'manager', 'social', 'gamer']
+export const ALL_ROLES: Role[] = ['admin', 'manager', 'social', 'gamer', 'dungeonmaster']
 
 export const ROLE_LABELS: Record<Role, string> = {
-  admin:   'Admin',
-  manager: 'Manager',
-  social:  'Social Media',
-  gamer:   'Gamer',
+  admin:         'Admin',
+  manager:       'Manager',
+  social:        'Social Media',
+  gamer:         'Gamer',
+  dungeonmaster: 'Dungeon Master',
 }
 
 export const ROLE_COLORS: Record<Role, string> = {
-  admin:   'var(--purple)',
-  manager: 'var(--navy)',
-  social:  'var(--red)',
-  gamer:   'var(--teal)',
+  admin:         'var(--purple)',
+  manager:       'var(--navy)',
+  social:        'var(--red)',
+  gamer:         'var(--teal)',
+  dungeonmaster: '#C9962C',
 }
 
 export const SECTION_ACCESS = {
   games:  ['admin', 'manager', 'gamer'] as Role[],
   menu:   ['admin', 'manager'] as Role[],
   events: ['admin', 'manager', 'social'] as Role[],
-  dnd:    ['admin', 'manager'] as Role[],
+  dnd:    ['admin', 'manager', 'dungeonmaster'] as Role[],
 }
 
 export function useAdminUser() {
@@ -115,6 +118,7 @@ export async function createAccount(email: string, password: string, role: Role)
     await setDoc(doc(db, 'adminUsers', cred.user.uid), {
       email, role, createdAt: serverTimestamp(),
     })
+    await logActivity('create', 'User Account', `${email} (${role})`)
     return cred.user.uid
   } finally {
     await signOut(secondaryAuth)

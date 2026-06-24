@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useState, useEffect } from 'react'
 import { collection, getDocs } from 'firebase/firestore'
 import { db } from '../../lib/firebase'
+import Skeleton from '../Skeleton'
 
 interface Campaign {
   id: string
@@ -171,7 +172,9 @@ export default function DndPreview() {
           {/* Right — Carousel */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
 
-            {loading || campaigns.length === 0 ? (
+            {loading ? (
+              <Skeleton height={isMobile ? '320px' : '480px'} borderRadius="4px" />
+            ) : campaigns.length === 0 ? (
               <div style={{
                 height: isMobile ? '320px' : '480px',
                 borderRadius: '4px',
@@ -184,7 +187,7 @@ export default function DndPreview() {
                 fontFamily: 'var(--font-inter)',
                 fontSize: '0.85rem',
               }}>
-                {loading ? 'Loading campaigns…' : 'No campaigns yet'}
+                No campaigns yet
               </div>
             ) : (
               <>

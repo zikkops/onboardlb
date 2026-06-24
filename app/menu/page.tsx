@@ -6,6 +6,7 @@ import { collection, getDocs } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import Navbar from '../components/layout/Navbar'
 import Footer from '../components/layout/Footer'
+import Skeleton from '../components/Skeleton'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faList } from '@fortawesome/free-solid-svg-icons'
 
@@ -141,13 +142,32 @@ export default function MenuPage() {
 
         {loading ? (
           <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '8rem',
-            color: 'rgba(245,242,236,0.3)',
-            fontFamily: 'var(--font-inter)',
-          }}>Loading menu…</div>
+            maxWidth: '1400px',
+            margin: '0 auto',
+            display: 'grid',
+            gridTemplateColumns: isMobile ? '1fr' : '280px 1fr',
+            gap: isMobile ? '1.5rem' : 0,
+            padding: isMobile ? '1.5rem' : '3rem 0',
+          }}>
+            {!isMobile && (
+              <div style={{ borderRight: '1px solid rgba(255,255,255,0.06)', padding: '3rem 0', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <Skeleton key={i} width="80%" height="1.2rem" style={{ marginLeft: '1.5rem' }} />
+                ))}
+              </div>
+            )}
+            <div style={{ padding: isMobile ? '0' : '4rem', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.9rem 1.2rem', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '4px' }}>
+                  <Skeleton width="50px" height="50px" />
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    <Skeleton width="40%" height="1rem" />
+                    <Skeleton width="70%" height="0.8rem" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         ) : (
           <div style={{
             maxWidth: '1400px',
@@ -399,7 +419,7 @@ export default function MenuPage() {
                         const catItems = items.filter(i => i.categoryId === cat.id)
                         if (catItems.length === 0) return null
                         return (
-                          <div key={cat.id} id={`cat-${cat.id}`} style={{ marginBottom: '3rem' }}>
+                          <div key={cat.id} id={`cat-${cat.id}`} style={{ marginBottom: '3rem', scrollMarginTop: isMobile ? '90px' : '110px' }}>
 
                             {/* Category Header */}
                             <div style={{

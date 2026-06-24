@@ -5,6 +5,7 @@ import { collection, getDocs } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import Navbar from '../components/layout/Navbar'
 import Footer from '../components/layout/Footer'
+import Skeleton from '../components/Skeleton'
 
 interface Campaign {
   id: string
@@ -330,7 +331,25 @@ export default function DndPage() {
             }} />
 
             {loading ? (
-              <p style={{ color: 'rgba(245,242,236,0.3)', fontFamily: 'var(--font-inter)' }}>Loading…</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: isMobile ? '1.5rem' : '2rem' }}>
+                {[0, 1].map(i => (
+                  <div key={i} style={{
+                    display: 'grid',
+                    gridTemplateColumns: isMobile ? '1fr' : '380px 1fr',
+                    border: '1px solid rgba(255,255,255,0.06)',
+                    borderRadius: '4px',
+                    overflow: 'hidden',
+                  }}>
+                    <Skeleton height={isMobile ? '180px' : '300px'} borderRadius="0" />
+                    <div style={{ padding: isMobile ? '1.5rem' : '2rem', display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                      <Skeleton width="35%" height="1.6rem" />
+                      <Skeleton width="90%" height="0.9rem" />
+                      <Skeleton width="80%" height="0.9rem" />
+                      <Skeleton width="60%" height="0.9rem" />
+                    </div>
+                  </div>
+                ))}
+              </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: isMobile ? '1.5rem' : '2rem' }}>
                 {displayCampaigns.map(campaign => (

@@ -7,6 +7,9 @@ import {
 } from 'firebase/firestore'
 import { db } from '../../lib/firebase'
 import { useRequireRole, SECTION_ACCESS } from '../../lib/adminAuth'
+import { logActivity, logCreate, logUpdate, logDelete } from '../../lib/activityLog'
+import { recordMediaUpload } from '../../lib/media'
+import MediaPickerModal from '../../components/admin/MediaPickerModal'
 import {
   DndContext, closestCenter, KeyboardSensor,
   PointerSensor, useSensor, useSensors, DragEndEvent
@@ -192,6 +195,9 @@ export default function AdminMenuPage() {
   const [open, setOpen]       = useState(false)
   const [editing, setEditing] = useState<MenuItem | null>(null)
   const [form, setForm]       = useState({ ...EMPTY_ITEM })
+
+  // Media picker (shared modal — `pickerTarget` says which image field it fills)
+  const [pickerTarget, setPickerTarget] = useState<'new' | 'edit' | null>(null)
   const [saving, setSaving]   = useState(false)
 
   const sensors = useSensors(
@@ -231,6 +237,7 @@ export default function AdminMenuPage() {
     const res  = await fetch('https://api.imgbb.com/1/upload', { method: 'POST', body: formData })
     const data = await res.json()
     setNewCatImage(data.data.url)
+    await recordMediaUpload({ url: data.data.url, deleteUrl: data.data.delete_url, fileName: file.name })
     setUploadingCat(false)
   }
 
@@ -244,6 +251,7 @@ export default function AdminMenuPage() {
     const res  = await fetch('https://api.imgbb.com/1/upload', { method: 'POST', body: formData })
     const data = await res.json()
     setEditCatImage(data.data.url)
+    await recordMediaUpload({ url: data.data.url, deleteUrl: data.data.delete_url, fileName: file.name })
     setUploadingEditCat(false)
   }
 
@@ -256,6 +264,9 @@ export default function AdminMenuPage() {
       image:     newCatImage,
       order:     categories.filter(c => c.section === newCatSection).length,
       createdAt: serverTimestamp(),
+    })
+    await logCreate('Menu Category', newCatName.trim(), {
+      name: newCatName.trim(), section: newCatSection, image: newCatImage,
     })
     setNewCatName('')
     setNewCatImage('')
@@ -275,6 +286,9 @@ export default function AdminMenuPage() {
       image:     editCatImage,
       updatedAt: serverTimestamp(),
     })
+    await logUpdate('Menu Category', editCatName, editingCat, {
+      name: editCatName, section: editCatSection, image: editCatImage,
+    })
     setSavingCat(false)
     setEditingCat(null)
     if (editCatFileRef.current) editCatFileRef.current.value = ''
@@ -283,12 +297,15 @@ export default function AdminMenuPage() {
 
   async function deleteCategory(id: string) {
     if (!confirm('Delete this category and all its items?')) return
+    const cat = categories.find(c => c.id === id)
+    const itemCount = items.filter(i => i.categoryId === id).length
     const batch = writeBatch(db)
     batch.delete(doc(db, 'menuCategories', id))
     items.filter(i => i.categoryId === id).forEach(i => {
       batch.delete(doc(db, 'menuItems', i.id))
     })
     await batch.commit()
+    await logDelete('Menu Category', `${cat?.name ?? id}${itemCount > 0 ? ` (+${itemCount} items)` : ''}`, cat)
     if (activeCategory === id) setActiveCategory(categories[0]?.id ?? '')
     loadData()
   }
@@ -318,6 +335,7 @@ export default function AdminMenuPage() {
     setSaving(true)
     if (editing) {
       await updateDoc(doc(db, 'menuItems', editing.id), { ...form, updatedAt: serverTimestamp() })
+      await logUpdate('Menu Item', form.name, editing, form)
     } else {
       const catItems = items.filter(i => i.categoryId === activeCategory)
       await addDoc(collection(db, 'menuItems'), {
@@ -327,6 +345,7 @@ export default function AdminMenuPage() {
         createdAt:  serverTimestamp(),
         updatedAt:  serverTimestamp(),
       })
+      await logCreate('Menu Item', form.name, form)
     }
     setSaving(false)
     setOpen(false)
@@ -335,7 +354,9 @@ export default function AdminMenuPage() {
 
   async function handleDelete(id: string) {
     if (!confirm('Delete this item?')) return
+    const item = items.find(i => i.id === id)
     await deleteDoc(doc(db, 'menuItems', id))
+    await logDelete('Menu Item', item?.name ?? id, item)
     loadData()
   }
 
@@ -578,13 +599,28 @@ export default function AdminMenuPage() {
 
               <div>
                 <label style={{ ...labelStyle, marginBottom: '0.4rem' }}>Category Image</label>
-                <input
-                  ref={catFileRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleCatImageUpload}
-                  style={{ ...inputStyle, padding: '0.5rem', fontSize: '0.78rem', cursor: 'pointer' }}
-                />
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <input
+                    ref={catFileRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleCatImageUpload}
+                    style={{ ...inputStyle, padding: '0.5rem', fontSize: '0.78rem', cursor: 'pointer', flex: 1 }}
+                  />
+                  <button type="button" onClick={() => setPickerTarget('new')} style={{
+                    background: 'transparent',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    color: 'rgba(245,242,236,0.6)',
+                    padding: '0.5rem 0.8rem',
+                    borderRadius: '2px',
+                    fontSize: '0.68rem',
+                    letterSpacing: '0.05em',
+                    textTransform: 'uppercase',
+                    cursor: 'pointer',
+                    fontFamily: 'var(--font-inter)',
+                    whiteSpace: 'nowrap',
+                  }}>Media</button>
+                </div>
                 {uploadingCat && (
                   <p style={{ fontSize: '0.72rem', color: 'var(--teal)', fontFamily: 'var(--font-inter)', marginTop: '0.3rem' }}>
                     Uploading…
@@ -737,13 +773,28 @@ export default function AdminMenuPage() {
 
               <div>
                 <label style={labelStyle}>Category Image</label>
-                <input
-                  ref={editCatFileRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleEditCatImageUpload}
-                  style={{ ...inputStyle, padding: '0.5rem', fontSize: '0.78rem', cursor: 'pointer' }}
-                />
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <input
+                    ref={editCatFileRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleEditCatImageUpload}
+                    style={{ ...inputStyle, padding: '0.5rem', fontSize: '0.78rem', cursor: 'pointer', flex: 1 }}
+                  />
+                  <button type="button" onClick={() => setPickerTarget('edit')} style={{
+                    background: 'transparent',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    color: 'rgba(245,242,236,0.6)',
+                    padding: '0.5rem 0.8rem',
+                    borderRadius: '2px',
+                    fontSize: '0.68rem',
+                    letterSpacing: '0.05em',
+                    textTransform: 'uppercase',
+                    cursor: 'pointer',
+                    fontFamily: 'var(--font-inter)',
+                    whiteSpace: 'nowrap',
+                  }}>Media</button>
+                </div>
                 {uploadingEditCat && (
                   <p style={{ fontSize: '0.72rem', color: 'var(--teal)', fontFamily: 'var(--font-inter)', marginTop: '0.3rem' }}>
                     Uploading…
@@ -891,6 +942,16 @@ export default function AdminMenuPage() {
           </div>
         </div>
       )}
+
+      <MediaPickerModal
+        open={pickerTarget !== null}
+        onClose={() => setPickerTarget(null)}
+        onSelect={url => {
+          if (pickerTarget === 'new') setNewCatImage(url)
+          else if (pickerTarget === 'edit') setEditCatImage(url)
+          setPickerTarget(null)
+        }}
+      />
     </div>
   )
 }

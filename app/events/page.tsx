@@ -5,6 +5,7 @@ import { collection, getDocs } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import Navbar from '../components/layout/Navbar'
 import Footer from '../components/layout/Footer'
+import Skeleton from '../components/Skeleton'
 
 interface GameEvent {
   id: string
@@ -303,7 +304,22 @@ export default function EventsPage() {
           </div>
 
           {loading ? (
-            <p style={{ color: 'rgba(245,242,236,0.3)', fontFamily: 'var(--font-inter)' }}>Loading events…</p>
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)',
+              gap: isMobile ? '1.25rem' : '1.5rem',
+            }}>
+              {[0, 1, 2].map(i => (
+                <div key={i} style={{ border: '1px solid rgba(106,106,183,0.2)', borderRadius: '4px', overflow: 'hidden' }}>
+                  <Skeleton height="160px" borderRadius="0" />
+                  <div style={{ padding: '1.5rem' }}>
+                    <Skeleton width="40%" height="1.8rem" style={{ marginBottom: '0.8rem' }} />
+                    <Skeleton width="75%" height="1rem" style={{ marginBottom: '0.6rem' }} />
+                    <Skeleton width="55%" height="0.8rem" />
+                  </div>
+                </div>
+              ))}
+            </div>
           ) : (
             <>
               {/* Upcoming */}

@@ -6,9 +6,11 @@ import { db } from '../../lib/firebase'
 import { useParams } from 'next/navigation'
 import Navbar from '../../components/layout/Navbar'
 import Footer from '../../components/layout/Footer'
+import Skeleton from '../../components/Skeleton'
 import Link from 'next/link'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faUsers, faClock, faCakeCandles, faArrowLeft } from '@fortawesome/free-solid-svg-icons'
+import { totalStock } from '../../lib/branches'
 
 interface Game {
   id: string
@@ -19,12 +21,24 @@ interface Game {
   duration: string
   age: string
   price: number
-  stock: number
+  stock: Record<string, number>
   image: string
+}
+
+function useIsMobile(breakpoint = 768) {
+  const [isMobile, setIsMobile] = useState(false)
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < breakpoint)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [breakpoint])
+  return isMobile
 }
 
 export default function GamePage() {
   const { id }                  = useParams()
+  const isMobile                = useIsMobile()
   const [game, setGame]         = useState<Game | null>(null)
   const [loading, setLoading]   = useState(true)
   const [notFound, setNotFound] = useState(false)
@@ -43,15 +57,29 @@ export default function GamePage() {
   }, [id])
 
   if (loading) return (
-    <div style={{
-      minHeight: '100vh',
-      backgroundColor: 'var(--black)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      color: 'rgba(245,242,236,0.3)',
-      fontFamily: 'var(--font-inter)',
-    }}>Loading…</div>
+    <>
+      <Navbar />
+      <main style={{ backgroundColor: 'var(--black)', minHeight: '100vh' }}>
+        <div style={{ maxWidth: '1200px', margin: '0 auto', padding: isMobile ? '7rem 1.25rem 3rem' : '9rem 3rem 6rem' }}>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+            gap: isMobile ? '2rem' : '5rem',
+            alignItems: 'start',
+          }}>
+            <Skeleton height={isMobile ? '260px' : '400px'} borderRadius="8px" />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <Skeleton width="30%" height="0.8rem" />
+              <Skeleton width="60%" height={isMobile ? '1.75rem' : '2.5rem'} />
+              <Skeleton width="90%" height="1rem" />
+              <Skeleton width="80%" height="1rem" />
+              <Skeleton height="3.5rem" style={{ marginTop: '1rem' }} />
+            </div>
+          </div>
+        </div>
+      </main>
+      <Footer />
+    </>
   )
 
   if (notFound || !game) return (
@@ -80,7 +108,8 @@ export default function GamePage() {
     </>
   )
 
-  const outOfStock = game.stock === 0
+  const stock      = totalStock(game.stock)
+  const outOfStock = stock === 0
 
   return (
     <>
@@ -88,7 +117,7 @@ export default function GamePage() {
       <main style={{ backgroundColor: 'var(--black)', minHeight: '100vh' }}>
 
         {/* Back button */}
-        <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '9rem 3rem 0' }}>
+        <div style={{ maxWidth: '1200px', margin: '0 auto', padding: isMobile ? '7rem 1.25rem 0' : '9rem 3rem 0' }}>
           <Link href="/shop" style={{
             display: 'inline-flex',
             alignItems: 'center',
@@ -107,11 +136,11 @@ export default function GamePage() {
         </div>
 
         {/* Game Detail */}
-        <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 3rem 6rem' }}>
+        <div style={{ maxWidth: '1200px', margin: '0 auto', padding: isMobile ? '0 1.25rem 3rem' : '0 3rem 6rem' }}>
           <div style={{
             display: 'grid',
-            gridTemplateColumns: '1fr 1fr',
-            gap: '5rem',
+            gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+            gap: isMobile ? '2rem' : '5rem',
             alignItems: 'start',
           }}>
 
@@ -119,7 +148,7 @@ export default function GamePage() {
             <div style={{
               backgroundColor: '#fff',
               borderRadius: '8px',
-              padding: '2rem',
+              padding: isMobile ? '1.25rem' : '2rem',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -147,7 +176,7 @@ export default function GamePage() {
                 alt={game.name}
                 style={{
                   width: '100%',
-                  height: '400px',
+                  height: isMobile ? '260px' : '400px',
                   objectFit: 'contain',
                   filter: outOfStock ? 'grayscale(60%)' : 'none',
                 }}
@@ -170,7 +199,7 @@ export default function GamePage() {
               {/* Name */}
               <h1 style={{
                 fontFamily: 'var(--font-cinzel)',
-                fontSize: '2.5rem',
+                fontSize: isMobile ? '1.75rem' : '2.5rem',
                 color: 'var(--offwhite)',
                 lineHeight: 1.2,
                 marginBottom: '1.5rem',
@@ -199,7 +228,7 @@ export default function GamePage() {
                   alignItems: 'center',
                   gap: '0.8rem',
                   marginBottom: '2rem',
-                  padding: '1.2rem 1.5rem',
+                  padding: isMobile ? '1rem 1.2rem' : '1.2rem 1.5rem',
                   background: 'rgba(106,106,183,0.08)',
                   border: '1px solid rgba(106,106,183,0.2)',
                   borderRadius: '4px',
@@ -223,7 +252,7 @@ export default function GamePage() {
               <div style={{
                 display: 'grid',
                 gridTemplateColumns: 'repeat(3, 1fr)',
-                gap: '1rem',
+                gap: isMobile ? '0.6rem' : '1rem',
                 marginBottom: '2rem',
               }}>
                 {[
@@ -235,7 +264,7 @@ export default function GamePage() {
                     background: 'rgba(255,255,255,0.03)',
                     border: '1px solid rgba(255,255,255,0.06)',
                     borderRadius: '4px',
-                    padding: '1.2rem',
+                    padding: isMobile ? '0.8rem 0.5rem' : '1.2rem',
                     textAlign: 'center',
                   }}>
                     <FontAwesomeIcon icon={icon} style={{ width: '18px', color: 'var(--purple)', marginBottom: '0.5rem' }} />
@@ -280,7 +309,7 @@ export default function GamePage() {
                 }}>
                   {outOfStock
                     ? 'Currently out of stock'
-                    : `${game.stock} available in store`}
+                    : `${stock} available in store`}
                 </p>
               </div>
 

@@ -32,7 +32,9 @@ export default function AdminPage() {
     { label: 'Manage Menu',   desc: 'Update food and drink items',              href: '/admin/menu',   color: 'var(--teal)', access: SECTION_ACCESS.menu },
     { label: 'Manage Events', desc: 'Create and manage D&D sessions and events', href: '/admin/events', color: 'var(--red)', access: SECTION_ACCESS.events },
     { label: 'D&D Campaigns', desc: 'Add and manage D&D campaigns', href: '/admin/dnd', color: 'var(--navy)', access: SECTION_ACCESS.dnd },
+    { label: 'Media Library', desc: 'View and delete previously uploaded images', href: '/admin/media', color: 'rgba(245,242,236,0.4)', access: ALL_ROLES },
     { label: 'Manage Users',  desc: 'Create accounts and set access levels', href: '/admin/users', color: 'rgba(245,242,236,0.4)', access: ['admin'] as Role[] },
+    { label: 'Activity Log',  desc: 'See who created, edited, or deleted what, and when', href: '/admin/logs', color: 'rgba(245,242,236,0.4)', access: ['admin'] as Role[] },
   ].filter(({ access }) => role && access.includes(role))
 
   if (checking) {

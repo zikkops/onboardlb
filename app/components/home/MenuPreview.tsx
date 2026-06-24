@@ -5,6 +5,7 @@ import Image from 'next/image'
 import { useEffect, useState } from 'react'
 import { collection, getDocs } from 'firebase/firestore'
 import { db } from '../../lib/firebase'
+import Skeleton from '../Skeleton'
 
 interface Category {
   id: string
@@ -84,7 +85,15 @@ export default function MenuPreview() {
         }} />
 
         {loading ? (
-          <p style={{ color: 'rgba(245,242,236,0.3)', fontFamily: 'var(--font-inter)' }}>Loading…</p>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(5, 1fr)',
+            gap: isMobile ? '0.75rem' : '1rem',
+          }}>
+            {(isMobile ? [0, 1, 2, 3] : [0, 1, 2, 3, 4]).map(i => (
+              <Skeleton key={i} height={isMobile ? '140px' : '180px'} />
+            ))}
+          </div>
         ) : (
           <div style={{
             display: 'grid',

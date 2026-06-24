@@ -7,6 +7,7 @@ import {
   useRequireRole, createAccount,
   ROLE_LABELS, ROLE_COLORS, type Role,
 } from '../../lib/adminAuth'
+import { logActivity } from '../../lib/activityLog'
 
 interface Account {
   id: string
@@ -14,7 +15,7 @@ interface Account {
   role: Role
 }
 
-const ROLES: Role[] = ['admin', 'manager', 'social', 'gamer']
+const ROLES: Role[] = ['admin', 'manager', 'social', 'gamer', 'dungeonmaster']
 
 const EMPTY = { email: '', password: '', role: 'manager' as Role }
 
@@ -71,6 +72,7 @@ export default function AdminUsersPage() {
   async function handleRevoke(account: Account) {
     if (!confirm(`Revoke admin panel access for ${account.email}? This does not delete their login — only their access here.`)) return
     await deleteDoc(doc(db, 'adminUsers', account.id))
+    await logActivity('delete', 'User Account', `${account.email} (${account.role})`)
     loadAccounts()
   }
 
@@ -147,8 +149,8 @@ export default function AdminUsersPage() {
           marginBottom: '2rem',
           lineHeight: 1.6,
         }}>
-          Admin and Manager can access every section below. Social Media is limited to Events, and Gamer is limited to Games.
-          Only Admin can create accounts.
+          Admin and Manager can access every section below. Social Media is limited to Events, Gamer is limited to Games,
+          and Dungeon Master is limited to D&amp;D Campaigns. Only Admin can create accounts.
         </p>
 
         {/* Table */}

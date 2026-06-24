@@ -4,12 +4,14 @@ import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { collection, getDocs, limit, query } from 'firebase/firestore'
 import { db } from '../../lib/firebase'
+import Skeleton from '../Skeleton'
+import { totalStock } from '../../lib/branches'
 
 interface Game {
   id: string
   name: string
   description: string
-  stock: number
+  stock: Record<string, number>
   price: number
   image: string
 }
@@ -76,7 +78,21 @@ export default function ShopPreview() {
         }} />
 
         {loading ? (
-          <p style={{ color: 'rgba(245,242,236,0.3)', fontFamily: 'var(--font-inter)' }}>Loading…</p>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)',
+            gap: isMobile ? '0.75rem' : '1.5rem',
+          }}>
+            {[0, 1, 2, 3].map(i => (
+              <div key={i} style={{ border: '1px solid rgba(255,255,255,0.06)', borderRadius: '4px', overflow: 'hidden' }}>
+                <Skeleton height={isMobile ? '120px' : '200px'} borderRadius="0" />
+                <div style={{ padding: isMobile ? '0.8rem' : '1.2rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                  <Skeleton width="70%" height="1rem" />
+                  <Skeleton width="45%" height="0.8rem" />
+                </div>
+              </div>
+            ))}
+          </div>
         ) : (
           <div style={{
             display: 'grid',
@@ -85,7 +101,8 @@ export default function ShopPreview() {
           }}>
 
             {/* Game Cards */}
-            {games.map(({ id, name, description, stock, price, image }) => {
+            {games.map(({ id, name, description, stock: stockByBranch, price, image }) => {
+              const stock      = totalStock(stockByBranch)
               const outOfStock = stock === 0
               const hovered    = hoveredId === id
               return (

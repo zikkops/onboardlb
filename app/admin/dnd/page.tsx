@@ -7,6 +7,9 @@ import {
 } from 'firebase/firestore'
 import { db } from '../../lib/firebase'
 import { useRequireRole, SECTION_ACCESS } from '../../lib/adminAuth'
+import { logCreate, logUpdate, logDelete } from '../../lib/activityLog'
+import { recordMediaUpload } from '../../lib/media'
+import MediaPickerModal from '../../components/admin/MediaPickerModal'
 
 interface Campaign {
   id: string
@@ -74,6 +77,7 @@ export default function AdminDndPage() {
   const [form, setForm]           = useState({ ...EMPTY })
   const [saving, setSaving]       = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [showPicker, setShowPicker] = useState(false)
   const fileRef                   = useRef<HTMLInputElement>(null)
 
   async function loadCampaigns() {
@@ -97,6 +101,7 @@ export default function AdminDndPage() {
     const res  = await fetch('https://api.imgbb.com/1/upload', { method: 'POST', body: formData })
     const data = await res.json()
     setForm(f => ({ ...f, image: data.data.url }))
+    await recordMediaUpload({ url: data.data.url, deleteUrl: data.data.delete_url, fileName: file.name })
     setUploading(false)
   }
 
@@ -142,12 +147,14 @@ export default function AdminDndPage() {
         ...form,
         updatedAt: serverTimestamp(),
       })
+      await logUpdate('D&D Campaign', form.title, editing, form)
     } else {
       await addDoc(collection(db, 'dndCampaigns'), {
         ...form,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       })
+      await logCreate('D&D Campaign', form.title, form)
     }
     setSaving(false)
     setOpen(false)
@@ -157,7 +164,9 @@ export default function AdminDndPage() {
 
   async function handleDelete(id: string) {
     if (!confirm('Delete this campaign?')) return
+    const campaign = campaigns.find(c => c.id === id)
     await deleteDoc(doc(db, 'dndCampaigns', id))
+    await logDelete('D&D Campaign', campaign?.title ?? id, campaign)
     loadCampaigns()
   }
 
@@ -607,9 +616,24 @@ export default function AdminDndPage() {
 
               <div>
                 <label style={labelStyle}>Campaign Image</label>
-                <input ref={fileRef} type="file" accept="image/*"
-                  onChange={handleImageUpload}
-                  style={{ ...inputStyle, cursor: 'pointer' }} />
+                <div style={{ display: 'flex', gap: '0.6rem' }}>
+                  <input ref={fileRef} type="file" accept="image/*"
+                    onChange={handleImageUpload}
+                    style={{ ...inputStyle, cursor: 'pointer', flex: 1 }} />
+                  <button type="button" onClick={() => setShowPicker(true)} style={{
+                    background: 'transparent',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    color: 'rgba(245,242,236,0.6)',
+                    padding: '0.6rem 1rem',
+                    borderRadius: '2px',
+                    fontSize: '0.72rem',
+                    letterSpacing: '0.05em',
+                    textTransform: 'uppercase',
+                    cursor: 'pointer',
+                    fontFamily: 'var(--font-inter)',
+                    whiteSpace: 'nowrap',
+                  }}>Choose from Media</button>
+                </div>
                 {uploading && (
                   <p style={{ marginTop: '0.5rem', fontSize: '0.75rem', color: 'var(--teal)', fontFamily: 'var(--font-inter)' }}>
                     Uploading…
@@ -727,6 +751,12 @@ export default function AdminDndPage() {
           </form>
         </div>
       )}
+
+      <MediaPickerModal
+        open={showPicker}
+        onClose={() => setShowPicker(false)}
+        onSelect={url => setForm(f => ({ ...f, image: url }))}
+      />
     </div>
   )
 }
