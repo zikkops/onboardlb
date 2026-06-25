@@ -91,7 +91,7 @@ export default function AdminEventsPage() {
     ])
     const evs = evSnap.docs
       .map(d => ({ id: d.id, ...d.data() } as GameEvent))
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
     const types = typeSnap.docs.map(d => ({ id: d.id, ...d.data() } as EventType))
     setEvents(evs)
     setEventTypes(types)

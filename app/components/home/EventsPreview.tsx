@@ -157,14 +157,14 @@ export default function EventsPreview() {
                   {/* Image */}
                   {ev.image ? (
                     <div style={{
-                      height: '140px',
+                      height: isMobile ? '90px' : '140px',
                       backgroundImage: `url(${ev.image})`,
                       backgroundSize: 'cover',
                       backgroundPosition: 'center',
                     }} />
                   ) : (
                     <div style={{
-                      height: '140px',
+                      height: isMobile ? '90px' : '140px',
                       background: 'rgba(50,50,124,0.2)',
                       display: 'flex',
                       alignItems: 'center',
@@ -172,7 +172,7 @@ export default function EventsPreview() {
                     }}>
                       <span style={{
                         fontFamily: 'var(--font-cinzel)',
-                        fontSize: '2rem',
+                        fontSize: isMobile ? '1.4rem' : '2rem',
                         color: 'rgba(106,106,183,0.4)',
                       }}>
                         {d.getDate()}
@@ -180,24 +180,24 @@ export default function EventsPreview() {
                     </div>
                   )}
 
-                  <div style={{ padding: isMobile ? '1.25rem' : '1.5rem' }}>
+                  <div style={{ padding: isMobile ? '1rem' : '1.5rem' }}>
                     {/* Date + Type */}
                     <div style={{
                       display: 'flex',
                       justifyContent: 'space-between',
                       alignItems: 'center',
-                      marginBottom: '0.8rem',
+                      marginBottom: isMobile ? '0.5rem' : '0.8rem',
                     }}>
                       <div>
                         <p style={{
                           fontFamily: 'var(--font-cinzel)',
-                          fontSize: '1.8rem',
+                          fontSize: isMobile ? '1.3rem' : '1.8rem',
                           color: 'var(--offwhite)',
                           lineHeight: 1,
                         }}>{d.getDate()}</p>
                         <p style={{
                           fontFamily: 'var(--font-inter)',
-                          fontSize: '0.68rem',
+                          fontSize: '0.62rem',
                           color: 'rgba(245,242,236,0.35)',
                           textTransform: 'uppercase',
                           letterSpacing: '0.1em',
@@ -207,8 +207,8 @@ export default function EventsPreview() {
                         </p>
                       </div>
                       <span style={{
-                        fontSize: '0.65rem',
-                        padding: '0.25rem 0.7rem',
+                        fontSize: isMobile ? '0.6rem' : '0.65rem',
+                        padding: isMobile ? '0.2rem 0.5rem' : '0.25rem 0.7rem',
                         borderRadius: '2px',
                         backgroundColor: 'rgba(106,106,183,0.15)',
                         color: 'var(--purple)',
@@ -220,15 +220,15 @@ export default function EventsPreview() {
 
                     <h3 style={{
                       fontFamily: 'var(--font-cinzel)',
-                      fontSize: '1rem',
+                      fontSize: isMobile ? '0.88rem' : '1rem',
                       color: 'var(--offwhite)',
-                      marginBottom: '0.5rem',
+                      marginBottom: isMobile ? '0.35rem' : '0.5rem',
                     }}>{ev.title}</h3>
 
                     <div style={{
                       display: 'flex',
-                      gap: '0.8rem',
-                      fontSize: '0.72rem',
+                      gap: '0.6rem',
+                      fontSize: isMobile ? '0.66rem' : '0.72rem',
                       color: 'rgba(245,242,236,0.4)',
                       fontFamily: 'var(--font-inter)',
                       marginBottom: '0.4rem',

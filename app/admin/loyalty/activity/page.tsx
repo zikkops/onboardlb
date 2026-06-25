@@ -2,9 +2,11 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { collection, getDocs, query, orderBy, limit, Timestamp } from 'firebase/firestore'
-import { db } from '../../lib/firebase'
-import { useRequireRole } from '../../lib/adminAuth'
-import type { FieldChange } from '../../lib/activityLog'
+import { db } from '../../../lib/firebase'
+import { useRequireRole, SECTION_ACCESS } from '../../../lib/adminAuth'
+import type { FieldChange } from '../../../lib/activityLog'
+
+const LOYALTY_SECTIONS = ['Loyalty Submission', 'Loyalty Management'] as const
 
 interface LogEntry {
   id: string
@@ -29,7 +31,10 @@ const ACTION_COLORS: Record<LogEntry['action'], string> = {
   delete: 'var(--red)',
 }
 
-const SNAPSHOT_HIDE = ['image', 'description']
+const SECTION_COLORS: Record<string, string> = {
+  'Loyalty Submission': 'var(--navy)',
+  'Loyalty Management': 'var(--purple)',
+}
 
 function formatValue(v: unknown): string {
   if (v === null || v === undefined || v === '') return '—'
@@ -73,7 +78,7 @@ function Details({ log }: { log: LogEntry }) {
   }
 
   if (log.snapshot) {
-    const entries = Object.entries(log.snapshot).filter(([k]) => !SNAPSHOT_HIDE.includes(k))
+    const entries = Object.entries(log.snapshot)
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
         {entries.map(([k, v]) => (
@@ -89,30 +94,29 @@ function Details({ log }: { log: LogEntry }) {
   return <span style={{ color: 'rgba(245,242,236,0.2)' }}>—</span>
 }
 
-export default function AdminLogsPage() {
-  const { checking } = useRequireRole(['admin'])
+export default function LoyaltyActivityPage() {
+  const { checking } = useRequireRole(SECTION_ACCESS.loyalty)
   const isMobile = useIsMobile()
   const [logs, setLogs]       = useState<LogEntry[]>([])
   const [loading, setLoading] = useState(true)
-  const [actionFilter, setActionFilter] = useState<'all' | LogEntry['action']>('all')
-  const [sectionFilter, setSectionFilter] = useState('all')
+  const [actionFilter, setActionFilter]   = useState<'all' | LogEntry['action']>('all')
+  const [sectionFilter, setSectionFilter] = useState<'all' | typeof LOYALTY_SECTIONS[number]>('all')
   const [search, setSearch] = useState('')
 
+  // Same read pattern as /admin/logs (newest 300, no server-side `where`) —
+  // filtering down to just the loyalty sections happens client-side below,
+  // which avoids needing a new composite index on activityLog.
   useEffect(() => {
     async function load() {
       const snap = await getDocs(
         query(collection(db, 'activityLog'), orderBy('createdAt', 'desc'), limit(300))
       )
-      setLogs(snap.docs.map(d => ({ id: d.id, ...d.data() } as LogEntry)))
+      const all = snap.docs.map(d => ({ id: d.id, ...d.data() } as LogEntry))
+      setLogs(all.filter(l => LOYALTY_SECTIONS.includes(l.section as typeof LOYALTY_SECTIONS[number])))
       setLoading(false)
     }
     load()
   }, [])
-
-  const sections = useMemo(
-    () => Array.from(new Set(logs.map(l => l.section))).sort(),
-    [logs]
-  )
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -148,7 +152,6 @@ export default function AdminLogsPage() {
     <div style={{ minHeight: '100vh', backgroundColor: 'var(--black)', padding: isMobile ? '1.25rem' : '3rem' }}>
       <div style={{ maxWidth: '1300px', margin: '0 auto' }}>
 
-        {/* Header */}
         <div style={{ marginBottom: '2rem' }}>
           <a href="/admin" style={{
             fontSize: '0.7rem',
@@ -161,7 +164,7 @@ export default function AdminLogsPage() {
             display: 'block',
           }}>← Back to Dashboard</a>
           <h1 style={{ fontFamily: 'var(--font-cinzel)', fontSize: '2rem', color: 'var(--offwhite)' }}>
-            Activity Log
+            Loyalty Activity
           </h1>
         </div>
 
@@ -172,8 +175,7 @@ export default function AdminLogsPage() {
           marginBottom: '1.5rem',
           lineHeight: 1.6,
         }}>
-          Every entry created, edited, or deleted across the admin panel, with who made the change and when.
-          Visible to Admins only.
+          Submissions, approvals, rejections, and redemption item changes across the loyalty program — separate from the general CMS Activity Log. Visible to Managers and Admins.
         </p>
 
         {/* Filters */}
@@ -183,6 +185,24 @@ export default function AdminLogsPage() {
           gap: '0.8rem',
           marginBottom: '2rem',
         }}>
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+            {(['all', 'Loyalty Submission', 'Loyalty Management'] as const).map(s => (
+              <button key={s} onClick={() => setSectionFilter(s)} style={{
+                backgroundColor: sectionFilter === s ? (s === 'all' ? 'var(--offwhite)' : SECTION_COLORS[s]) : 'transparent',
+                border: `1px solid ${sectionFilter === s ? 'transparent' : 'rgba(255,255,255,0.1)'}`,
+                color: sectionFilter === s ? '#0a0a0a' : 'rgba(245,242,236,0.5)',
+                padding: '0.5rem 1rem',
+                borderRadius: '2px',
+                fontSize: '0.72rem',
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase',
+                cursor: 'pointer',
+                fontFamily: 'var(--font-inter)',
+                whiteSpace: 'nowrap',
+              }}>{s === 'all' ? 'All' : s}</button>
+            ))}
+          </div>
+
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
             {(['all', 'create', 'update', 'delete'] as const).map(a => (
               <button key={a} onClick={() => setActionFilter(a)} style={{
@@ -200,18 +220,9 @@ export default function AdminLogsPage() {
             ))}
           </div>
 
-          <select
-            value={sectionFilter}
-            onChange={e => setSectionFilter(e.target.value)}
-            style={{ ...inputStyle, color: '#F5F2EC', backgroundColor: '#1a1a1a', minWidth: isMobile ? 'auto' : '180px' }}
-          >
-            <option value="all">All Sections</option>
-            {sections.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
-
           <input
             type="text"
-            placeholder="Search item or field (e.g. price)…"
+            placeholder="Search item or field…"
             value={search}
             onChange={e => setSearch(e.target.value)}
             style={{ ...inputStyle, flex: 1 }}
@@ -229,7 +240,7 @@ export default function AdminLogsPage() {
             textAlign: 'center',
             color: 'rgba(245,242,236,0.2)',
             fontFamily: 'var(--font-inter)',
-          }}>No activity matches these filters.</div>
+          }}>No loyalty activity matches these filters.</div>
         ) : isMobile ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
             {filtered.map(log => (
@@ -257,8 +268,15 @@ export default function AdminLogsPage() {
                     {log.createdAt?.toDate().toLocaleString('en', { dateStyle: 'medium', timeStyle: 'short' }) ?? '—'}
                   </span>
                 </div>
+                <span style={{
+                  fontSize: '0.65rem',
+                  letterSpacing: '0.1em',
+                  textTransform: 'uppercase',
+                  color: SECTION_COLORS[log.section] ?? 'rgba(245,242,236,0.4)',
+                  fontFamily: 'var(--font-inter)',
+                }}>{log.section}</span>
                 <p style={{ fontFamily: 'var(--font-cinzel)', fontSize: '0.9rem', color: 'var(--offwhite)' }}>
-                  {log.section} — {log.label}
+                  {log.label}
                 </p>
                 <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.75rem', color: 'rgba(245,242,236,0.4)' }}>
                   {log.userEmail}
@@ -314,7 +332,7 @@ export default function AdminLogsPage() {
                         whiteSpace: 'nowrap',
                       }}>{ACTION_LABELS[log.action] ?? log.action}</span>
                     </td>
-                    <td style={{ padding: '1rem 1.2rem', fontFamily: 'var(--font-inter)', fontSize: '0.82rem', color: 'rgba(245,242,236,0.5)', verticalAlign: 'top', whiteSpace: 'nowrap' }}>
+                    <td style={{ padding: '1rem 1.2rem', fontFamily: 'var(--font-inter)', fontSize: '0.78rem', color: SECTION_COLORS[log.section] ?? 'rgba(245,242,236,0.5)', verticalAlign: 'top', whiteSpace: 'nowrap' }}>
                       {log.section}
                     </td>
                     <td style={{ padding: '1rem 1.2rem', fontFamily: 'var(--font-inter)', fontSize: '0.82rem', color: 'rgba(245,242,236,0.5)', verticalAlign: 'top' }}>

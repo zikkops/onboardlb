@@ -555,6 +555,16 @@ export default function ShopPage() {
             </button>
           )}
 
+          {/* Backdrop — closes the panel when tapped outside it */}
+          {isMobile && filtersOpen && (
+            <div onClick={() => setFiltersOpen(false)} style={{
+              position: 'fixed',
+              inset: 0,
+              backgroundColor: 'rgba(0,0,0,0.5)',
+              zIndex: 59,
+            }} />
+          )}
+
           {/* Mobile filter panel — slides in from the left, covers half the page */}
           {isMobile && (
             <div style={{
@@ -568,13 +578,48 @@ export default function ShopPage() {
               boxShadow: '8px 0 24px rgba(0,0,0,0.6)',
               zIndex: 60,
               overflowY: 'auto',
-              padding: '6rem 1.25rem 2rem',
+              padding: '0 1.25rem 2rem',
               display: 'flex',
               flexDirection: 'column',
               gap: '1.75rem',
               transform: filtersOpen ? 'translateX(0)' : 'translateX(-100%)',
               transition: 'transform 0.3s ease',
             }}>
+              {/* Header — pinned, with close button */}
+              <div style={{
+                position: 'sticky',
+                top: 0,
+                backgroundColor: 'var(--black)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '1.5rem 0 1rem',
+                marginBottom: '-0.5rem',
+                zIndex: 1,
+              }}>
+                <p style={{
+                  fontFamily: 'var(--font-cinzel)',
+                  fontSize: '1rem',
+                  color: 'var(--offwhite)',
+                }}>Filters</p>
+                <button onClick={() => setFiltersOpen(false)} aria-label="Close filters" style={{
+                  background: 'transparent',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  color: 'rgba(245,242,236,0.6)',
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '50%',
+                  cursor: 'pointer',
+                  fontSize: '1rem',
+                  lineHeight: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}>
+                  <FontAwesomeIcon icon={faXmark} />
+                </button>
+              </div>
+
               {filterFields}
             </div>
           )}

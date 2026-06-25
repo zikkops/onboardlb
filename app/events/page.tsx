@@ -93,11 +93,11 @@ export default function EventsPage() {
           (e.currentTarget as HTMLDivElement).style.borderColor = dimmed ? 'rgba(255,255,255,0.04)' : 'rgba(106,106,183,0.2)'
         }}
       >
-        {/* Image — 4:5 ratio */}
+        {/* Image — 4:5 ratio on desktop, shorter on mobile */}
         <div style={{
           position: 'relative',
           width: '100%',
-          paddingTop: '125%',
+          paddingTop: isMobile ? '55%' : '125%',
           overflow: 'hidden',
           flexShrink: 0,
         }}>
@@ -134,7 +134,7 @@ export default function EventsPage() {
             }}>
               <span style={{
                 fontFamily: 'var(--font-cinzel)',
-                fontSize: '3rem',
+                fontSize: isMobile ? '1.8rem' : '3rem',
                 color: dimmed ? 'rgba(255,255,255,0.08)' : 'rgba(106,106,183,0.4)',
               }}>{d.getDate()}</span>
               {dimmed && (
@@ -155,23 +155,23 @@ export default function EventsPage() {
           )}
         </div>
 
-        <div style={{ padding: '1.5rem', flex: 1, display: 'flex', flexDirection: 'column' }}>
+        <div style={{ padding: isMobile ? '1rem' : '1.5rem', flex: 1, display: 'flex', flexDirection: 'column' }}>
           <div style={{
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            marginBottom: '0.8rem',
+            marginBottom: isMobile ? '0.5rem' : '0.8rem',
           }}>
             <div>
               <p style={{
                 fontFamily: 'var(--font-cinzel)',
-                fontSize: '1.8rem',
+                fontSize: isMobile ? '1.3rem' : '1.8rem',
                 color: 'var(--offwhite)',
                 lineHeight: 1,
               }}>{d.getDate()}</p>
               <p style={{
                 fontFamily: 'var(--font-inter)',
-                fontSize: '0.68rem',
+                fontSize: '0.62rem',
                 color: 'rgba(245,242,236,0.35)',
                 textTransform: 'uppercase',
                 letterSpacing: '0.1em',
@@ -181,8 +181,8 @@ export default function EventsPage() {
               </p>
             </div>
             <span style={{
-              fontSize: '0.65rem',
-              padding: '0.25rem 0.7rem',
+              fontSize: isMobile ? '0.6rem' : '0.65rem',
+              padding: isMobile ? '0.2rem 0.5rem' : '0.25rem 0.7rem',
               borderRadius: '2px',
               backgroundColor: dimmed ? 'rgba(255,255,255,0.05)' : 'rgba(106,106,183,0.15)',
               color: dimmed ? 'rgba(245,242,236,0.3)' : 'var(--purple)',
@@ -194,23 +194,25 @@ export default function EventsPage() {
 
           <h3 style={{
             fontFamily: 'var(--font-cinzel)',
-            fontSize: '1rem',
+            fontSize: isMobile ? '0.88rem' : '1rem',
             color: 'var(--offwhite)',
-            marginBottom: '0.5rem',
+            marginBottom: isMobile ? '0.35rem' : '0.5rem',
           }}>{ev.title}</h3>
 
-          <p style={{
-            fontFamily: 'var(--font-inter)',
-            fontSize: '0.78rem',
-            color: 'rgba(245,242,236,0.4)',
-            lineHeight: 1.6,
-            marginBottom: '0.8rem',
-          }}>{truncate(ev.description, 10)}</p>
+          {!isMobile && (
+            <p style={{
+              fontFamily: 'var(--font-inter)',
+              fontSize: '0.78rem',
+              color: 'rgba(245,242,236,0.4)',
+              lineHeight: 1.6,
+              marginBottom: '0.8rem',
+            }}>{truncate(ev.description, 10)}</p>
+          )}
 
           <div style={{
             display: 'flex',
-            gap: '0.8rem',
-            fontSize: '0.72rem',
+            gap: '0.6rem',
+            fontSize: isMobile ? '0.66rem' : '0.72rem',
             color: 'rgba(245,242,236,0.4)',
             fontFamily: 'var(--font-inter)',
             marginBottom: '0.4rem',
@@ -224,11 +226,11 @@ export default function EventsPage() {
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            fontSize: '0.72rem',
+            fontSize: isMobile ? '0.66rem' : '0.72rem',
             fontFamily: 'var(--font-inter)',
             color: 'rgba(245,242,236,0.4)',
             marginTop: 'auto',
-            paddingTop: '0.8rem',
+            paddingTop: isMobile ? '0.6rem' : '0.8rem',
             borderTop: '1px solid rgba(255,255,255,0.05)',
           }}>
             <span>👥 {ev.minPlayers}–{ev.maxPlayers} players</span>

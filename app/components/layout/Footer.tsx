@@ -74,6 +74,7 @@ export default function Footer() {
                 { label: 'Menu',         href: '/menu' },
                 { label: 'D&D',          href: '/dnd' },
                 { label: 'Events',       href: '#events' },
+                { label: 'Loyalty',      href: '/loyalty' },
               ].map(({ label, href }) => (
                 <li key={label}>
                   <a href={href} style={{

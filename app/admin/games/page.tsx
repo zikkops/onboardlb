@@ -234,10 +234,11 @@ export default function AdminGamesPage() {
               Game Library
             </h1>
           </div>
-          <div style={{ display: 'flex', gap: '0.8rem' }}>
+          <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: '0.8rem', width: isMobile ? '100%' : 'auto' }}>
             <a href="/admin/games/import" style={{
               display: 'flex',
               alignItems: 'center',
+              justifyContent: 'center',
               backgroundColor: 'transparent',
               border: '1px solid rgba(255,255,255,0.1)',
               color: 'rgba(245,242,236,0.6)',
@@ -440,15 +441,83 @@ export default function AdminGamesPage() {
             fontFamily: 'var(--font-inter)',
             fontSize: '0.85rem',
           }}>No games match these filters.</div>
+        ) : isMobile ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+            {filteredGames.map(game => {
+              const stock = totalStock(game.stock)
+              return (
+                <div key={game.id} style={{
+                  background: 'rgba(255,255,255,0.02)',
+                  border: '1px solid rgba(255,255,255,0.06)',
+                  borderRadius: '4px',
+                  padding: '1rem 1.2rem',
+                  display: 'flex',
+                  gap: '1rem',
+                }}>
+                  {game.image && (
+                    <img src={game.image} alt={game.name} style={{
+                      width: '60px', height: '60px',
+                      objectFit: 'cover', borderRadius: '2px',
+                      flexShrink: 0,
+                    }} />
+                  )}
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                    <p style={{ fontFamily: 'var(--font-cinzel)', fontSize: '0.95rem', color: 'var(--offwhite)' }}>{game.name}</p>
+                    <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.78rem', color: 'rgba(245,242,236,0.5)' }}>
+                      {game.category} · {game.players}
+                    </p>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                      <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.82rem', color: 'var(--teal)' }}>
+                        {game.price > 0 ? `$${game.price}` : '—'}
+                      </span>
+                      <span style={{
+                        fontSize: '0.68rem',
+                        padding: '0.2rem 0.6rem',
+                        borderRadius: '2px',
+                        backgroundColor: stock > 0 ? 'rgba(0,160,152,0.15)' : 'rgba(228,51,41,0.15)',
+                        color: stock > 0 ? 'var(--teal)' : 'var(--red)',
+                        fontFamily: 'var(--font-inter)',
+                      }}>
+                        {stock > 0 ? `${stock} in stock` : 'Out of stock'}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.3rem' }}>
+                      <button onClick={() => openEdit(game)} style={{
+                        flex: 1,
+                        background: 'transparent',
+                        border: '1px solid rgba(255,255,255,0.1)',
+                        color: 'rgba(245,242,236,0.5)',
+                        padding: '0.5rem',
+                        borderRadius: '2px',
+                        fontSize: '0.72rem',
+                        cursor: 'pointer',
+                        fontFamily: 'var(--font-inter)',
+                      }}>Edit</button>
+                      <button onClick={() => handleDelete(game.id)} style={{
+                        flex: 1,
+                        background: 'transparent',
+                        border: '1px solid rgba(228,51,41,0.3)',
+                        color: 'var(--red)',
+                        padding: '0.5rem',
+                        borderRadius: '2px',
+                        fontSize: '0.72rem',
+                        cursor: 'pointer',
+                        fontFamily: 'var(--font-inter)',
+                      }}>Delete</button>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         ) : (
           <div style={{
             background: 'rgba(255,255,255,0.02)',
             border: '1px solid rgba(255,255,255,0.06)',
             borderRadius: '4px',
             overflow: 'hidden',
-            overflowX: 'auto',
           }}>
-            <table style={{ width: '100%', minWidth: isMobile ? '640px' : undefined, borderCollapse: 'collapse' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
                   {['Image', 'Name', 'Category', 'Players', 'Price', 'Stock', 'Actions'].map(h => (
@@ -694,7 +763,7 @@ export default function AdminGamesPage() {
 
               <div>
                 <label style={labelStyle}>Upload Image</label>
-                <div style={{ display: 'flex', gap: '0.6rem' }}>
+                <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: '0.6rem' }}>
                   <input
                     ref={catFileRef}
                     type="file"

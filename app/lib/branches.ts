@@ -27,3 +27,12 @@ export function totalStock(stock: unknown): number {
   }
   return 0
 }
+
+// Branch ids are just the branch name itself (no separate branches
+// collection) — this just normalizes casing and falls back to the raw value
+// for anything unrecognized instead of showing blank.
+export function resolveBranchName(branchId: string | undefined | null): string {
+  if (!branchId) return '—'
+  const match = BRANCHES.find(b => b.toLowerCase() === branchId.toLowerCase())
+  return match ?? branchId
+}

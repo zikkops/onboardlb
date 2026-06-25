@@ -4,20 +4,29 @@ import { useEffect, useState } from 'react'
 import { collection, getDocs, deleteDoc, doc } from 'firebase/firestore'
 import { db } from '../../lib/firebase'
 import {
-  useRequireRole, createAccount,
+  useRequireRole, createAccount, updateAccountAccess,
   ROLE_LABELS, ROLE_COLORS, type Role,
 } from '../../lib/adminAuth'
 import { logActivity } from '../../lib/activityLog'
+import { BRANCHES, resolveBranchName } from '../../lib/branches'
 
 interface Account {
   id: string
   email: string
   role: Role
+  branchIds: string[]
 }
 
 const ROLES: Role[] = ['admin', 'manager', 'social', 'gamer', 'dungeonmaster']
 
-const EMPTY = { email: '', password: '', role: 'manager' as Role }
+const EMPTY = { email: '', password: '', role: 'manager' as Role, branchIds: [] as string[] }
+
+// Reads either the new `branchIds` array or the older singular `branchId`
+// from accounts created before multi-branch support existed.
+function normalizeBranchIds(data: { branchIds?: unknown; branchId?: unknown }): string[] {
+  if (Array.isArray(data.branchIds)) return data.branchIds as string[]
+  return data.branchId ? [data.branchId as string] : []
+}
 
 function useIsMobile(breakpoint = 768) {
   const [isMobile, setIsMobile] = useState(false)
@@ -36,22 +45,41 @@ export default function AdminUsersPage() {
   const [accounts, setAccounts] = useState<Account[]>([])
   const [loading, setLoading]   = useState(true)
   const [open, setOpen]         = useState(false)
+  const [editing, setEditing]   = useState<Account | null>(null)
   const [form, setForm]         = useState({ ...EMPTY })
   const [saving, setSaving]     = useState(false)
   const [error, setError]       = useState('')
 
   async function loadAccounts() {
     const snap = await getDocs(collection(db, 'adminUsers'))
-    setAccounts(snap.docs.map(d => ({ id: d.id, ...d.data() } as Account)))
+    setAccounts(snap.docs.map(d => {
+      const data = d.data()
+      return { id: d.id, email: data.email, role: data.role, branchIds: normalizeBranchIds(data) } as Account
+    }))
     setLoading(false)
   }
 
   useEffect(() => { loadAccounts() }, [])
 
   function openNew() {
+    setEditing(null)
     setForm({ ...EMPTY })
     setError('')
     setOpen(true)
+  }
+
+  function openEdit(account: Account) {
+    setEditing(account)
+    setForm({ email: account.email, password: '', role: account.role, branchIds: account.branchIds })
+    setError('')
+    setOpen(true)
+  }
+
+  function toggleBranch(branch: string) {
+    setForm(f => ({
+      ...f,
+      branchIds: f.branchIds.includes(branch) ? f.branchIds.filter(b => b !== branch) : [...f.branchIds, branch],
+    }))
   }
 
   async function handleSave(e: React.FormEvent) {
@@ -59,11 +87,21 @@ export default function AdminUsersPage() {
     setSaving(true)
     setError('')
     try {
-      await createAccount(form.email.trim(), form.password, form.role)
+      const branchIds = form.role === 'manager' ? form.branchIds : []
+      if (editing) {
+        await updateAccountAccess(
+          editing.id,
+          editing.email,
+          { role: editing.role, branchIds: editing.branchIds },
+          { role: form.role, branchIds }
+        )
+      } else {
+        await createAccount(form.email.trim(), form.password, form.role, branchIds)
+      }
       setOpen(false)
       loadAccounts()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not create account.')
+      setError(err instanceof Error ? err.message : 'Could not save account.')
     } finally {
       setSaving(false)
     }
@@ -74,6 +112,11 @@ export default function AdminUsersPage() {
     await deleteDoc(doc(db, 'adminUsers', account.id))
     await logActivity('delete', 'User Account', `${account.email} (${account.role})`)
     loadAccounts()
+  }
+
+  function branchSummary(account: Account): string {
+    if (account.role !== 'manager') return '—'
+    return account.branchIds.length > 0 ? account.branchIds.map(resolveBranchName).join(', ') : '— unassigned —'
   }
 
   const inputStyle = {
@@ -150,24 +193,89 @@ export default function AdminUsersPage() {
           lineHeight: 1.6,
         }}>
           Admin and Manager can access every section below. Social Media is limited to Events, Gamer is limited to Games,
-          and Dungeon Master is limited to D&amp;D Campaigns. Only Admin can create accounts.
+          and Dungeon Master is limited to D&amp;D Campaigns. Only Admin can create or edit accounts. Managers can be
+          assigned one or more branches — they only see loyalty data for their assigned branches.
         </p>
 
         {/* Table */}
         {loading ? (
           <p style={{ color: 'rgba(245,242,236,0.3)', fontFamily: 'var(--font-inter)' }}>Loading…</p>
+        ) : isMobile ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+            {accounts.map(account => (
+              <div key={account.id} style={{
+                background: 'rgba(255,255,255,0.02)',
+                border: '1px solid rgba(255,255,255,0.06)',
+                borderRadius: '4px',
+                padding: '1rem 1.2rem',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.6rem',
+              }}>
+                <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.85rem', color: 'var(--offwhite)', wordBreak: 'break-word' }}>
+                  {account.email}
+                  {account.id === user?.uid && (
+                    <span style={{ color: 'rgba(245,242,236,0.3)', marginLeft: '0.5rem' }}>(you)</span>
+                  )}
+                </p>
+                <span style={{
+                  fontSize: '0.7rem',
+                  padding: '0.25rem 0.7rem',
+                  borderRadius: '2px',
+                  backgroundColor: `${ROLE_COLORS[account.role]}25`,
+                  color: ROLE_COLORS[account.role],
+                  fontFamily: 'var(--font-inter)',
+                  letterSpacing: '0.05em',
+                  width: 'fit-content',
+                }}>{ROLE_LABELS[account.role] ?? account.role}</span>
+                {account.role === 'manager' && (
+                  <p style={{ fontSize: '0.75rem', color: 'rgba(245,242,236,0.4)', fontFamily: 'var(--font-inter)' }}>
+                    Branches: {branchSummary(account)}
+                  </p>
+                )}
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <button
+                    onClick={() => openEdit(account)}
+                    style={{
+                      flex: 1,
+                      background: 'transparent',
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      color: 'rgba(245,242,236,0.6)',
+                      padding: '0.6rem 0.8rem',
+                      borderRadius: '2px',
+                      fontSize: '0.72rem',
+                      cursor: 'pointer',
+                      fontFamily: 'var(--font-inter)',
+                    }}>Edit</button>
+                  <button
+                    onClick={() => handleRevoke(account)}
+                    disabled={account.id === user?.uid}
+                    style={{
+                      flex: 1,
+                      background: 'transparent',
+                      border: '1px solid rgba(228,51,41,0.3)',
+                      color: account.id === user?.uid ? 'rgba(228,51,41,0.25)' : 'var(--red)',
+                      padding: '0.6rem 0.8rem',
+                      borderRadius: '2px',
+                      fontSize: '0.72rem',
+                      cursor: account.id === user?.uid ? 'not-allowed' : 'pointer',
+                      fontFamily: 'var(--font-inter)',
+                    }}>Revoke Access</button>
+                </div>
+              </div>
+            ))}
+          </div>
         ) : (
           <div style={{
             background: 'rgba(255,255,255,0.02)',
             border: '1px solid rgba(255,255,255,0.06)',
             borderRadius: '4px',
             overflow: 'hidden',
-            overflowX: 'auto',
           }}>
-            <table style={{ width: '100%', minWidth: isMobile ? '500px' : undefined, borderCollapse: 'collapse' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                  {['Email', 'Role', 'Actions'].map(h => (
+                  {['Email', 'Role', 'Branches', 'Actions'].map(h => (
                     <th key={h} style={{
                       padding: '1rem 1.2rem',
                       textAlign: 'left',
@@ -201,20 +309,37 @@ export default function AdminUsersPage() {
                         letterSpacing: '0.05em',
                       }}>{ROLE_LABELS[account.role] ?? account.role}</span>
                     </td>
+                    <td style={{ padding: '1rem 1.2rem', fontFamily: 'var(--font-inter)', fontSize: '0.82rem', color: 'rgba(245,242,236,0.5)' }}>
+                      {branchSummary(account)}
+                    </td>
                     <td style={{ padding: '1rem 1.2rem' }}>
-                      <button
-                        onClick={() => handleRevoke(account)}
-                        disabled={account.id === user?.uid}
-                        style={{
-                          background: 'transparent',
-                          border: '1px solid rgba(228,51,41,0.3)',
-                          color: account.id === user?.uid ? 'rgba(228,51,41,0.25)' : 'var(--red)',
-                          padding: '0.4rem 0.8rem',
-                          borderRadius: '2px',
-                          fontSize: '0.7rem',
-                          cursor: account.id === user?.uid ? 'not-allowed' : 'pointer',
-                          fontFamily: 'var(--font-inter)',
-                        }}>Revoke Access</button>
+                      <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <button
+                          onClick={() => openEdit(account)}
+                          style={{
+                            background: 'transparent',
+                            border: '1px solid rgba(255,255,255,0.1)',
+                            color: 'rgba(245,242,236,0.6)',
+                            padding: '0.4rem 0.8rem',
+                            borderRadius: '2px',
+                            fontSize: '0.7rem',
+                            cursor: 'pointer',
+                            fontFamily: 'var(--font-inter)',
+                          }}>Edit</button>
+                        <button
+                          onClick={() => handleRevoke(account)}
+                          disabled={account.id === user?.uid}
+                          style={{
+                            background: 'transparent',
+                            border: '1px solid rgba(228,51,41,0.3)',
+                            color: account.id === user?.uid ? 'rgba(228,51,41,0.25)' : 'var(--red)',
+                            padding: '0.4rem 0.8rem',
+                            borderRadius: '2px',
+                            fontSize: '0.7rem',
+                            cursor: account.id === user?.uid ? 'not-allowed' : 'pointer',
+                            fontFamily: 'var(--font-inter)',
+                          }}>Revoke Access</button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -224,7 +349,7 @@ export default function AdminUsersPage() {
         )}
       </div>
 
-      {/* Add Account Modal */}
+      {/* Add/Edit Account Modal */}
       {open && (
         <div style={{
           position: 'fixed', inset: 0,
@@ -252,7 +377,7 @@ export default function AdminUsersPage() {
               borderBottom: '1px solid rgba(255,255,255,0.06)',
             }}>
               <h2 style={{ fontFamily: 'var(--font-cinzel)', fontSize: '1.2rem', color: 'var(--offwhite)' }}>
-                Add New Account
+                {editing ? 'Edit Account' : 'Add New Account'}
               </h2>
               <button onClick={() => setOpen(false)} style={{
                 background: 'transparent', border: 'none',
@@ -263,17 +388,23 @@ export default function AdminUsersPage() {
             <form onSubmit={handleSave} style={{ padding: isMobile ? '1.5rem' : '2rem', display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
               <div>
                 <label style={labelStyle}>Email</label>
-                <input type="email" value={form.email} required
-                  onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-                  style={inputStyle} />
+                {editing ? (
+                  <p style={{ ...inputStyle, color: 'rgba(245,242,236,0.5)' }}>{form.email}</p>
+                ) : (
+                  <input type="email" value={form.email} required
+                    onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+                    style={inputStyle} />
+                )}
               </div>
 
-              <div>
-                <label style={labelStyle}>Password</label>
-                <input type="password" value={form.password} required minLength={6}
-                  onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
-                  style={inputStyle} />
-              </div>
+              {!editing && (
+                <div>
+                  <label style={labelStyle}>Password</label>
+                  <input type="password" value={form.password} required minLength={6}
+                    onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
+                    style={inputStyle} />
+                </div>
+              )}
 
               <div>
                 <label style={{ ...labelStyle, marginBottom: '0.8rem' }}>Access Level</label>
@@ -301,6 +432,50 @@ export default function AdminUsersPage() {
                 </div>
               </div>
 
+              {form.role === 'manager' && (
+                <div>
+                  <label style={{ ...labelStyle, marginBottom: '0.8rem' }}>Branches</label>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    {BRANCHES.map(b => {
+                      const checked = form.branchIds.includes(b)
+                      return (
+                        <button key={b} type="button"
+                          onClick={() => toggleBranch(b)}
+                          style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            backgroundColor: checked ? 'rgba(0,160,152,0.12)' : 'transparent',
+                            border: `1px solid ${checked ? 'var(--teal)' : 'rgba(255,255,255,0.1)'}`,
+                            color: checked ? 'var(--teal)' : 'rgba(245,242,236,0.5)',
+                            padding: '0.6rem 1rem',
+                            borderRadius: '2px',
+                            fontSize: '0.82rem',
+                            cursor: 'pointer',
+                            fontFamily: 'var(--font-inter)',
+                            textAlign: 'left',
+                          }}>
+                          <span>{b}</span>
+                          <span style={{
+                            width: '16px', height: '16px',
+                            borderRadius: '3px',
+                            border: `1px solid ${checked ? 'var(--teal)' : 'rgba(255,255,255,0.2)'}`,
+                            backgroundColor: checked ? 'var(--teal)' : 'transparent',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: '0.65rem',
+                            color: '#fff',
+                            flexShrink: 0,
+                          }}>{checked ? '✓' : ''}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                  <p style={{ fontSize: '0.72rem', color: 'rgba(245,242,236,0.3)', fontFamily: 'var(--font-inter)', marginTop: '0.5rem' }}>
+                    Managers only see loyalty data for their assigned branches. Multiple branches can be assigned.
+                  </p>
+                </div>
+              )}
+
               {error && (
                 <p style={{ color: 'var(--red)', fontSize: '0.78rem', fontFamily: 'var(--font-inter)' }}>{error}</p>
               )}
@@ -319,7 +494,7 @@ export default function AdminUsersPage() {
                   borderRadius: '2px', fontSize: '0.75rem',
                   cursor: saving ? 'not-allowed' : 'pointer',
                   opacity: saving ? 0.6 : 1, fontFamily: 'var(--font-inter)',
-                }}>{saving ? 'Creating…' : 'Create Account'}</button>
+                }}>{saving ? 'Saving…' : editing ? 'Save Changes' : 'Create Account'}</button>
               </div>
             </form>
           </div>
