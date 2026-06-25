@@ -16,8 +16,25 @@ function useIsMobile(breakpoint = 768) {
   return isMobile
 }
 
+function FooterLink({ label, href }: { label: string; href: string }) {
+  const [hovered, setHovered] = useState(false)
+  return (
+    <a href={href}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        fontSize: '0.82rem',
+        color: hovered ? 'var(--teal)' : 'rgba(245,242,236,0.5)',
+        textDecoration: 'none',
+        fontFamily: 'var(--font-inter)',
+        transition: 'color 0.2s ease',
+      }}>{label}</a>
+  )
+}
+
 export default function Footer() {
   const isMobile = useIsMobile()
+  const [hoveredSocial, setHoveredSocial] = useState<number | null>(null)
 
   return (
     <footer style={{
@@ -77,12 +94,7 @@ export default function Footer() {
                 { label: 'Loyalty',      href: '/loyalty' },
               ].map(({ label, href }) => (
                 <li key={label}>
-                  <a href={href} style={{
-                    fontSize: '0.82rem',
-                    color: 'rgba(245,242,236,0.5)',
-                    textDecoration: 'none',
-                    fontFamily: 'var(--font-inter)',
-                  }}>{label}</a>
+                  <FooterLink label={label} href={href} />
                 </li>
               ))}
             </ul>
@@ -101,12 +113,7 @@ export default function Footer() {
             <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '0.7rem' }}>
               {['Beirut', 'Zouk', 'Broummana'].map(branch => (
                 <li key={branch}>
-                  <a href="#branches" style={{
-                    fontSize: '0.82rem',
-                    color: 'rgba(245,242,236,0.5)',
-                    textDecoration: 'none',
-                    fontFamily: 'var(--font-inter)',
-                  }}>{branch}</a>
+                  <FooterLink label={branch} href="#branches" />
                 </li>
               ))}
             </ul>
@@ -127,20 +134,29 @@ export default function Footer() {
                 { icon: faInstagram, href: '#' },
                 { icon: faFacebook,  href: '#' },
                 { icon: faWhatsapp,  href: '#' },
-              ].map(({ icon, href }, i) => (
-                <a key={i} href={href} style={{
-                  width: '36px',
-                  height: '36px',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  borderRadius: '50%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: 'rgba(245,242,236,0.4)',
-                }}>
-                  <FontAwesomeIcon icon={icon} style={{ width: '16px' }} />
-                </a>
-              ))}
+              ].map(({ icon, href }, i) => {
+                const hovered = hoveredSocial === i
+                return (
+                  <a key={i} href={href}
+                    onMouseEnter={() => setHoveredSocial(i)}
+                    onMouseLeave={() => setHoveredSocial(null)}
+                    style={{
+                      width: '36px',
+                      height: '36px',
+                      border: `1px solid ${hovered ? 'var(--teal)' : 'rgba(255,255,255,0.1)'}`,
+                      backgroundColor: hovered ? 'rgba(0,160,152,0.12)' : 'transparent',
+                      borderRadius: '50%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: hovered ? 'var(--teal)' : 'rgba(245,242,236,0.4)',
+                      transform: hovered ? 'translateY(-3px)' : 'none',
+                      transition: 'all 0.25s ease',
+                    }}>
+                    <FontAwesomeIcon icon={icon} style={{ width: '16px' }} />
+                  </a>
+                )
+              })}
             </div>
           </div>
 

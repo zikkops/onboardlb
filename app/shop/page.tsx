@@ -51,21 +51,26 @@ function FilterSection({
   children: React.ReactNode
   maxHeight?: string
 }) {
+  const [hovered, setHovered] = useState(false)
   return (
     <div>
-      <button onClick={onToggle} style={{
-        width: '100%',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: '0.5rem',
-        background: 'transparent',
-        border: 'none',
-        borderBottom: '1px solid rgba(255,255,255,0.06)',
-        padding: '0 0 0.8rem',
-        marginBottom: collapsed ? '0' : '0.8rem',
-        cursor: 'pointer',
-      }}>
+      <button onClick={onToggle}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        style={{
+          width: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '0.5rem',
+          background: 'transparent',
+          border: 'none',
+          borderBottom: `1px solid ${hovered ? 'rgba(106,106,183,0.4)' : 'rgba(255,255,255,0.06)'}`,
+          padding: '0 0 0.8rem',
+          marginBottom: collapsed ? '0' : '0.8rem',
+          cursor: 'pointer',
+          transition: 'border-color 0.2s ease',
+        }}>
         <span style={{
           display: 'flex',
           alignItems: 'center',
@@ -73,8 +78,9 @@ function FilterSection({
           fontSize: '0.65rem',
           letterSpacing: '0.2em',
           textTransform: 'uppercase',
-          color: 'rgba(245,242,236,0.3)',
+          color: hovered ? 'rgba(245,242,236,0.6)' : 'rgba(245,242,236,0.3)',
           fontFamily: 'var(--font-inter)',
+          transition: 'color 0.2s ease',
         }}>
           {icon && <FontAwesomeIcon icon={icon} style={{ width: '12px' }} />}
           {title}
@@ -110,6 +116,12 @@ export default function ShopPage() {
   const [maxPlayers, setMaxPlayers] = useState<number>(10)
   const isMobile = useIsMobile()
   const [filtersOpen, setFiltersOpen] = useState(false)
+  const [hoveredCat, setHoveredCat] = useState<string | null>(null)
+  const [hoveredQuick, setHoveredQuick] = useState<string | null>(null)
+  const [resetHovered, setResetHovered] = useState(false)
+  const [mobileSearchHovered, setMobileSearchHovered] = useState(false)
+  const [filterTabHovered, setFilterTabHovered] = useState(false)
+  const [closeFiltersHovered, setCloseFiltersHovered] = useState(false)
   const [collapsedFilters, setCollapsedFilters] = useState<Record<string, boolean>>({
     search: true,
     category: true,
@@ -228,25 +240,32 @@ export default function ShopPage() {
           WebkitBackdropFilter: 'blur(10px)',
           border: '1px solid rgba(106,106,183,0.25)',
         }}>
-          {CATEGORIES.map(cat => (
-            <button key={cat} onClick={() => setFilter(cat)} style={{
-              display: 'flex',
-              alignItems: 'center',
-              backgroundColor: 'transparent',
-              border: 'none',
-              borderLeft: `2px solid ${filter === cat ? 'var(--purple)' : 'transparent'}`,
-              color: filter === cat ? 'var(--offwhite)' : 'rgba(245,242,236,0.55)',
-              padding: '0.5rem 0.8rem',
-              fontSize: '0.82rem',
-              cursor: 'pointer',
-              fontFamily: 'var(--font-inter)',
-              textAlign: 'left',
-              transition: 'all 0.2s',
-              borderRadius: '0 4px 4px 0',
-              background: filter === cat ? 'rgba(106,106,183,0.25)' : 'transparent',
-              flexShrink: 0,
-            }}>{cat}</button>
-          ))}
+          {CATEGORIES.map(cat => {
+            const active = filter === cat
+            const hov = hoveredCat === cat
+            return (
+              <button key={cat} onClick={() => setFilter(cat)}
+                onMouseEnter={() => setHoveredCat(cat)}
+                onMouseLeave={() => setHoveredCat(null)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  backgroundColor: 'transparent',
+                  border: 'none',
+                  borderLeft: `2px solid ${active ? 'var(--purple)' : hov ? 'rgba(106,106,183,0.5)' : 'transparent'}`,
+                  color: active ? 'var(--offwhite)' : hov ? 'var(--offwhite)' : 'rgba(245,242,236,0.55)',
+                  padding: '0.5rem 0.8rem',
+                  fontSize: '0.82rem',
+                  cursor: 'pointer',
+                  fontFamily: 'var(--font-inter)',
+                  textAlign: 'left',
+                  transition: 'all 0.2s',
+                  borderRadius: '0 4px 4px 0',
+                  background: active ? 'rgba(106,106,183,0.25)' : hov ? 'rgba(106,106,183,0.12)' : 'transparent',
+                  flexShrink: 0,
+                }}>{cat}</button>
+            )
+          })}
         </div>
       </FilterSection>
 
@@ -374,29 +393,29 @@ export default function ShopPage() {
             { label: '2–4',     min: 2, max: 4 },
             { label: '4+',      min: 4, max: 10 },
             { label: 'Any',     min: 1, max: 10 },
-          ].map(({ label, min, max }) => (
-            <button
-              key={label}
-              onClick={() => { setMinPlayers(min); setMaxPlayers(max) }}
-              style={{
-                backgroundColor: minPlayers === min && maxPlayers === max
-                  ? 'var(--purple)'
-                  : 'transparent',
-                border: `1px solid ${minPlayers === min && maxPlayers === max
-                  ? 'var(--purple)'
-                  : 'rgba(255,255,255,0.1)'}`,
-                color: minPlayers === min && maxPlayers === max
-                  ? '#fff'
-                  : 'rgba(245,242,236,0.4)',
-                padding: '0.3rem 0.6rem',
-                borderRadius: '2px',
-                fontSize: '0.7rem',
-                cursor: 'pointer',
-                fontFamily: 'var(--font-inter)',
-                transition: 'all 0.2s',
-              }}
-            >{label}</button>
-          ))}
+          ].map(({ label, min, max }) => {
+            const active = minPlayers === min && maxPlayers === max
+            const hov = hoveredQuick === label
+            return (
+              <button
+                key={label}
+                onClick={() => { setMinPlayers(min); setMaxPlayers(max) }}
+                onMouseEnter={() => setHoveredQuick(label)}
+                onMouseLeave={() => setHoveredQuick(null)}
+                style={{
+                  backgroundColor: active ? 'var(--purple)' : hov ? 'rgba(106,106,183,0.15)' : 'transparent',
+                  border: `1px solid ${active || hov ? 'var(--purple)' : 'rgba(255,255,255,0.1)'}`,
+                  color: active ? '#fff' : hov ? 'var(--offwhite)' : 'rgba(245,242,236,0.4)',
+                  padding: '0.3rem 0.6rem',
+                  borderRadius: '2px',
+                  fontSize: '0.7rem',
+                  cursor: 'pointer',
+                  fontFamily: 'var(--font-inter)',
+                  transition: 'all 0.2s',
+                }}
+              >{label}</button>
+            )
+          })}
         </div>
       </FilterSection>
 
@@ -412,46 +431,55 @@ export default function ShopPage() {
         }}>
           <span style={{ color: 'var(--offwhite)', fontFamily: 'var(--font-cinzel)' }}>{filtered.length}</span> of {games.length} games
         </p>
-        <button onClick={reset} style={{
-          width: '100%',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '0.5rem',
-          background: 'transparent',
-          border: '1px solid rgba(255,255,255,0.1)',
-          color: 'rgba(245,242,236,0.4)',
-          padding: '0.6rem',
-          borderRadius: '4px',
-          fontSize: '0.72rem',
-          letterSpacing: '0.08em',
-          textTransform: 'uppercase',
-          cursor: 'pointer',
-          fontFamily: 'var(--font-inter)',
-        }}>
+        <button onClick={reset}
+          onMouseEnter={() => setResetHovered(true)}
+          onMouseLeave={() => setResetHovered(false)}
+          style={{
+            width: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '0.5rem',
+            background: resetHovered ? 'rgba(255,255,255,0.06)' : 'transparent',
+            border: `1px solid ${resetHovered ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.1)'}`,
+            color: resetHovered ? 'var(--offwhite)' : 'rgba(245,242,236,0.4)',
+            padding: '0.6rem',
+            borderRadius: '4px',
+            fontSize: '0.72rem',
+            letterSpacing: '0.08em',
+            textTransform: 'uppercase',
+            cursor: 'pointer',
+            fontFamily: 'var(--font-inter)',
+            transition: 'all 0.2s ease',
+          }}>
           <FontAwesomeIcon icon={faXmark} style={{ width: '12px' }} />
           Reset Filters
         </button>
 
         {isMobile && (
-          <button onClick={() => setFiltersOpen(false)} style={{
-            width: '100%',
-            marginTop: '0.6rem',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '0.5rem',
-            background: 'var(--purple)',
-            border: 'none',
-            color: '#fff',
-            padding: '0.8rem',
-            borderRadius: '4px',
-            fontSize: '0.78rem',
-            letterSpacing: '0.08em',
-            textTransform: 'uppercase',
-            cursor: 'pointer',
-            fontFamily: 'var(--font-inter)',
-          }}>
+          <button onClick={() => setFiltersOpen(false)}
+            onMouseEnter={() => setMobileSearchHovered(true)}
+            onMouseLeave={() => setMobileSearchHovered(false)}
+            style={{
+              width: '100%',
+              marginTop: '0.6rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.5rem',
+              background: mobileSearchHovered ? 'rgba(106,106,183,0.8)' : 'var(--purple)',
+              border: 'none',
+              color: '#fff',
+              padding: '0.8rem',
+              borderRadius: '4px',
+              fontSize: '0.78rem',
+              letterSpacing: '0.08em',
+              textTransform: 'uppercase',
+              cursor: 'pointer',
+              fontFamily: 'var(--font-inter)',
+              boxShadow: mobileSearchHovered ? '0 8px 16px rgba(106,106,183,0.4)' : 'none',
+              transition: 'all 0.2s ease',
+            }}>
             <FontAwesomeIcon icon={faSearch} style={{ width: '12px' }} />
             Search ({filtered.length})
           </button>
@@ -528,28 +556,32 @@ export default function ShopPage() {
 
           {/* Mobile filter tab — fixed, vertically centered on the left edge */}
           {isMobile && !filtersOpen && (
-            <button onClick={() => setFiltersOpen(true)} style={{
-              position: 'fixed',
-              left: 0,
-              top: '50%',
-              transform: 'translateY(-50%)',
-              zIndex: 60,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: '0.4rem',
-              background: 'var(--purple)',
-              border: 'none',
-              color: '#fff',
-              padding: '1rem 0.6rem',
-              borderRadius: '0 6px 6px 0',
-              fontSize: '0.65rem',
-              letterSpacing: '0.08em',
-              textTransform: 'uppercase',
-              cursor: 'pointer',
-              fontFamily: 'var(--font-inter)',
-              boxShadow: '4px 0 12px rgba(0,0,0,0.4)',
-            }}>
+            <button onClick={() => setFiltersOpen(true)}
+              onMouseEnter={() => setFilterTabHovered(true)}
+              onMouseLeave={() => setFilterTabHovered(false)}
+              style={{
+                position: 'fixed',
+                left: 0,
+                top: '50%',
+                transform: filterTabHovered ? 'translateY(-50%) translateX(3px)' : 'translateY(-50%)',
+                zIndex: 60,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '0.4rem',
+                background: filterTabHovered ? 'rgba(106,106,183,0.85)' : 'var(--purple)',
+                border: 'none',
+                color: '#fff',
+                padding: '1rem 0.6rem',
+                borderRadius: '0 6px 6px 0',
+                fontSize: '0.65rem',
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase',
+                cursor: 'pointer',
+                fontFamily: 'var(--font-inter)',
+                boxShadow: filterTabHovered ? '6px 0 16px rgba(0,0,0,0.5)' : '4px 0 12px rgba(0,0,0,0.4)',
+                transition: 'all 0.2s ease',
+              }}>
               <FontAwesomeIcon icon={faSliders} style={{ width: '13px' }} />
               Filters
             </button>
@@ -602,20 +634,25 @@ export default function ShopPage() {
                   fontSize: '1rem',
                   color: 'var(--offwhite)',
                 }}>Filters</p>
-                <button onClick={() => setFiltersOpen(false)} aria-label="Close filters" style={{
-                  background: 'transparent',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  color: 'rgba(245,242,236,0.6)',
-                  width: '32px',
-                  height: '32px',
-                  borderRadius: '50%',
-                  cursor: 'pointer',
-                  fontSize: '1rem',
-                  lineHeight: 1,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}>
+                <button onClick={() => setFiltersOpen(false)} aria-label="Close filters"
+                  onMouseEnter={() => setCloseFiltersHovered(true)}
+                  onMouseLeave={() => setCloseFiltersHovered(false)}
+                  style={{
+                    background: closeFiltersHovered ? 'rgba(255,255,255,0.08)' : 'transparent',
+                    border: `1px solid ${closeFiltersHovered ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.1)'}`,
+                    color: closeFiltersHovered ? 'var(--offwhite)' : 'rgba(245,242,236,0.6)',
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: '50%',
+                    cursor: 'pointer',
+                    fontSize: '1rem',
+                    lineHeight: 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    transform: closeFiltersHovered ? 'rotate(90deg)' : 'none',
+                    transition: 'all 0.25s ease',
+                  }}>
                   <FontAwesomeIcon icon={faXmark} />
                 </button>
               </div>

@@ -6,6 +6,7 @@ import { db } from '../lib/firebase'
 import Navbar from '../components/layout/Navbar'
 import Footer from '../components/layout/Footer'
 import Skeleton from '../components/Skeleton'
+import EventReservationModal from '../components/events/EventReservationModal'
 
 interface GameEvent {
   id: string
@@ -40,6 +41,224 @@ function useIsMobile(breakpoint = 768) {
   return isMobile
 }
 
+// Top-level (not nested inside EventsPage) so its identity is stable across
+// renders — a function declared inside another component's body is recreated
+// every render, which makes React treat every <EventCard> as a brand-new
+// component type and fully unmount+remount the DOM instead of updating
+// styles. That remount was silently killing the CSS hover transition (a
+// freshly mounted node has no "previous" state to animate from), which is
+// why the lift/shadow/zoom looked chunky no matter how the transition itself
+// was tuned.
+function EventCard({ ev, dimmed = false, isMobile, hoveredEventId, onHover, onSelect }: {
+  ev: GameEvent
+  dimmed?: boolean
+  isMobile: boolean
+  hoveredEventId: string | null
+  onHover: (id: string | null) => void
+  onSelect: (ev: GameEvent) => void
+}) {
+  const d = new Date(ev.date)
+  const hovered = !dimmed && hoveredEventId === ev.id
+  return (
+    <div
+      onClick={() => onSelect(ev)}
+      onMouseEnter={() => onHover(ev.id)}
+      onMouseLeave={() => onHover(null)}
+      style={{
+        // box-shadow lives on this outer, overflow-visible wrapper — a
+        // child with `overflow: hidden` clips its own outer box-shadow,
+        // which made the glow get cut off at the border instead of
+        // rendering smoothly. Only transform/shadow animate here; the
+        // border-radius clipping happens one level down.
+        borderRadius: '4px',
+        cursor: 'pointer',
+        opacity: dimmed ? 0.6 : 1,
+        transform: hovered ? 'translateY(-6px)' : 'translateY(0)',
+        boxShadow: hovered ? '0 16px 28px rgba(0,0,0,0.35)' : '0 0px 0px rgba(0,0,0,0)',
+        transition: 'transform 0.45s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.45s cubic-bezier(0.16, 1, 0.3, 1)',
+      }}
+    >
+    <div style={{
+      border: `1px solid ${hovered ? 'rgba(106,106,183,0.6)' : dimmed ? 'rgba(255,255,255,0.04)' : 'rgba(106,106,183,0.2)'}`,
+      borderRadius: '4px',
+      overflow: 'hidden',
+      display: 'flex',
+      flexDirection: 'column',
+      transition: 'border-color 0.45s cubic-bezier(0.16, 1, 0.3, 1)',
+    }}>
+      {/* Image — landscape 16:9 on both mobile and desktop */}
+      <div style={{
+        position: 'relative',
+        width: '100%',
+        paddingTop: '56.25%',
+        overflow: 'hidden',
+        flexShrink: 0,
+      }}>
+        {ev.image ? (
+          <div style={{
+            position: 'absolute', inset: 0,
+            backgroundImage: `url(${ev.image})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            filter: dimmed ? 'grayscale(60%)' : 'none',
+            transform: hovered ? 'scale(1.08)' : 'scale(1)',
+            transition: 'transform 0.45s cubic-bezier(0.16, 1, 0.3, 1)',
+          }}>
+            {dimmed && (
+              <div style={{
+                position: 'absolute',
+                top: '0.8rem', right: '0.8rem',
+                backgroundColor: 'rgba(0,0,0,0.7)',
+                color: 'rgba(245,242,236,0.5)',
+                padding: '0.25rem 0.7rem',
+                borderRadius: '2px',
+                fontSize: '0.65rem',
+                letterSpacing: '0.1em',
+                textTransform: 'uppercase',
+                fontFamily: 'var(--font-inter)',
+              }}>Completed</div>
+            )}
+          </div>
+        ) : (
+          <div style={{
+            position: 'absolute', inset: 0,
+            background: dimmed ? 'rgba(255,255,255,0.02)' : 'rgba(50,50,124,0.2)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}>
+            <span style={{
+              fontFamily: 'var(--font-cinzel)',
+              fontSize: isMobile ? '1.8rem' : '3rem',
+              color: dimmed ? 'rgba(255,255,255,0.08)' : 'rgba(106,106,183,0.4)',
+            }}>{d.getDate()}</span>
+            {dimmed && (
+              <div style={{
+                position: 'absolute',
+                top: '0.8rem', right: '0.8rem',
+                backgroundColor: 'rgba(0,0,0,0.7)',
+                color: 'rgba(245,242,236,0.5)',
+                padding: '0.25rem 0.7rem',
+                borderRadius: '2px',
+                fontSize: '0.65rem',
+                letterSpacing: '0.1em',
+                textTransform: 'uppercase',
+                fontFamily: 'var(--font-inter)',
+              }}>Completed</div>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div style={{ padding: isMobile ? '1rem' : '1.5rem', flex: 1, display: 'flex', flexDirection: 'column' }}>
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: isMobile ? '0.5rem' : '0.8rem',
+        }}>
+          <div>
+            <p style={{
+              fontFamily: 'var(--font-cinzel)',
+              fontSize: isMobile ? '1.3rem' : '1.8rem',
+              color: 'var(--offwhite)',
+              lineHeight: 1,
+            }}>{d.getDate()}</p>
+            <p style={{
+              fontFamily: 'var(--font-inter)',
+              fontSize: '0.62rem',
+              color: 'rgba(245,242,236,0.35)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.1em',
+              marginTop: '0.2rem',
+            }}>
+              {d.toLocaleString('en', { month: 'long', year: 'numeric' })}
+            </p>
+          </div>
+          <span style={{
+            fontSize: isMobile ? '0.6rem' : '0.65rem',
+            padding: isMobile ? '0.2rem 0.5rem' : '0.25rem 0.7rem',
+            borderRadius: '2px',
+            backgroundColor: dimmed ? 'rgba(255,255,255,0.05)' : 'rgba(106,106,183,0.15)',
+            color: dimmed ? 'rgba(245,242,236,0.3)' : 'var(--purple)',
+            fontFamily: 'var(--font-inter)',
+            letterSpacing: '0.08em',
+            textTransform: 'uppercase',
+          }}>{ev.type}</span>
+        </div>
+
+        <h3 style={{
+          fontFamily: 'var(--font-cinzel)',
+          fontSize: isMobile ? '0.88rem' : '1rem',
+          color: 'var(--offwhite)',
+          marginBottom: isMobile ? '0.35rem' : '0.5rem',
+        }}>{ev.title}</h3>
+
+        {!isMobile && (
+          <p style={{
+            fontFamily: 'var(--font-inter)',
+            fontSize: '0.78rem',
+            color: 'rgba(245,242,236,0.4)',
+            lineHeight: 1.6,
+            marginBottom: '0.8rem',
+          }}>{truncate(ev.description, 10)}</p>
+        )}
+
+        <div style={{
+          display: 'flex',
+          gap: '0.6rem',
+          fontSize: isMobile ? '0.66rem' : '0.72rem',
+          color: 'rgba(245,242,236,0.4)',
+          fontFamily: 'var(--font-inter)',
+          marginBottom: '0.4rem',
+          flexWrap: 'wrap',
+        }}>
+          <span style={{ color: 'var(--teal)' }}>{ev.branch}</span>
+          <span>{ev.timeStart} – {ev.timeEnd}</span>
+        </div>
+
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          fontSize: isMobile ? '0.66rem' : '0.72rem',
+          fontFamily: 'var(--font-inter)',
+          color: 'rgba(245,242,236,0.4)',
+          marginTop: 'auto',
+          paddingTop: isMobile ? '0.6rem' : '0.8rem',
+          borderTop: '1px solid rgba(255,255,255,0.05)',
+        }}>
+          <span>👥 {ev.minPlayers}–{ev.maxPlayers} players</span>
+          <span style={{ color: dimmed ? 'rgba(245,242,236,0.3)' : 'var(--teal)' }}>
+            {ev.price === 0 ? 'Free' : `$${ev.price}/person`}
+          </span>
+        </div>
+
+        <button onClick={() => onSelect(ev)} style={{
+          display: 'block',
+          width: '100%',
+          textAlign: 'center',
+          background: 'transparent',
+          border: `1px solid ${hovered ? 'var(--purple)' : 'rgba(106,106,183,0.3)'}`,
+          color: hovered ? 'var(--purple)' : 'var(--offwhite)',
+          padding: '0.6rem',
+          borderRadius: '2px',
+          fontSize: '0.72rem',
+          letterSpacing: '0.1em',
+          textTransform: 'uppercase',
+          cursor: 'pointer',
+          fontFamily: 'var(--font-inter)',
+          marginTop: '0.8rem',
+          transition: 'border-color 0.45s cubic-bezier(0.16, 1, 0.3, 1), color 0.45s cubic-bezier(0.16, 1, 0.3, 1)',
+        }}>
+          {dimmed ? 'View Details' : 'Learn More'}
+        </button>
+      </div>
+    </div>
+    </div>
+  )
+}
+
 export default function EventsPage() {
   const [upcoming, setUpcoming]   = useState<GameEvent[]>([])
   const [completed, setCompleted] = useState<GameEvent[]>([])
@@ -47,6 +266,12 @@ export default function EventsPage() {
   const [filter, setFilter]       = useState('All')
   const [branches, setBranches]   = useState<string[]>([])
   const [selected, setSelected]   = useState<GameEvent | null>(null)
+  const [reserving, setReserving] = useState<GameEvent | null>(null)
+  const [hoveredEventId, setHoveredEventId] = useState<string | null>(null)
+  const [hoveredFilter, setHoveredFilter] = useState<string | null>(null)
+  const [closeHovered, setCloseHovered] = useState(false)
+  const [reserveHovered, setReserveHovered] = useState(false)
+  const [registerHovered, setRegisterHovered] = useState(false)
   const isMobile = useIsMobile()
 
   useEffect(() => {
@@ -70,178 +295,6 @@ export default function EventsPage() {
 
   const filteredUpcoming  = filter === 'All' ? upcoming  : upcoming.filter(e => e.branch === filter)
   const filteredCompleted = filter === 'All' ? completed : completed.filter(e => e.branch === filter)
-
-  function EventCard({ ev, dimmed = false }: { ev: GameEvent, dimmed?: boolean }) {
-    const d = new Date(ev.date)
-    return (
-      <div
-        onClick={() => setSelected(ev)}
-        style={{
-          border: `1px solid ${dimmed ? 'rgba(255,255,255,0.04)' : 'rgba(106,106,183,0.2)'}`,
-          borderRadius: '4px',
-          overflow: 'hidden',
-          opacity: dimmed ? 0.6 : 1,
-          display: 'flex',
-          flexDirection: 'column',
-          cursor: 'pointer',
-          transition: 'border-color 0.2s',
-        }}
-        onMouseEnter={e => {
-          if (!dimmed)(e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(106,106,183,0.5)'
-        }}
-        onMouseLeave={e => {
-          (e.currentTarget as HTMLDivElement).style.borderColor = dimmed ? 'rgba(255,255,255,0.04)' : 'rgba(106,106,183,0.2)'
-        }}
-      >
-        {/* Image — 4:5 ratio on desktop, shorter on mobile */}
-        <div style={{
-          position: 'relative',
-          width: '100%',
-          paddingTop: isMobile ? '55%' : '125%',
-          overflow: 'hidden',
-          flexShrink: 0,
-        }}>
-          {ev.image ? (
-            <div style={{
-              position: 'absolute', inset: 0,
-              backgroundImage: `url(${ev.image})`,
-              backgroundSize: 'cover',
-              backgroundPosition: 'center',
-              filter: dimmed ? 'grayscale(60%)' : 'none',
-            }}>
-              {dimmed && (
-                <div style={{
-                  position: 'absolute',
-                  top: '0.8rem', right: '0.8rem',
-                  backgroundColor: 'rgba(0,0,0,0.7)',
-                  color: 'rgba(245,242,236,0.5)',
-                  padding: '0.25rem 0.7rem',
-                  borderRadius: '2px',
-                  fontSize: '0.65rem',
-                  letterSpacing: '0.1em',
-                  textTransform: 'uppercase',
-                  fontFamily: 'var(--font-inter)',
-                }}>Completed</div>
-              )}
-            </div>
-          ) : (
-            <div style={{
-              position: 'absolute', inset: 0,
-              background: dimmed ? 'rgba(255,255,255,0.02)' : 'rgba(50,50,124,0.2)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}>
-              <span style={{
-                fontFamily: 'var(--font-cinzel)',
-                fontSize: isMobile ? '1.8rem' : '3rem',
-                color: dimmed ? 'rgba(255,255,255,0.08)' : 'rgba(106,106,183,0.4)',
-              }}>{d.getDate()}</span>
-              {dimmed && (
-                <div style={{
-                  position: 'absolute',
-                  top: '0.8rem', right: '0.8rem',
-                  backgroundColor: 'rgba(0,0,0,0.7)',
-                  color: 'rgba(245,242,236,0.5)',
-                  padding: '0.25rem 0.7rem',
-                  borderRadius: '2px',
-                  fontSize: '0.65rem',
-                  letterSpacing: '0.1em',
-                  textTransform: 'uppercase',
-                  fontFamily: 'var(--font-inter)',
-                }}>Completed</div>
-              )}
-            </div>
-          )}
-        </div>
-
-        <div style={{ padding: isMobile ? '1rem' : '1.5rem', flex: 1, display: 'flex', flexDirection: 'column' }}>
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: isMobile ? '0.5rem' : '0.8rem',
-          }}>
-            <div>
-              <p style={{
-                fontFamily: 'var(--font-cinzel)',
-                fontSize: isMobile ? '1.3rem' : '1.8rem',
-                color: 'var(--offwhite)',
-                lineHeight: 1,
-              }}>{d.getDate()}</p>
-              <p style={{
-                fontFamily: 'var(--font-inter)',
-                fontSize: '0.62rem',
-                color: 'rgba(245,242,236,0.35)',
-                textTransform: 'uppercase',
-                letterSpacing: '0.1em',
-                marginTop: '0.2rem',
-              }}>
-                {d.toLocaleString('en', { month: 'long', year: 'numeric' })}
-              </p>
-            </div>
-            <span style={{
-              fontSize: isMobile ? '0.6rem' : '0.65rem',
-              padding: isMobile ? '0.2rem 0.5rem' : '0.25rem 0.7rem',
-              borderRadius: '2px',
-              backgroundColor: dimmed ? 'rgba(255,255,255,0.05)' : 'rgba(106,106,183,0.15)',
-              color: dimmed ? 'rgba(245,242,236,0.3)' : 'var(--purple)',
-              fontFamily: 'var(--font-inter)',
-              letterSpacing: '0.08em',
-              textTransform: 'uppercase',
-            }}>{ev.type}</span>
-          </div>
-
-          <h3 style={{
-            fontFamily: 'var(--font-cinzel)',
-            fontSize: isMobile ? '0.88rem' : '1rem',
-            color: 'var(--offwhite)',
-            marginBottom: isMobile ? '0.35rem' : '0.5rem',
-          }}>{ev.title}</h3>
-
-          {!isMobile && (
-            <p style={{
-              fontFamily: 'var(--font-inter)',
-              fontSize: '0.78rem',
-              color: 'rgba(245,242,236,0.4)',
-              lineHeight: 1.6,
-              marginBottom: '0.8rem',
-            }}>{truncate(ev.description, 10)}</p>
-          )}
-
-          <div style={{
-            display: 'flex',
-            gap: '0.6rem',
-            fontSize: isMobile ? '0.66rem' : '0.72rem',
-            color: 'rgba(245,242,236,0.4)',
-            fontFamily: 'var(--font-inter)',
-            marginBottom: '0.4rem',
-            flexWrap: 'wrap',
-          }}>
-            <span style={{ color: 'var(--teal)' }}>{ev.branch}</span>
-            <span>{ev.timeStart} – {ev.timeEnd}</span>
-          </div>
-
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            fontSize: isMobile ? '0.66rem' : '0.72rem',
-            fontFamily: 'var(--font-inter)',
-            color: 'rgba(245,242,236,0.4)',
-            marginTop: 'auto',
-            paddingTop: isMobile ? '0.6rem' : '0.8rem',
-            borderTop: '1px solid rgba(255,255,255,0.05)',
-          }}>
-            <span>👥 {ev.minPlayers}–{ev.maxPlayers} players</span>
-            <span style={{ color: dimmed ? 'rgba(245,242,236,0.3)' : 'var(--teal)' }}>
-              {ev.price === 0 ? 'Free' : `$${ev.price}/person`}
-            </span>
-          </div>
-        </div>
-      </div>
-    )
-  }
 
   return (
     <>
@@ -290,19 +343,27 @@ export default function EventsPage() {
 
           {/* Branch Filter */}
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '4rem' }}>
-            {['All', ...branches].map(b => (
-              <button key={b} onClick={() => setFilter(b)} style={{
-                backgroundColor: filter === b ? 'var(--purple)' : 'transparent',
-                border: `1px solid ${filter === b ? 'var(--purple)' : 'rgba(255,255,255,0.1)'}`,
-                color: filter === b ? '#fff' : 'rgba(245,242,236,0.5)',
-                padding: '0.4rem 1.2rem',
-                borderRadius: '50px',
-                fontSize: '0.75rem',
-                letterSpacing: '0.08em',
-                cursor: 'pointer',
-                fontFamily: 'var(--font-inter)',
-              }}>{b}</button>
-            ))}
+            {['All', ...branches].map(b => {
+              const active = filter === b
+              const hov = hoveredFilter === b
+              return (
+                <button key={b} onClick={() => setFilter(b)}
+                  onMouseEnter={() => setHoveredFilter(b)}
+                  onMouseLeave={() => setHoveredFilter(null)}
+                  style={{
+                    backgroundColor: active ? 'var(--purple)' : hov ? 'rgba(106,106,183,0.15)' : 'transparent',
+                    border: `1px solid ${active || hov ? 'var(--purple)' : 'rgba(255,255,255,0.1)'}`,
+                    color: active ? '#fff' : hov ? 'var(--offwhite)' : 'rgba(245,242,236,0.5)',
+                    padding: '0.4rem 1.2rem',
+                    borderRadius: '50px',
+                    fontSize: '0.75rem',
+                    letterSpacing: '0.08em',
+                    cursor: 'pointer',
+                    fontFamily: 'var(--font-inter)',
+                    transition: 'all 0.2s ease',
+                  }}>{b}</button>
+              )
+            })}
           </div>
 
           {loading ? (
@@ -355,7 +416,9 @@ export default function EventsPage() {
                     gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)',
                     gap: isMobile ? '1.25rem' : '1.5rem',
                   }}>
-                    {filteredUpcoming.map(ev => <EventCard key={ev.id} ev={ev} />)}
+                    {filteredUpcoming.map(ev => (
+                      <EventCard key={ev.id} ev={ev} isMobile={isMobile} hoveredEventId={hoveredEventId} onHover={setHoveredEventId} onSelect={setSelected} />
+                    ))}
                   </div>
                 )}
               </div>
@@ -387,7 +450,9 @@ export default function EventsPage() {
                     gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)',
                     gap: isMobile ? '1.25rem' : '1.5rem',
                   }}>
-                    {filteredCompleted.map(ev => <EventCard key={ev.id} ev={ev} dimmed />)}
+                    {filteredCompleted.map(ev => (
+                      <EventCard key={ev.id} ev={ev} dimmed isMobile={isMobile} hoveredEventId={hoveredEventId} onHover={setHoveredEventId} onSelect={setSelected} />
+                    ))}
                   </div>
                 </div>
               )}
@@ -485,15 +550,20 @@ export default function EventsPage() {
             <div style={{ padding: isMobile ? '1.5rem' : '2.5rem' }}>
 
               {/* Close */}
-              <button onClick={() => setSelected(null)} style={{
-                float: 'right',
-                background: 'transparent',
-                border: 'none',
-                color: 'rgba(245,242,236,0.4)',
-                fontSize: '1.2rem',
-                cursor: 'pointer',
-                marginBottom: '1rem',
-              }}>✕</button>
+              <button onClick={() => setSelected(null)}
+                onMouseEnter={() => setCloseHovered(true)}
+                onMouseLeave={() => setCloseHovered(false)}
+                style={{
+                  float: 'right',
+                  background: 'transparent',
+                  border: 'none',
+                  color: closeHovered ? 'var(--offwhite)' : 'rgba(245,242,236,0.4)',
+                  fontSize: '1.2rem',
+                  cursor: 'pointer',
+                  marginBottom: '1rem',
+                  transform: closeHovered ? 'rotate(90deg)' : 'none',
+                  transition: 'all 0.25s ease',
+                }}>✕</button>
 
               {/* Type badge */}
               <span style={{
@@ -567,13 +637,52 @@ export default function EventsPage() {
 
               {/* CTAs */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                <button
+                  onClick={() => setReserving(selected)}
+                  onMouseEnter={() => setReserveHovered(true)}
+                  onMouseLeave={() => setReserveHovered(false)}
+                  style={{
+                    position: 'relative',
+                    overflow: 'hidden',
+                    display: 'block',
+                    width: '100%',
+                    textAlign: 'center',
+                    backgroundColor: reserveHovered ? 'rgba(106,106,183,0.15)' : 'var(--purple)',
+                    color: '#fff',
+                    border: '1px solid var(--purple)',
+                    padding: '0.9rem',
+                    borderRadius: '2px',
+                    fontSize: '0.78rem',
+                    letterSpacing: '0.12em',
+                    textTransform: 'uppercase',
+                    fontFamily: 'var(--font-inter)',
+                    cursor: 'pointer',
+                    backdropFilter: reserveHovered ? 'blur(10px)' : 'none',
+                    transition: 'all 0.3s ease',
+                  }}>
+                  <span style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: reserveHovered ? '120%' : '-60%',
+                    width: '40%',
+                    height: '100%',
+                    background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent)',
+                    transform: 'skewX(-20deg)',
+                    transition: 'left 0.5s ease',
+                    pointerEvents: 'none',
+                  }} />
+                  Reserve a Spot
+                </button>
                 {selected.registrationLink && (
                   <a href={selected.registrationLink} target="_blank" rel="noopener noreferrer"
+                    onMouseEnter={() => setRegisterHovered(true)}
+                    onMouseLeave={() => setRegisterHovered(false)}
                     style={{
                       display: 'block',
                       textAlign: 'center',
-                      backgroundColor: 'var(--purple)',
-                      color: '#fff',
+                      backgroundColor: registerHovered ? 'rgba(255,255,255,0.06)' : 'transparent',
+                      border: `1px solid ${registerHovered ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.15)'}`,
+                      color: registerHovered ? 'var(--offwhite)' : 'rgba(245,242,236,0.7)',
                       padding: '0.9rem',
                       borderRadius: '2px',
                       fontSize: '0.78rem',
@@ -581,32 +690,29 @@ export default function EventsPage() {
                       textTransform: 'uppercase',
                       textDecoration: 'none',
                       fontFamily: 'var(--font-inter)',
-                    }}>Register Now</a>
+                      transition: 'all 0.2s ease',
+                    }}>Register Externally</a>
                 )}
-                <a
-                  href={`https://wa.me/${(selected.contactNumber ?? '96181950042').replace(/\+/g, '')}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{
-                    display: 'block',
-                    textAlign: 'center',
-                    backgroundColor: 'var(--teal)',
-                    color: '#fff',
-                    padding: '0.9rem',
-                    borderRadius: '2px',
-                    fontSize: '0.78rem',
-                    letterSpacing: '0.12em',
-                    textTransform: 'uppercase',
-                    textDecoration: 'none',
-                    fontFamily: 'var(--font-inter)',
-                  }}
-                >
-                  Contact Us on WhatsApp
-                </a>
               </div>
             </div>
           </div>
         </div>
+      )}
+
+      {reserving && (
+        <EventReservationModal
+          event={{
+            id: reserving.id,
+            title: reserving.title,
+            date: reserving.date,
+            timeStart: reserving.timeStart,
+            timeEnd: reserving.timeEnd,
+            branch: reserving.branch,
+            minPlayers: reserving.minPlayers,
+            maxPlayers: reserving.maxPlayers,
+          }}
+          onClose={() => setReserving(null)}
+        />
       )}
     </>
   )

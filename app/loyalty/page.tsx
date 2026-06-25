@@ -116,6 +116,11 @@ export default function LoyaltyPage() {
   const isMobile = useIsMobile()
   const { items: redemptionItems, loading: loadingRedemptions } = useRedemptionItems(true)
   const [activeTier, setActiveTier] = useState<string>(TIERS[0].label)
+  const [hoveredTierBtn, setHoveredTierBtn] = useState<string | null>(null)
+  const [signInHovered, setSignInHovered] = useState(false)
+  const [profileLinkHovered, setProfileLinkHovered] = useState(false)
+  const [joinHovered, setJoinHovered] = useState(false)
+  const [leaderboardHovered, setLeaderboardHovered] = useState(false)
 
   const activeTierRange = TIERS.find(t => t.label === activeTier) ?? TIERS[0]
   const activeTierLevels = Array.from(
@@ -145,6 +150,7 @@ export default function LoyaltyPage() {
             alt="Onboard interior"
             fill
             priority
+            sizes="100vw"
             style={{ objectFit: 'cover', objectPosition: 'center' }}
           />
           <div style={{ position: 'absolute', inset: 0, background: 'rgba(5,5,5,0.82)' }} />
@@ -213,42 +219,63 @@ export default function LoyaltyPage() {
               justifyContent: 'center',
               alignItems: 'center',
             }}>
-              <Link href="/customer/login" style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '0.5rem',
-                backgroundColor: 'var(--teal)',
-                color: '#fff',
-                padding: '0.65rem 1.4rem',
-                borderRadius: '2px',
-                fontSize: '0.72rem',
-                letterSpacing: '0.08em',
-                textTransform: 'uppercase',
-                textDecoration: 'none',
-                fontFamily: 'var(--font-inter)',
-                width: isMobile ? '100%' : 'auto',
-              }}>
+              <Link href="/customer/login"
+                onMouseEnter={() => setSignInHovered(true)}
+                onMouseLeave={() => setSignInHovered(false)}
+                style={{
+                  position: 'relative',
+                  overflow: 'hidden',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.5rem',
+                  backgroundColor: signInHovered ? 'rgba(0,160,152,0.15)' : 'var(--teal)',
+                  color: '#fff',
+                  padding: '0.65rem 1.4rem',
+                  borderRadius: '2px',
+                  fontSize: '0.72rem',
+                  letterSpacing: '0.08em',
+                  textTransform: 'uppercase',
+                  textDecoration: 'none',
+                  fontFamily: 'var(--font-inter)',
+                  width: isMobile ? '100%' : 'auto',
+                  border: '1px solid var(--teal)',
+                  backdropFilter: signInHovered ? 'blur(10px)' : 'none',
+                  transition: 'all 0.3s ease',
+                }}>
+                <span style={{
+                  position: 'absolute', top: 0,
+                  left: signInHovered ? '120%' : '-60%',
+                  width: '40%', height: '100%',
+                  background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent)',
+                  transform: 'skewX(-20deg)',
+                  transition: 'left 0.5s ease',
+                  pointerEvents: 'none',
+                }} />
                 <FontAwesomeIcon icon={faGoogle} style={{ width: '12px' }} />
                 Sign In
               </Link>
 
-              <Link href="/customer/profile" style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: 'transparent',
-                border: '1px solid rgba(245,242,236,0.25)',
-                color: 'rgba(245,242,236,0.8)',
-                padding: '0.65rem 1.4rem',
-                borderRadius: '2px',
-                fontSize: '0.72rem',
-                letterSpacing: '0.08em',
-                textTransform: 'uppercase',
-                textDecoration: 'none',
-                fontFamily: 'var(--font-inter)',
-                width: isMobile ? '100%' : 'auto',
-              }}>
+              <Link href="/customer/profile"
+                onMouseEnter={() => setProfileLinkHovered(true)}
+                onMouseLeave={() => setProfileLinkHovered(false)}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: profileLinkHovered ? 'rgba(245,242,236,0.08)' : 'transparent',
+                  border: `1px solid ${profileLinkHovered ? 'rgba(245,242,236,0.5)' : 'rgba(245,242,236,0.25)'}`,
+                  color: profileLinkHovered ? 'var(--offwhite)' : 'rgba(245,242,236,0.8)',
+                  padding: '0.65rem 1.4rem',
+                  borderRadius: '2px',
+                  fontSize: '0.72rem',
+                  letterSpacing: '0.08em',
+                  textTransform: 'uppercase',
+                  textDecoration: 'none',
+                  fontFamily: 'var(--font-inter)',
+                  width: isMobile ? '100%' : 'auto',
+                  transition: 'all 0.2s ease',
+                }}>
                 My Profile
               </Link>
             </div>
@@ -466,15 +493,18 @@ export default function LoyaltyPage() {
                 {TIERS.map(tier => {
                   const color = TIER_COLORS[tier.label]
                   const active = activeTier === tier.label
+                  const hov = hoveredTierBtn === tier.label
                   return (
                     <button
                       key={tier.label}
                       onClick={() => setActiveTier(tier.label)}
+                      onMouseEnter={() => setHoveredTierBtn(tier.label)}
+                      onMouseLeave={() => setHoveredTierBtn(null)}
                       style={{
                         flex: isMobile ? '1 1 calc(50% - 0.25rem)' : 'initial',
-                        backgroundColor: active ? color : 'transparent',
-                        border: `1px solid ${active ? color : 'rgba(255,255,255,0.12)'}`,
-                        color: active ? '#fff' : 'rgba(245,242,236,0.55)',
+                        backgroundColor: active ? color : hov ? `${color}25` : 'transparent',
+                        border: `1px solid ${active || hov ? color : 'rgba(255,255,255,0.12)'}`,
+                        color: active ? '#fff' : hov ? 'var(--offwhite)' : 'rgba(245,242,236,0.55)',
                         padding: '0.65rem 1.4rem',
                         borderRadius: '2px',
                         fontSize: '0.75rem',
@@ -716,32 +746,54 @@ export default function LoyaltyPage() {
                 Sign in with your Google account — it takes 10 seconds.
               </p>
 
-              <Link href="/customer/login" style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.6rem',
-                backgroundColor: 'var(--teal)',
-                color: '#fff',
-                padding: '1.1rem 3rem',
-                borderRadius: '2px',
-                fontSize: '0.85rem',
-                letterSpacing: '0.12em',
-                textTransform: 'uppercase',
-                textDecoration: 'none',
-                fontFamily: 'var(--font-inter)',
-                marginBottom: '1.5rem',
-              }}>
+              <Link href="/customer/login"
+                onMouseEnter={() => setJoinHovered(true)}
+                onMouseLeave={() => setJoinHovered(false)}
+                style={{
+                  position: 'relative',
+                  overflow: 'hidden',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.6rem',
+                  backgroundColor: joinHovered ? 'rgba(0,160,152,0.15)' : 'var(--teal)',
+                  color: '#fff',
+                  padding: '1.1rem 3rem',
+                  borderRadius: '2px',
+                  fontSize: '0.85rem',
+                  letterSpacing: '0.12em',
+                  textTransform: 'uppercase',
+                  textDecoration: 'none',
+                  fontFamily: 'var(--font-inter)',
+                  marginBottom: '1.5rem',
+                  border: '1px solid var(--teal)',
+                  backdropFilter: joinHovered ? 'blur(10px)' : 'none',
+                  boxShadow: joinHovered ? '0 0 24px rgba(0,160,152,0.4)' : 'none',
+                  transition: 'all 0.3s ease',
+                }}>
+                <span style={{
+                  position: 'absolute', top: 0,
+                  left: joinHovered ? '120%' : '-60%',
+                  width: '40%', height: '100%',
+                  background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent)',
+                  transform: 'skewX(-20deg)',
+                  transition: 'left 0.5s ease',
+                  pointerEvents: 'none',
+                }} />
                 <FontAwesomeIcon icon={faGoogle} style={{ width: '15px' }} />
                 Join the loyalty program
               </Link>
 
               <div>
-                <Link href="/customer/leaderboard" style={{
-                  fontFamily: 'var(--font-inter)',
-                  fontSize: '0.8rem',
-                  color: 'rgba(245,242,236,0.45)',
-                  textDecoration: 'underline',
-                }}>
+                <Link href="/customer/leaderboard"
+                  onMouseEnter={() => setLeaderboardHovered(true)}
+                  onMouseLeave={() => setLeaderboardHovered(false)}
+                  style={{
+                    fontFamily: 'var(--font-inter)',
+                    fontSize: '0.8rem',
+                    color: leaderboardHovered ? 'var(--teal)' : 'rgba(245,242,236,0.45)',
+                    textDecoration: 'underline',
+                    transition: 'color 0.2s ease',
+                  }}>
                   View the leaderboard
                 </Link>
               </div>

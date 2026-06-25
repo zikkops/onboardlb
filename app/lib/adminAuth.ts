@@ -43,6 +43,12 @@ export const SECTION_ACCESS = {
   // gate the public-facing content management sections, not loyalty logging.
   loyaltyDnd:    ['admin', 'manager', 'dungeonmaster'] as Role[],
   loyaltyEvents: ['admin', 'manager', 'social'] as Role[],
+  dndReservations: ['admin', 'manager', 'dungeonmaster'] as Role[],
+  // Deliberately DM-only (not admin/manager) — this page edits the signed-in
+  // user's own opening hours, not anyone else's, so admin/manager wouldn't
+  // see anything meaningful here unless they're also DM-flagged, which the
+  // 'dungeonmaster' entry already covers via hasSectionAccess below.
+  dmAvailability: ['dungeonmaster'] as Role[],
 }
 
 // Reads either shape — the new `branchIds` array, or the older singular
@@ -57,6 +63,7 @@ export function useAdminUser() {
   const [user, setUser]             = useState<User | null>(null)
   const [role, setRole]             = useState<Role | null>(null)
   const [branchIds, setBranchIds]   = useState<string[]>([])
+  const [isDungeonMaster, setIsDungeonMaster] = useState(false)
   const [loading, setLoading]       = useState(true)
   const [provisioned, setProvisioned] = useState(true)
 
@@ -66,6 +73,7 @@ export function useAdminUser() {
         setUser(null)
         setRole(null)
         setBranchIds([])
+        setIsDungeonMaster(false)
         setProvisioned(true)
         setLoading(false)
         return
@@ -77,6 +85,7 @@ export function useAdminUser() {
         const data = snap.data()
         setRole((data.role as Role) ?? null)
         setBranchIds(normalizeBranchIds(data))
+        setIsDungeonMaster(data.isDungeonMaster === true)
         setProvisioned(true)
       } else {
         // No role record yet. If this is the very first sign-in (the account that
@@ -87,10 +96,12 @@ export function useAdminUser() {
           await setDoc(ref, { email: u.email, role: 'admin', createdAt: serverTimestamp() })
           setRole('admin')
           setBranchIds([])
+          setIsDungeonMaster(false)
           setProvisioned(true)
         } else {
           setRole(null)
           setBranchIds([])
+          setIsDungeonMaster(false)
           setProvisioned(false)
         }
       }
@@ -99,12 +110,23 @@ export function useAdminUser() {
     return unsub
   }, [])
 
-  return { user, role, branchIds, loading, provisioned }
+  return { user, role, branchIds, isDungeonMaster, loading, provisioned }
+}
+
+// A section whose access list includes 'dungeonmaster' is treated as
+// "DM-gated" — anyone with the isDungeonMaster flag gets in too, regardless
+// of their primary role (e.g. an admin or a gamer who also runs sessions).
+// Shared by useRequireRole below and by dashboard card visibility filters,
+// so the two never drift out of sync.
+export function hasSectionAccess(role: Role | null, isDungeonMaster: boolean, allowed: Role[]): boolean {
+  return !!role && (allowed.includes(role) || (isDungeonMaster && allowed.includes('dungeonmaster')))
 }
 
 export function useRequireRole(allowed: Role[]) {
   const router = useRouter()
-  const { user, role, branchIds, loading, provisioned } = useAdminUser()
+  const { user, role, branchIds, isDungeonMaster, loading, provisioned } = useAdminUser()
+
+  const hasAccess = hasSectionAccess(role, isDungeonMaster, allowed)
 
   useEffect(() => {
     if (loading) return
@@ -116,26 +138,26 @@ export function useRequireRole(allowed: Role[]) {
       signOut(auth).then(() => router.replace('/admin/login'))
       return
     }
-    if (!role || !allowed.includes(role)) {
+    if (!hasAccess) {
       router.replace('/admin')
     }
-  }, [loading, user, role, provisioned, router, allowed])
+  }, [loading, user, hasAccess, provisioned, router])
 
-  const checking = loading || !user || !provisioned || !role || !allowed.includes(role)
-  return { checking, role, branchIds, user }
+  const checking = loading || !user || !provisioned || !hasAccess
+  return { checking, role, branchIds, isDungeonMaster, user }
 }
 
 // Creating a user with the client SDK signs that user in immediately, which would
 // kick the admin out of their own session. We spin up a second, throwaway Firebase
 // app instance just to create the account, so the admin's session is untouched.
-export async function createAccount(email: string, password: string, role: Role, branchIds?: string[]) {
+export async function createAccount(email: string, password: string, role: Role, branchIds?: string[], isDungeonMaster?: boolean) {
   const secondary = getApps().find(a => a.name === 'AccountCreator')
     ?? initializeApp(firebaseConfig, 'AccountCreator')
   const secondaryAuth = getAuth(secondary)
   try {
     const cred = await createUserWithEmailAndPassword(secondaryAuth, email, password)
     await setDoc(doc(db, 'adminUsers', cred.user.uid), {
-      email, role, branchIds: branchIds ?? [], createdAt: serverTimestamp(),
+      email, role, branchIds: branchIds ?? [], isDungeonMaster: isDungeonMaster ?? false, createdAt: serverTimestamp(),
     })
     await logActivity('create', 'User Account', `${email} (${role})`)
     return cred.user.uid
@@ -151,9 +173,9 @@ export async function createAccount(email: string, password: string, role: Role,
 export async function updateAccountAccess(
   uid: string,
   email: string,
-  before: { role: Role; branchIds: string[] },
-  after: { role: Role; branchIds: string[] }
+  before: { role: Role; branchIds: string[]; isDungeonMaster: boolean },
+  after: { role: Role; branchIds: string[]; isDungeonMaster: boolean }
 ) {
-  await updateDoc(doc(db, 'adminUsers', uid), { role: after.role, branchIds: after.branchIds })
+  await updateDoc(doc(db, 'adminUsers', uid), { role: after.role, branchIds: after.branchIds, isDungeonMaster: after.isDungeonMaster })
   await logUpdate('User Account', email, before, after)
 }

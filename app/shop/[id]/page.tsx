@@ -36,6 +36,77 @@ function useIsMobile(breakpoint = 768) {
   return isMobile
 }
 
+function BackToShopLink({ withIcon }: { withIcon?: boolean }) {
+  const [hovered, setHovered] = useState(false)
+  return (
+    <Link href="/shop"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '0.5rem',
+        color: hovered ? 'var(--teal)' : (withIcon ? 'rgba(245,242,236,0.4)' : 'var(--teal)'),
+        textDecoration: 'none',
+        fontFamily: 'var(--font-inter)',
+        fontSize: withIcon ? '0.78rem' : '0.85rem',
+        letterSpacing: withIcon ? '0.1em' : undefined,
+        textTransform: withIcon ? 'uppercase' : undefined,
+        marginBottom: withIcon ? '3rem' : undefined,
+        transform: hovered ? 'translateX(-4px)' : 'none',
+        transition: 'all 0.2s ease',
+      }}>
+      {withIcon && <FontAwesomeIcon icon={faArrowLeft} style={{ width: '12px' }} />}
+      {withIcon ? 'Back to Shop' : '← Back to Shop'}
+    </Link>
+  )
+}
+
+function WhatsAppCta() {
+  const [hovered, setHovered] = useState(false)
+  return (
+    <a
+      href="https://wa.me/96100000000"
+      target="_blank"
+      rel="noopener noreferrer"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        position: 'relative',
+        overflow: 'hidden',
+        display: 'block',
+        width: '100%',
+        textAlign: 'center',
+        backgroundColor: hovered ? 'rgba(106,106,183,0.15)' : 'var(--purple)',
+        color: '#fff',
+        padding: '1rem',
+        border: '1px solid var(--purple)',
+        borderRadius: '2px',
+        fontSize: '0.82rem',
+        letterSpacing: '0.15em',
+        textTransform: 'uppercase',
+        textDecoration: 'none',
+        fontFamily: 'var(--font-inter)',
+        backdropFilter: hovered ? 'blur(10px)' : 'none',
+        transition: 'all 0.3s ease',
+      }}
+    >
+      <span style={{
+        position: 'absolute',
+        top: 0,
+        left: hovered ? '120%' : '-60%',
+        width: '40%',
+        height: '100%',
+        background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent)',
+        transform: 'skewX(-20deg)',
+        transition: 'left 0.5s ease',
+        pointerEvents: 'none',
+      }} />
+      Contact Us to Buy via WhatsApp
+    </a>
+  )
+}
+
 export default function GamePage() {
   const { id }                  = useParams()
   const isMobile                = useIsMobile()
@@ -97,12 +168,7 @@ export default function GamePage() {
         <h1 style={{ fontFamily: 'var(--font-cinzel)', color: 'var(--offwhite)', fontSize: '2rem' }}>
           Game Not Found
         </h1>
-        <Link href="/shop" style={{
-          color: 'var(--teal)',
-          fontFamily: 'var(--font-inter)',
-          fontSize: '0.85rem',
-          textDecoration: 'none',
-        }}>← Back to Shop</Link>
+        <BackToShopLink />
       </div>
       <Footer />
     </>
@@ -118,21 +184,7 @@ export default function GamePage() {
 
         {/* Back button */}
         <div style={{ maxWidth: '1200px', margin: '0 auto', padding: isMobile ? '7rem 1.25rem 0' : '9rem 3rem 0' }}>
-          <Link href="/shop" style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '0.5rem',
-            color: 'rgba(245,242,236,0.4)',
-            textDecoration: 'none',
-            fontFamily: 'var(--font-inter)',
-            fontSize: '0.78rem',
-            letterSpacing: '0.1em',
-            textTransform: 'uppercase',
-            marginBottom: '3rem',
-          }}>
-            <FontAwesomeIcon icon={faArrowLeft} style={{ width: '12px' }} />
-            Back to Shop
-          </Link>
+          <BackToShopLink withIcon />
         </div>
 
         {/* Game Detail */}
@@ -329,27 +381,7 @@ export default function GamePage() {
                   fontFamily: 'var(--font-inter)',
                 }}>Out of Stock</button>
               ) : (
-                <a
-                  href="https://wa.me/96100000000"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{
-                    display: 'block',
-                    width: '100%',
-                    textAlign: 'center',
-                    backgroundColor: 'var(--purple)',
-                    color: '#fff',
-                    padding: '1rem',
-                    borderRadius: '2px',
-                    fontSize: '0.82rem',
-                    letterSpacing: '0.15em',
-                    textTransform: 'uppercase',
-                    textDecoration: 'none',
-                    fontFamily: 'var(--font-inter)',
-                  }}
-                >
-                  Contact Us to Buy via WhatsApp
-                </a>
+                <WhatsAppCta />
               )}
             </div>
           </div>

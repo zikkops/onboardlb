@@ -72,6 +72,8 @@ export default function FriendsPage() {
   const [loadingDir, setLoadingDir] = useState(true)
   const [search, setSearch]         = useState('')
   const [busyUid, setBusyUid]       = useState<string | null>(null)
+  const [backHovered, setBackHovered] = useState(false)
+  const [hoveredBtn, setHoveredBtn] = useState<string | null>(null)
 
   useEffect(() => {
     if (!user) return
@@ -173,16 +175,20 @@ export default function FriendsPage() {
       <div style={{ maxWidth: '560px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '2rem' }}>
 
         <div>
-          <Link href="/customer/profile" style={{
-            fontSize: '0.7rem',
-            letterSpacing: '0.2em',
-            textTransform: 'uppercase',
-            color: 'rgba(245,242,236,0.3)',
-            textDecoration: 'none',
-            fontFamily: 'var(--font-inter)',
-            marginBottom: '0.5rem',
-            display: 'block',
-          }}>← Back to Profile</Link>
+          <Link href="/customer/profile"
+            onMouseEnter={() => setBackHovered(true)}
+            onMouseLeave={() => setBackHovered(false)}
+            style={{
+              fontSize: '0.7rem',
+              letterSpacing: '0.2em',
+              textTransform: 'uppercase',
+              color: backHovered ? 'var(--offwhite)' : 'rgba(245,242,236,0.3)',
+              textDecoration: 'none',
+              fontFamily: 'var(--font-inter)',
+              marginBottom: '0.5rem',
+              display: 'block',
+              transition: 'color 0.2s ease',
+            }}>← Back to Profile</Link>
           <h1 style={{ fontFamily: 'var(--font-cinzel)', fontSize: isMobile ? '1.6rem' : '2rem', color: 'var(--offwhite)' }}>
             Friends
           </h1>
@@ -231,7 +237,15 @@ export default function FriendsPage() {
                         <button
                           onClick={() => handleSendRequest(u)}
                           disabled={busyUid === u.uid}
-                          style={{ ...actionButtonStyle, opacity: busyUid === u.uid ? 0.6 : 1 }}
+                          onMouseEnter={() => setHoveredBtn(`add-${u.uid}`)}
+                          onMouseLeave={() => setHoveredBtn(null)}
+                          style={{
+                            ...actionButtonStyle,
+                            backgroundColor: busyUid !== u.uid && hoveredBtn === `add-${u.uid}` ? 'rgba(106,106,183,0.8)' : 'var(--purple)',
+                            opacity: busyUid === u.uid ? 0.6 : 1,
+                            boxShadow: busyUid !== u.uid && hoveredBtn === `add-${u.uid}` ? '0 6px 14px rgba(106,106,183,0.4)' : 'none',
+                            transition: 'all 0.2s ease',
+                          }}
                         >Add Friend</button>
                       )}
                     </div>
@@ -255,25 +269,41 @@ export default function FriendsPage() {
                     <button
                       onClick={() => handleAccept(r.id)}
                       disabled={busyUid === r.id}
-                      style={{ ...actionButtonStyle, backgroundColor: 'var(--teal)', opacity: busyUid === r.id ? 0.6 : 1 }}
-                    >Accept</button>
-                    <button
-                      onClick={() => handleDecline(r.id)}
-                      disabled={busyUid === r.id}
+                      onMouseEnter={() => setHoveredBtn(`accept-${r.id}`)}
+                      onMouseLeave={() => setHoveredBtn(null)}
                       style={{
-                        background: 'transparent',
-                        border: '1px solid rgba(228,51,41,0.3)',
-                        color: 'var(--red)',
-                        padding: '0.5rem 1rem',
-                        borderRadius: '2px',
-                        fontSize: '0.7rem',
-                        letterSpacing: '0.06em',
-                        textTransform: 'uppercase',
-                        fontFamily: 'var(--font-inter)',
-                        cursor: 'pointer',
+                        ...actionButtonStyle,
+                        backgroundColor: busyUid !== r.id && hoveredBtn === `accept-${r.id}` ? 'rgba(0,160,152,0.8)' : 'var(--teal)',
                         opacity: busyUid === r.id ? 0.6 : 1,
+                        boxShadow: busyUid !== r.id && hoveredBtn === `accept-${r.id}` ? '0 6px 14px rgba(0,160,152,0.4)' : 'none',
+                        transition: 'all 0.2s ease',
                       }}
-                    >Decline</button>
+                    >Accept</button>
+                    {(() => {
+                      const declineHovered = busyUid !== r.id && hoveredBtn === `decline-${r.id}`
+                      return (
+                        <button
+                          onClick={() => handleDecline(r.id)}
+                          disabled={busyUid === r.id}
+                          onMouseEnter={() => setHoveredBtn(`decline-${r.id}`)}
+                          onMouseLeave={() => setHoveredBtn(null)}
+                          style={{
+                            background: declineHovered ? 'rgba(228,51,41,0.1)' : 'transparent',
+                            border: `1px solid ${declineHovered ? 'var(--red)' : 'rgba(228,51,41,0.3)'}`,
+                            color: 'var(--red)',
+                            padding: '0.5rem 1rem',
+                            borderRadius: '2px',
+                            fontSize: '0.7rem',
+                            letterSpacing: '0.06em',
+                            textTransform: 'uppercase',
+                            fontFamily: 'var(--font-inter)',
+                            cursor: 'pointer',
+                            opacity: busyUid === r.id ? 0.6 : 1,
+                            transition: 'all 0.2s ease',
+                          }}
+                        >Decline</button>
+                      )
+                    })()}
                   </div>
                 </div>
               ))}
@@ -295,10 +325,12 @@ export default function FriendsPage() {
                   <button
                     onClick={() => handleRemove(f.requestId)}
                     disabled={busyUid === f.requestId}
+                    onMouseEnter={() => setHoveredBtn(`remove-${f.requestId}`)}
+                    onMouseLeave={() => setHoveredBtn(null)}
                     style={{
                       background: 'transparent',
-                      border: '1px solid rgba(255,255,255,0.1)',
-                      color: 'rgba(245,242,236,0.5)',
+                      border: `1px solid ${hoveredBtn === `remove-${f.requestId}` ? 'var(--red)' : 'rgba(255,255,255,0.1)'}`,
+                      color: hoveredBtn === `remove-${f.requestId}` ? 'var(--red)' : 'rgba(245,242,236,0.5)',
                       padding: '0.5rem 1rem',
                       borderRadius: '2px',
                       fontSize: '0.7rem',
@@ -307,6 +339,7 @@ export default function FriendsPage() {
                       fontFamily: 'var(--font-inter)',
                       cursor: 'pointer',
                       opacity: busyUid === f.requestId ? 0.6 : 1,
+                      transition: 'all 0.2s ease',
                     }}
                   >Remove</button>
                 </div>
@@ -328,9 +361,14 @@ export default function FriendsPage() {
                   <button
                     onClick={() => handleDecline(r.id)}
                     disabled={busyUid === r.id}
+                    onMouseEnter={() => setHoveredBtn(`cancel-${r.id}`)}
+                    onMouseLeave={() => setHoveredBtn(null)}
                     style={{
-                      background: 'transparent', border: 'none', color: 'rgba(228,51,41,0.6)',
+                      background: 'transparent', border: 'none',
+                      color: hoveredBtn === `cancel-${r.id}` ? 'var(--red)' : 'rgba(228,51,41,0.6)',
                       cursor: 'pointer', fontSize: '0.78rem', padding: '0 0.2rem',
+                      transform: hoveredBtn === `cancel-${r.id}` ? 'scale(1.2)' : 'scale(1)',
+                      transition: 'all 0.2s ease',
                     }}
                   >✕</button>
                 </div>

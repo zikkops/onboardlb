@@ -150,6 +150,9 @@ export default function LeaderboardPage() {
 
   const [friendEntries, setFriendEntries] = useState<LeaderboardEntry[]>([])
   const [loadingFriends, setLoadingFriends] = useState(false)
+  const [hoveredTab, setHoveredTab] = useState<string | null>(null)
+  const [signInHovered, setSignInHovered] = useState(false)
+  const [findFriendsHovered, setFindFriendsHovered] = useState(false)
 
   // Global Top 50 — live.
   useEffect(() => {
@@ -237,16 +240,19 @@ export default function LeaderboardPage() {
               { key: 'friends' as const, label: 'Friends',       icon: faUserGroup },
             ]).map(({ key, label, icon }) => {
               const active = tab === key
+              const hov = hoveredTab === key
               return (
                 <button
                   key={key}
                   onClick={() => setTab(key)}
+                  onMouseEnter={() => setHoveredTab(key)}
+                  onMouseLeave={() => setHoveredTab(null)}
                   style={{
                     flex: 1,
                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
-                    backgroundColor: active ? 'var(--teal)' : 'transparent',
-                    border: `1px solid ${active ? 'var(--teal)' : 'rgba(255,255,255,0.1)'}`,
-                    color: active ? '#fff' : 'rgba(245,242,236,0.5)',
+                    backgroundColor: active ? 'var(--teal)' : hov ? 'rgba(0,160,152,0.15)' : 'transparent',
+                    border: `1px solid ${active || hov ? 'var(--teal)' : 'rgba(255,255,255,0.1)'}`,
+                    color: active ? '#fff' : hov ? 'var(--offwhite)' : 'rgba(245,242,236,0.5)',
                     padding: '0.75rem 1rem',
                     borderRadius: '2px',
                     fontSize: '0.75rem',
@@ -254,6 +260,7 @@ export default function LeaderboardPage() {
                     textTransform: 'uppercase',
                     cursor: 'pointer',
                     fontFamily: 'var(--font-inter)',
+                    transition: 'all 0.2s ease',
                   }}
                 >
                   <FontAwesomeIcon icon={icon} style={{ width: '12px' }} />
@@ -330,11 +337,31 @@ export default function LeaderboardPage() {
                 <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.85rem', color: 'rgba(245,242,236,0.4)' }}>
                   Sign in to see how you rank against your friends.
                 </p>
-                <Link href="/customer/login" style={{
-                  backgroundColor: 'var(--teal)', color: '#fff', padding: '0.7rem 1.8rem',
-                  borderRadius: '2px', fontSize: '0.75rem', letterSpacing: '0.1em', textTransform: 'uppercase',
-                  textDecoration: 'none', fontFamily: 'var(--font-inter)',
-                }}>Sign In</Link>
+                <Link href="/customer/login"
+                  onMouseEnter={() => setSignInHovered(true)}
+                  onMouseLeave={() => setSignInHovered(false)}
+                  style={{
+                    position: 'relative',
+                    overflow: 'hidden',
+                    backgroundColor: signInHovered ? 'rgba(0,160,152,0.15)' : 'var(--teal)',
+                    color: '#fff', padding: '0.7rem 1.8rem',
+                    borderRadius: '2px', fontSize: '0.75rem', letterSpacing: '0.1em', textTransform: 'uppercase',
+                    textDecoration: 'none', fontFamily: 'var(--font-inter)',
+                    border: '1px solid var(--teal)',
+                    backdropFilter: signInHovered ? 'blur(10px)' : 'none',
+                    transition: 'all 0.3s ease',
+                  }}>
+                  <span style={{
+                    position: 'absolute', top: 0,
+                    left: signInHovered ? '120%' : '-60%',
+                    width: '40%', height: '100%',
+                    background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent)',
+                    transform: 'skewX(-20deg)',
+                    transition: 'left 0.5s ease',
+                    pointerEvents: 'none',
+                  }} />
+                  Sign In
+                </Link>
               </div>
             ) : loadingFriends ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
@@ -349,7 +376,10 @@ export default function LeaderboardPage() {
                 </div>
                 {friendEntries.length <= 1 && (
                   <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.82rem', color: 'rgba(245,242,236,0.4)', textAlign: 'center' }}>
-                    Add some friends to see how you compare — <Link href="/customer/friends" style={{ color: 'var(--teal)', textDecoration: 'none' }}>find friends</Link>
+                    Add some friends to see how you compare — <Link href="/customer/friends"
+                      onMouseEnter={() => setFindFriendsHovered(true)}
+                      onMouseLeave={() => setFindFriendsHovered(false)}
+                      style={{ color: 'var(--teal)', textDecoration: findFriendsHovered ? 'underline' : 'none' }}>find friends</Link>
                   </p>
                 )}
               </>

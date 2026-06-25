@@ -46,6 +46,9 @@ export default function RedeemPage() {
   const [branchId, setBranchId] = useState<string>(BRANCHES[0])
   const [submitting, setSubmitting] = useState(false)
   const [success, setSuccess] = useState<SuccessInfo | null>(null)
+  const [backHovered, setBackHovered] = useState(false)
+  const [redeemAgainHovered, setRedeemAgainHovered] = useState(false)
+  const [hoveredBtn, setHoveredBtn] = useState<string | null>(null)
 
   useEffect(() => {
     if (!user) return
@@ -85,26 +88,47 @@ export default function RedeemPage() {
           </p>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
-            <button onClick={() => setSuccess(null)} style={{
-              width: '100%',
-              backgroundColor: 'var(--purple)',
-              color: '#fff',
-              border: 'none',
-              padding: '0.9rem',
-              borderRadius: '4px',
-              fontSize: '0.8rem',
-              letterSpacing: '0.08em',
-              textTransform: 'uppercase',
-              fontFamily: 'var(--font-inter)',
-              cursor: 'pointer',
-            }}>Redeem Something Else</button>
+            <button onClick={() => setSuccess(null)}
+              onMouseEnter={() => setRedeemAgainHovered(true)}
+              onMouseLeave={() => setRedeemAgainHovered(false)}
+              style={{
+                position: 'relative',
+                overflow: 'hidden',
+                width: '100%',
+                backgroundColor: redeemAgainHovered ? 'rgba(106,106,183,0.15)' : 'var(--purple)',
+                color: '#fff',
+                border: '1px solid var(--purple)',
+                padding: '0.9rem',
+                borderRadius: '4px',
+                fontSize: '0.8rem',
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase',
+                fontFamily: 'var(--font-inter)',
+                cursor: 'pointer',
+                backdropFilter: redeemAgainHovered ? 'blur(10px)' : 'none',
+                transition: 'all 0.3s ease',
+              }}>
+              <span style={{
+                position: 'absolute', top: 0,
+                left: redeemAgainHovered ? '120%' : '-60%',
+                width: '40%', height: '100%',
+                background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent)',
+                transform: 'skewX(-20deg)',
+                transition: 'left 0.5s ease',
+                pointerEvents: 'none',
+              }} />
+              Redeem Something Else
+            </button>
 
-            <Link href="/customer/profile" style={{
-              fontFamily: 'var(--font-inter)',
-              fontSize: '0.8rem',
-              color: 'var(--teal)',
-              textDecoration: 'none',
-            }}>← Back to Profile</Link>
+            <Link href="/customer/profile"
+              onMouseEnter={() => setBackHovered(true)}
+              onMouseLeave={() => setBackHovered(false)}
+              style={{
+                fontFamily: 'var(--font-inter)',
+                fontSize: '0.8rem',
+                color: 'var(--teal)',
+                textDecoration: backHovered ? 'underline' : 'none',
+              }}>← Back to Profile</Link>
           </div>
         </div>
       </div>
@@ -115,16 +139,20 @@ export default function RedeemPage() {
     <div style={{ minHeight: '100vh', backgroundColor: 'var(--black)', padding: isMobile ? '1.25rem' : '3rem' }}>
       <div style={{ maxWidth: '640px', margin: '0 auto' }}>
 
-        <Link href="/customer/profile" style={{
-          fontSize: '0.7rem',
-          letterSpacing: '0.2em',
-          textTransform: 'uppercase',
-          color: 'rgba(245,242,236,0.3)',
-          textDecoration: 'none',
-          fontFamily: 'var(--font-inter)',
-          marginBottom: '0.5rem',
-          display: 'block',
-        }}>← Back to Profile</Link>
+        <Link href="/customer/profile"
+          onMouseEnter={() => setBackHovered(true)}
+          onMouseLeave={() => setBackHovered(false)}
+          style={{
+            fontSize: '0.7rem',
+            letterSpacing: '0.2em',
+            textTransform: 'uppercase',
+            color: backHovered ? 'var(--offwhite)' : 'rgba(245,242,236,0.3)',
+            textDecoration: 'none',
+            fontFamily: 'var(--font-inter)',
+            marginBottom: '0.5rem',
+            display: 'block',
+            transition: 'color 0.2s ease',
+          }}>← Back to Profile</Link>
 
         <h1 style={{ fontFamily: 'var(--font-cinzel)', fontSize: isMobile ? '1.6rem' : '2rem', color: 'var(--offwhite)', marginBottom: '1.25rem' }}>
           Redeem OB Coins
@@ -207,9 +235,11 @@ export default function RedeemPage() {
                         <button
                           onClick={() => handleConfirm(item)}
                           disabled={submitting}
+                          onMouseEnter={() => setHoveredBtn(`confirm-${item.id}`)}
+                          onMouseLeave={() => setHoveredBtn(null)}
                           style={{
                             flex: 1,
-                            backgroundColor: 'var(--purple)',
+                            backgroundColor: !submitting && hoveredBtn === `confirm-${item.id}` ? 'rgba(106,106,183,0.8)' : 'var(--purple)',
                             color: '#fff',
                             border: 'none',
                             padding: '0.8rem',
@@ -220,16 +250,20 @@ export default function RedeemPage() {
                             fontFamily: 'var(--font-inter)',
                             cursor: submitting ? 'not-allowed' : 'pointer',
                             opacity: submitting ? 0.6 : 1,
+                            boxShadow: !submitting && hoveredBtn === `confirm-${item.id}` ? '0 6px 14px rgba(106,106,183,0.4)' : 'none',
+                            transition: 'all 0.2s ease',
                           }}
                         >{submitting ? 'Submitting…' : 'Confirm Redemption'}</button>
                         <button
                           onClick={() => setConfirmingId(null)}
                           disabled={submitting}
+                          onMouseEnter={() => setHoveredBtn(`cancel-${item.id}`)}
+                          onMouseLeave={() => setHoveredBtn(null)}
                           style={{
                             flex: isMobile ? 1 : 'initial',
-                            background: 'transparent',
-                            border: '1px solid rgba(255,255,255,0.1)',
-                            color: 'rgba(245,242,236,0.5)',
+                            background: hoveredBtn === `cancel-${item.id}` ? 'rgba(255,255,255,0.06)' : 'transparent',
+                            border: `1px solid ${hoveredBtn === `cancel-${item.id}` ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.1)'}`,
+                            color: hoveredBtn === `cancel-${item.id}` ? 'var(--offwhite)' : 'rgba(245,242,236,0.5)',
                             padding: '0.8rem 1.5rem',
                             borderRadius: '2px',
                             fontSize: '0.75rem',
@@ -237,6 +271,7 @@ export default function RedeemPage() {
                             textTransform: 'uppercase',
                             fontFamily: 'var(--font-inter)',
                             cursor: 'pointer',
+                            transition: 'all 0.2s ease',
                           }}
                         >Cancel</button>
                       </div>
@@ -245,10 +280,12 @@ export default function RedeemPage() {
                     <button
                       onClick={() => startRedeem(item)}
                       disabled={!canAfford}
+                      onMouseEnter={() => setHoveredBtn(`redeem-${item.id}`)}
+                      onMouseLeave={() => setHoveredBtn(null)}
                       style={{
                         width: isMobile ? '100%' : 'auto',
                         alignSelf: isMobile ? 'stretch' : 'flex-end',
-                        backgroundColor: canAfford ? 'var(--purple)' : 'rgba(255,255,255,0.05)',
+                        backgroundColor: canAfford ? (hoveredBtn === `redeem-${item.id}` ? 'rgba(106,106,183,0.8)' : 'var(--purple)') : 'rgba(255,255,255,0.05)',
                         color: canAfford ? '#fff' : 'rgba(245,242,236,0.35)',
                         border: 'none',
                         padding: '0.8rem 1.5rem',
@@ -258,6 +295,8 @@ export default function RedeemPage() {
                         textTransform: 'uppercase',
                         fontFamily: 'var(--font-inter)',
                         cursor: canAfford ? 'pointer' : 'not-allowed',
+                        boxShadow: canAfford && hoveredBtn === `redeem-${item.id}` ? '0 6px 14px rgba(106,106,183,0.4)' : 'none',
+                        transition: 'all 0.2s ease',
                       }}
                     >{canAfford ? 'Redeem' : 'Not enough coins'}</button>
                   )}

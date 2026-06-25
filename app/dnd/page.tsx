@@ -6,6 +6,7 @@ import { db } from '../lib/firebase'
 import Navbar from '../components/layout/Navbar'
 import Footer from '../components/layout/Footer'
 import Skeleton from '../components/Skeleton'
+import ReservationModal from '../components/dnd/ReservationModal'
 
 interface Campaign {
   id: string
@@ -20,13 +21,12 @@ interface Campaign {
   color: string
   locations: string[]
   contactNumber?: string
+  dmUid?: string | null
+  dmBranchIds?: string[]
+  dmOpeningStart?: string
+  dmOpeningEnd?: string
+  dmDaysOff?: string[]
   order: number
-}
-
-const LOCATION_NUMBERS: Record<string, string> = {
-  'Beirut — Hamra': '96181950042',
-  'Zouk':           '96170973242',
-  'Broummana':      '96176648054',
 }
 
 const FALLBACK_CAMPAIGNS: Campaign[] = [
@@ -103,7 +103,7 @@ const faqs = [
   },
   {
     q: 'How much does it cost?',
-    a: 'Session fees vary by campaign. Contact us on WhatsApp for current pricing and availability.',
+    a: 'Session fees vary by campaign. Reserve a session directly from this page to check availability — pricing is confirmed along with your booking.',
   },
   {
     q: 'Can I join an ongoing campaign?',
@@ -116,6 +116,8 @@ export default function DndPage() {
   const [loading, setLoading]         = useState(true)
   const [hoveredBtn, setHoveredBtn]   = useState<string | null>(null)
   const [openFaq, setOpenFaq]         = useState<number | null>(null)
+  const [reserving, setReserving]     = useState<{ campaign: Campaign; location: string } | null>(null)
+  const [hoveredFaq, setHoveredFaq]   = useState<number | null>(null)
   const isMobile = useIsMobile()
 
   useEffect(() => {
@@ -133,12 +135,6 @@ export default function DndPage() {
   function scrollTo(id: string) {
     const el = document.getElementById(id)
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }
-
-  function waLink(campaign: Campaign, location: string) {
-    const number = LOCATION_NUMBERS[location] ?? (campaign.contactNumber ?? '96181950042').replace(/\+/g, '')
-    const message = encodeURIComponent(`Hello, I would like to know more about the ${campaign.title} campaign and how to start it.`)
-    return `https://wa.me/${number}?text=${message}`
   }
 
   const displayCampaigns = campaigns.length > 0 ? campaigns : FALLBACK_CAMPAIGNS
@@ -441,58 +437,92 @@ export default function DndPage() {
                         ))}
                       </div>
 
-                      {/* Locations */}
-                      {campaign.locations?.length > 0 && (
-                        <div style={{ marginTop: 'auto' }}>
-                          <p style={{
-                            fontSize: '0.65rem',
-                            letterSpacing: '0.2em',
-                            textTransform: 'uppercase',
-                            color: 'rgba(245,242,236,0.3)',
-                            fontFamily: 'var(--font-inter)',
-                            marginBottom: '0.8rem',
-                          }}>Available at — click to join</p>
-                          <div style={{
-                            display: 'flex',
-                            gap: '0.6rem',
-                            flexWrap: 'wrap',
-                          }}>
-                            {campaign.locations.map(loc => (
-                              <a
-                                key={loc}
-                                href={waLink(campaign, loc)}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                style={{
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: '0.4rem',
-                                  backgroundColor: `${campaign.color}15`,
-                                  border: `1px solid ${campaign.color}50`,
-                                  color: campaign.color,
-                                  padding: '0.5rem 1rem',
-                                  borderRadius: '2px',
-                                  fontSize: '0.78rem',
-                                  letterSpacing: '0.05em',
-                                  textDecoration: 'none',
-                                  fontFamily: 'var(--font-inter)',
-                                  transition: 'all 0.2s',
-                                }}
-                                onMouseEnter={e => {
-                                  (e.currentTarget as HTMLAnchorElement).style.backgroundColor = `${campaign.color}30`
-                                  ;(e.currentTarget as HTMLAnchorElement).style.borderColor = campaign.color
-                                }}
-                                onMouseLeave={e => {
-                                  (e.currentTarget as HTMLAnchorElement).style.backgroundColor = `${campaign.color}15`
-                                  ;(e.currentTarget as HTMLAnchorElement).style.borderColor = `${campaign.color}50`
-                                }}
-                              >
-                                📍 {loc}
-                              </a>
-                            ))}
+                      {/* Locations — bookable only where the campaign lists the
+                          location AND the assigned DM is also assigned there
+                          (campaign.dmBranchIds, snapshotted from the DM's own
+                          branches in Manage Users). */}
+                      {campaign.locations?.length > 0 && (() => {
+                        const bookableLocations = new Set(campaign.dmUid ? (campaign.dmBranchIds ?? []) : [])
+                        const anyBookable = campaign.locations.some(loc => bookableLocations.has(loc))
+                        return (
+                          <div style={{ marginTop: 'auto' }}>
+                            <p style={{
+                              fontSize: '0.65rem',
+                              letterSpacing: '0.2em',
+                              textTransform: 'uppercase',
+                              color: 'rgba(245,242,236,0.3)',
+                              fontFamily: 'var(--font-inter)',
+                              marginBottom: '0.8rem',
+                            }}>{anyBookable ? 'Available at — click to reserve a session' : 'Available at'}</p>
+                            <div style={{
+                              display: 'flex',
+                              gap: '0.6rem',
+                              flexWrap: 'wrap',
+                            }}>
+                              {campaign.locations.map(loc => (
+                                bookableLocations.has(loc) ? (
+                                  <button
+                                    key={loc}
+                                    type="button"
+                                    onClick={() => setReserving({ campaign, location: loc })}
+                                    style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '0.4rem',
+                                      backgroundColor: `${campaign.color}15`,
+                                      border: `1px solid ${campaign.color}50`,
+                                      color: campaign.color,
+                                      padding: '0.5rem 1rem',
+                                      borderRadius: '2px',
+                                      fontSize: '0.78rem',
+                                      letterSpacing: '0.05em',
+                                      cursor: 'pointer',
+                                      fontFamily: 'var(--font-inter)',
+                                      transition: 'all 0.2s',
+                                    }}
+                                    onMouseEnter={e => {
+                                      (e.currentTarget as HTMLButtonElement).style.backgroundColor = `${campaign.color}30`
+                                      ;(e.currentTarget as HTMLButtonElement).style.borderColor = campaign.color
+                                    }}
+                                    onMouseLeave={e => {
+                                      (e.currentTarget as HTMLButtonElement).style.backgroundColor = `${campaign.color}15`
+                                      ;(e.currentTarget as HTMLButtonElement).style.borderColor = `${campaign.color}50`
+                                    }}
+                                  >
+                                    📍 {loc}
+                                  </button>
+                                ) : (
+                                  <span
+                                    key={loc}
+                                    style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '0.4rem',
+                                      backgroundColor: 'rgba(255,255,255,0.03)',
+                                      border: '1px solid rgba(255,255,255,0.08)',
+                                      color: 'rgba(245,242,236,0.35)',
+                                      padding: '0.5rem 1rem',
+                                      borderRadius: '2px',
+                                      fontSize: '0.78rem',
+                                      letterSpacing: '0.05em',
+                                      fontFamily: 'var(--font-inter)',
+                                    }}
+                                  >
+                                    📍 {loc}
+                                  </span>
+                                )
+                              ))}
+                            </div>
+                            {!anyBookable && (
+                              <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.72rem', color: 'rgba(245,242,236,0.25)', marginTop: '0.6rem' }}>
+                                {campaign.dmUid
+                                  ? 'Booking opens once the assigned Dungeon Master has branches set up.'
+                                  : 'Booking opens once a Dungeon Master is assigned to this campaign.'}
+                              </p>
+                            )}
                           </div>
-                        </div>
-                      )}
+                        )
+                      })()}
                     </div>
                   </div>
                 ))}
@@ -532,6 +562,8 @@ export default function DndPage() {
                 }}>
                   <button
                     onClick={() => setOpenFaq(openFaq === i ? null : i)}
+                    onMouseEnter={() => setHoveredFaq(i)}
+                    onMouseLeave={() => setHoveredFaq(null)}
                     style={{
                       width: '100%',
                       display: 'flex',
@@ -547,13 +579,14 @@ export default function DndPage() {
                     <p style={{
                       fontFamily: 'var(--font-cinzel)',
                       fontSize: isMobile ? '0.9rem' : '1rem',
-                      color: 'var(--offwhite)',
+                      color: hoveredFaq === i ? 'var(--purple)' : 'var(--offwhite)',
+                      transition: 'color 0.2s ease',
                     }}>{q}</p>
                     <span style={{
                       color: 'var(--purple)',
                       fontSize: '0.8rem',
                       transition: 'transform 0.3s',
-                      transform: openFaq === i ? 'rotate(180deg)' : 'rotate(0deg)',
+                      transform: openFaq === i ? 'rotate(180deg)' : hoveredFaq === i ? 'scale(1.2)' : 'rotate(0deg)',
                       flexShrink: 0,
                     }}>▼</span>
                   </button>
@@ -577,6 +610,22 @@ export default function DndPage() {
         </div>
       </main>
       <Footer />
+
+      {reserving && reserving.campaign.dmUid && (
+        <ReservationModal
+          campaign={{
+            id: reserving.campaign.id,
+            title: reserving.campaign.title,
+            color: reserving.campaign.color,
+            dmUid: reserving.campaign.dmUid,
+            dmOpeningStart: reserving.campaign.dmOpeningStart,
+            dmOpeningEnd: reserving.campaign.dmOpeningEnd,
+            dmDaysOff: reserving.campaign.dmDaysOff,
+          }}
+          location={reserving.location}
+          onClose={() => setReserving(null)}
+        />
+      )}
     </>
   )
 }

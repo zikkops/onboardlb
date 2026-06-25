@@ -31,6 +31,8 @@ export default function DndPreview() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [current, setCurrent]     = useState(0)
   const [loading, setLoading]     = useState(true)
+  const [exploreHovered, setExploreHovered] = useState(false)
+  const [hoveredDot, setHoveredDot] = useState<number | null>(null)
   const isMobile = useIsMobile()
 
   useEffect(() => {
@@ -152,19 +154,38 @@ export default function DndPreview() {
               ))}
             </div>
 
-            <Link href="/dnd" style={{
-              display: 'inline-block',
-              backgroundColor: 'var(--navy)',
-              color: '#fff',
-              padding: '0.9rem 2.5rem',
-              borderRadius: '2px',
-              fontSize: '0.78rem',
-              letterSpacing: '0.12em',
-              textTransform: 'uppercase',
-              textDecoration: 'none',
-              fontFamily: 'var(--font-inter)',
-              border: '1px solid rgba(106,106,183,0.4)',
-            }}>
+            <Link href="/dnd"
+              onMouseEnter={() => setExploreHovered(true)}
+              onMouseLeave={() => setExploreHovered(false)}
+              style={{
+                position: 'relative',
+                overflow: 'hidden',
+                display: 'inline-block',
+                backgroundColor: exploreHovered ? 'rgba(106,106,183,0.15)' : 'var(--navy)',
+                color: '#fff',
+                padding: '0.9rem 2.5rem',
+                borderRadius: '2px',
+                fontSize: '0.78rem',
+                letterSpacing: '0.12em',
+                textTransform: 'uppercase',
+                textDecoration: 'none',
+                fontFamily: 'var(--font-inter)',
+                border: `1px solid ${exploreHovered ? 'var(--purple)' : 'rgba(106,106,183,0.4)'}`,
+                backdropFilter: exploreHovered ? 'blur(10px)' : 'none',
+                boxShadow: exploreHovered ? '0 0 20px rgba(106,106,183,0.4)' : 'none',
+                transition: 'all 0.3s ease',
+              }}>
+              <span style={{
+                position: 'absolute',
+                top: 0,
+                left: exploreHovered ? '120%' : '-60%',
+                width: '40%',
+                height: '100%',
+                background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent)',
+                transform: 'skewX(-20deg)',
+                transition: 'left 0.5s ease',
+                pointerEvents: 'none',
+              }} />
               Explore D&D at Onboard
             </Link>
           </div>
@@ -253,11 +274,15 @@ export default function DndPreview() {
                     <button
                       key={i}
                       onClick={() => setCurrent(i)}
+                      onMouseEnter={() => setHoveredDot(i)}
+                      onMouseLeave={() => setHoveredDot(null)}
                       style={{
                         width: i === current ? '24px' : '8px',
                         height: '8px',
                         borderRadius: '4px',
-                        backgroundColor: i === current ? 'var(--purple)' : 'rgba(255,255,255,0.2)',
+                        backgroundColor: i === current
+                          ? 'var(--purple)'
+                          : hoveredDot === i ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.2)',
                         border: 'none',
                         cursor: 'pointer',
                         transition: 'all 0.3s ease',

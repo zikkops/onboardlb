@@ -15,11 +15,12 @@ interface Account {
   email: string
   role: Role
   branchIds: string[]
+  isDungeonMaster: boolean
 }
 
 const ROLES: Role[] = ['admin', 'manager', 'social', 'gamer', 'dungeonmaster']
 
-const EMPTY = { email: '', password: '', role: 'manager' as Role, branchIds: [] as string[] }
+const EMPTY = { email: '', password: '', role: 'manager' as Role, branchIds: [] as string[], isDungeonMaster: false }
 
 // Reads either the new `branchIds` array or the older singular `branchId`
 // from accounts created before multi-branch support existed.
@@ -54,7 +55,11 @@ export default function AdminUsersPage() {
     const snap = await getDocs(collection(db, 'adminUsers'))
     setAccounts(snap.docs.map(d => {
       const data = d.data()
-      return { id: d.id, email: data.email, role: data.role, branchIds: normalizeBranchIds(data) } as Account
+      return {
+        id: d.id, email: data.email, role: data.role,
+        branchIds: normalizeBranchIds(data),
+        isDungeonMaster: data.isDungeonMaster === true,
+      } as Account
     }))
     setLoading(false)
   }
@@ -70,7 +75,7 @@ export default function AdminUsersPage() {
 
   function openEdit(account: Account) {
     setEditing(account)
-    setForm({ email: account.email, password: '', role: account.role, branchIds: account.branchIds })
+    setForm({ email: account.email, password: '', role: account.role, branchIds: account.branchIds, isDungeonMaster: account.isDungeonMaster })
     setError('')
     setOpen(true)
   }
@@ -87,16 +92,22 @@ export default function AdminUsersPage() {
     setSaving(true)
     setError('')
     try {
-      const branchIds = form.role === 'manager' ? form.branchIds : []
+      // The dungeonmaster role already implies DM capability — the flag is
+      // only meaningful (and only edited) for every other role.
+      const isDungeonMaster = form.role === 'dungeonmaster' || form.isDungeonMaster
+      // Branches are kept for managers (loyalty-data scoping) and for any
+      // DM-capable account (which branches they can be booked at) — discarded
+      // for everyone else so a stale selection doesn't linger unused.
+      const branchIds = (form.role === 'manager' || isDungeonMaster) ? form.branchIds : []
       if (editing) {
         await updateAccountAccess(
           editing.id,
           editing.email,
-          { role: editing.role, branchIds: editing.branchIds },
-          { role: form.role, branchIds }
+          { role: editing.role, branchIds: editing.branchIds, isDungeonMaster: editing.isDungeonMaster },
+          { role: form.role, branchIds, isDungeonMaster }
         )
       } else {
-        await createAccount(form.email.trim(), form.password, form.role, branchIds)
+        await createAccount(form.email.trim(), form.password, form.role, branchIds, isDungeonMaster)
       }
       setOpen(false)
       loadAccounts()
@@ -114,8 +125,12 @@ export default function AdminUsersPage() {
     loadAccounts()
   }
 
+  function showsBranches(account: Account): boolean {
+    return account.role === 'manager' || account.role === 'dungeonmaster' || account.isDungeonMaster
+  }
+
   function branchSummary(account: Account): string {
-    if (account.role !== 'manager') return '—'
+    if (!showsBranches(account)) return '—'
     return account.branchIds.length > 0 ? account.branchIds.map(resolveBranchName).join(', ') : '— unassigned —'
   }
 
@@ -218,17 +233,31 @@ export default function AdminUsersPage() {
                     <span style={{ color: 'rgba(245,242,236,0.3)', marginLeft: '0.5rem' }}>(you)</span>
                   )}
                 </p>
-                <span style={{
-                  fontSize: '0.7rem',
-                  padding: '0.25rem 0.7rem',
-                  borderRadius: '2px',
-                  backgroundColor: `${ROLE_COLORS[account.role]}25`,
-                  color: ROLE_COLORS[account.role],
-                  fontFamily: 'var(--font-inter)',
-                  letterSpacing: '0.05em',
-                  width: 'fit-content',
-                }}>{ROLE_LABELS[account.role] ?? account.role}</span>
-                {account.role === 'manager' && (
+                <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                  <span style={{
+                    fontSize: '0.7rem',
+                    padding: '0.25rem 0.7rem',
+                    borderRadius: '2px',
+                    backgroundColor: `${ROLE_COLORS[account.role]}25`,
+                    color: ROLE_COLORS[account.role],
+                    fontFamily: 'var(--font-inter)',
+                    letterSpacing: '0.05em',
+                    width: 'fit-content',
+                  }}>{ROLE_LABELS[account.role] ?? account.role}</span>
+                  {account.isDungeonMaster && account.role !== 'dungeonmaster' && (
+                    <span style={{
+                      fontSize: '0.7rem',
+                      padding: '0.25rem 0.7rem',
+                      borderRadius: '2px',
+                      backgroundColor: 'rgba(201,150,44,0.18)',
+                      color: '#C9962C',
+                      fontFamily: 'var(--font-inter)',
+                      letterSpacing: '0.05em',
+                      width: 'fit-content',
+                    }}>🎲 DM</span>
+                  )}
+                </div>
+                {showsBranches(account) && (
                   <p style={{ fontSize: '0.75rem', color: 'rgba(245,242,236,0.4)', fontFamily: 'var(--font-inter)' }}>
                     Branches: {branchSummary(account)}
                   </p>
@@ -299,15 +328,28 @@ export default function AdminUsersPage() {
                       )}
                     </td>
                     <td style={{ padding: '1rem 1.2rem' }}>
-                      <span style={{
-                        fontSize: '0.7rem',
-                        padding: '0.25rem 0.7rem',
-                        borderRadius: '2px',
-                        backgroundColor: `${ROLE_COLORS[account.role]}25`,
-                        color: ROLE_COLORS[account.role],
-                        fontFamily: 'var(--font-inter)',
-                        letterSpacing: '0.05em',
-                      }}>{ROLE_LABELS[account.role] ?? account.role}</span>
+                      <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                        <span style={{
+                          fontSize: '0.7rem',
+                          padding: '0.25rem 0.7rem',
+                          borderRadius: '2px',
+                          backgroundColor: `${ROLE_COLORS[account.role]}25`,
+                          color: ROLE_COLORS[account.role],
+                          fontFamily: 'var(--font-inter)',
+                          letterSpacing: '0.05em',
+                        }}>{ROLE_LABELS[account.role] ?? account.role}</span>
+                        {account.isDungeonMaster && account.role !== 'dungeonmaster' && (
+                          <span style={{
+                            fontSize: '0.7rem',
+                            padding: '0.25rem 0.7rem',
+                            borderRadius: '2px',
+                            backgroundColor: 'rgba(201,150,44,0.18)',
+                            color: '#C9962C',
+                            fontFamily: 'var(--font-inter)',
+                            letterSpacing: '0.05em',
+                          }}>🎲 DM</span>
+                        )}
+                      </div>
                     </td>
                     <td style={{ padding: '1rem 1.2rem', fontFamily: 'var(--font-inter)', fontSize: '0.82rem', color: 'rgba(245,242,236,0.5)' }}>
                       {branchSummary(account)}
@@ -432,46 +474,91 @@ export default function AdminUsersPage() {
                 </div>
               </div>
 
-              {form.role === 'manager' && (
-                <div>
-                  <label style={{ ...labelStyle, marginBottom: '0.8rem' }}>Branches</label>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                    {BRANCHES.map(b => {
-                      const checked = form.branchIds.includes(b)
-                      return (
-                        <button key={b} type="button"
-                          onClick={() => toggleBranch(b)}
-                          style={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            backgroundColor: checked ? 'rgba(0,160,152,0.12)' : 'transparent',
-                            border: `1px solid ${checked ? 'var(--teal)' : 'rgba(255,255,255,0.1)'}`,
-                            color: checked ? 'var(--teal)' : 'rgba(245,242,236,0.5)',
-                            padding: '0.6rem 1rem',
-                            borderRadius: '2px',
-                            fontSize: '0.82rem',
-                            cursor: 'pointer',
-                            fontFamily: 'var(--font-inter)',
-                            textAlign: 'left',
-                          }}>
-                          <span>{b}</span>
-                          <span style={{
-                            width: '16px', height: '16px',
-                            borderRadius: '3px',
-                            border: `1px solid ${checked ? 'var(--teal)' : 'rgba(255,255,255,0.2)'}`,
-                            backgroundColor: checked ? 'var(--teal)' : 'transparent',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontSize: '0.65rem',
-                            color: '#fff',
-                            flexShrink: 0,
-                          }}>{checked ? '✓' : ''}</span>
-                        </button>
-                      )
-                    })}
+              {(() => {
+                const formIsDm = form.role === 'dungeonmaster' || form.isDungeonMaster
+                if (form.role !== 'manager' && !formIsDm) return null
+                return (
+                  <div>
+                    <label style={{ ...labelStyle, marginBottom: '0.8rem' }}>Branches</label>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                      {BRANCHES.map(b => {
+                        const checked = form.branchIds.includes(b)
+                        return (
+                          <button key={b} type="button"
+                            onClick={() => toggleBranch(b)}
+                            style={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              backgroundColor: checked ? 'rgba(0,160,152,0.12)' : 'transparent',
+                              border: `1px solid ${checked ? 'var(--teal)' : 'rgba(255,255,255,0.1)'}`,
+                              color: checked ? 'var(--teal)' : 'rgba(245,242,236,0.5)',
+                              padding: '0.6rem 1rem',
+                              borderRadius: '2px',
+                              fontSize: '0.82rem',
+                              cursor: 'pointer',
+                              fontFamily: 'var(--font-inter)',
+                              textAlign: 'left',
+                            }}>
+                            <span>{b}</span>
+                            <span style={{
+                              width: '16px', height: '16px',
+                              borderRadius: '3px',
+                              border: `1px solid ${checked ? 'var(--teal)' : 'rgba(255,255,255,0.2)'}`,
+                              backgroundColor: checked ? 'var(--teal)' : 'transparent',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              fontSize: '0.65rem',
+                              color: '#fff',
+                              flexShrink: 0,
+                            }}>{checked ? '✓' : ''}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                    <p style={{ fontSize: '0.72rem', color: 'rgba(245,242,236,0.3)', fontFamily: 'var(--font-inter)', marginTop: '0.5rem' }}>
+                      {form.role === 'manager' && formIsDm
+                        ? 'Managers only see loyalty data for their assigned branches, and Dungeon Masters can only be booked at theirs — this account uses the same branch list for both. Multiple branches can be assigned.'
+                        : form.role === 'manager'
+                          ? 'Managers only see loyalty data for their assigned branches. Multiple branches can be assigned.'
+                          : 'Dungeon Masters can only be booked for sessions at their assigned branches. Multiple branches can be assigned — the same DM can run campaigns at more than one location.'}
+                    </p>
                   </div>
+                )
+              })()}
+
+              {form.role !== 'dungeonmaster' && (
+                <div>
+                  <button type="button"
+                    onClick={() => setForm(f => ({ ...f, isDungeonMaster: !f.isDungeonMaster }))}
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      width: '100%',
+                      backgroundColor: form.isDungeonMaster ? 'rgba(201,150,44,0.12)' : 'transparent',
+                      border: `1px solid ${form.isDungeonMaster ? '#C9962C' : 'rgba(255,255,255,0.1)'}`,
+                      color: form.isDungeonMaster ? '#C9962C' : 'rgba(245,242,236,0.5)',
+                      padding: '0.6rem 1rem',
+                      borderRadius: '2px',
+                      fontSize: '0.82rem',
+                      cursor: 'pointer',
+                      fontFamily: 'var(--font-inter)',
+                      textAlign: 'left',
+                    }}>
+                    <span>🎲 Also a Dungeon Master</span>
+                    <span style={{
+                      width: '16px', height: '16px',
+                      borderRadius: '3px',
+                      border: `1px solid ${form.isDungeonMaster ? '#C9962C' : 'rgba(255,255,255,0.2)'}`,
+                      backgroundColor: form.isDungeonMaster ? '#C9962C' : 'transparent',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: '0.65rem',
+                      color: '#fff',
+                      flexShrink: 0,
+                    }}>{form.isDungeonMaster ? '✓' : ''}</span>
+                  </button>
                   <p style={{ fontSize: '0.72rem', color: 'rgba(245,242,236,0.3)', fontFamily: 'var(--font-inter)', marginTop: '0.5rem' }}>
-                    Managers only see loyalty data for their assigned branches. Multiple branches can be assigned.
+                    Lets this account be assigned as a Dungeon Master on D&amp;D campaigns and access D&amp;D Reservations, in addition to their main role.
                   </p>
                 </div>
               )}

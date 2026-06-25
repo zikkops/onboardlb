@@ -89,6 +89,7 @@ export default function Hero() {
         alt="Onboard interior"
         fill
         priority
+        sizes="100vw"
         style={{ objectFit: 'cover', objectPosition: 'center' }}
       />
 

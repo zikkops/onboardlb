@@ -72,6 +72,11 @@ export default function SubmitCheckPage() {
   const [submitting, setSubmitting] = useState(false)
   const [errors, setErrors]         = useState<Record<string, string>>({})
   const [result, setResult]         = useState<SubmissionSummary | null>(null)
+  const [backHovered, setBackHovered] = useState(false)
+  const [submitAnotherHovered, setSubmitAnotherHovered] = useState(false)
+  const [splitToggleHovered, setSplitToggleHovered] = useState(false)
+  const [hoveredBtn, setHoveredBtn] = useState<string | null>(null)
+  const [submitHovered, setSubmitHovered] = useState(false)
 
   const amountNum    = parseFloat(totalAmount) || 0
   const splitCount   = 1 + addedFriends.length
@@ -229,26 +234,47 @@ export default function SubmitCheckPage() {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
-            <button onClick={handleReset} style={{
-              width: '100%',
-              backgroundColor: 'var(--purple)',
-              color: '#fff',
-              border: 'none',
-              padding: '0.9rem',
-              borderRadius: '4px',
-              fontSize: '0.8rem',
-              letterSpacing: '0.08em',
-              textTransform: 'uppercase',
-              fontFamily: 'var(--font-inter)',
-              cursor: 'pointer',
-            }}>Submit Another</button>
+            <button onClick={handleReset}
+              onMouseEnter={() => setSubmitAnotherHovered(true)}
+              onMouseLeave={() => setSubmitAnotherHovered(false)}
+              style={{
+                position: 'relative',
+                overflow: 'hidden',
+                width: '100%',
+                backgroundColor: submitAnotherHovered ? 'rgba(106,106,183,0.15)' : 'var(--purple)',
+                color: '#fff',
+                border: '1px solid var(--purple)',
+                padding: '0.9rem',
+                borderRadius: '4px',
+                fontSize: '0.8rem',
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase',
+                fontFamily: 'var(--font-inter)',
+                cursor: 'pointer',
+                backdropFilter: submitAnotherHovered ? 'blur(10px)' : 'none',
+                transition: 'all 0.3s ease',
+              }}>
+              <span style={{
+                position: 'absolute', top: 0,
+                left: submitAnotherHovered ? '120%' : '-60%',
+                width: '40%', height: '100%',
+                background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent)',
+                transform: 'skewX(-20deg)',
+                transition: 'left 0.5s ease',
+                pointerEvents: 'none',
+              }} />
+              Submit Another
+            </button>
 
-            <Link href="/customer/profile" style={{
-              fontFamily: 'var(--font-inter)',
-              fontSize: '0.8rem',
-              color: 'var(--teal)',
-              textDecoration: 'none',
-            }}>← Back to Profile</Link>
+            <Link href="/customer/profile"
+              onMouseEnter={() => setBackHovered(true)}
+              onMouseLeave={() => setBackHovered(false)}
+              style={{
+                fontFamily: 'var(--font-inter)',
+                fontSize: '0.8rem',
+                color: 'var(--teal)',
+                textDecoration: backHovered ? 'underline' : 'none',
+              }}>← Back to Profile</Link>
           </div>
         </div>
       </div>
@@ -267,16 +293,20 @@ export default function SubmitCheckPage() {
     }}>
       <div style={{ maxWidth: '560px', margin: '0 auto' }}>
 
-        <Link href="/customer/profile" style={{
-          fontSize: '0.7rem',
-          letterSpacing: '0.2em',
-          textTransform: 'uppercase',
-          color: 'rgba(245,242,236,0.3)',
-          textDecoration: 'none',
-          fontFamily: 'var(--font-inter)',
-          marginBottom: '0.5rem',
-          display: 'block',
-        }}>← Back to Profile</Link>
+        <Link href="/customer/profile"
+          onMouseEnter={() => setBackHovered(true)}
+          onMouseLeave={() => setBackHovered(false)}
+          style={{
+            fontSize: '0.7rem',
+            letterSpacing: '0.2em',
+            textTransform: 'uppercase',
+            color: backHovered ? 'var(--offwhite)' : 'rgba(245,242,236,0.3)',
+            textDecoration: 'none',
+            fontFamily: 'var(--font-inter)',
+            marginBottom: '0.5rem',
+            display: 'block',
+            transition: 'color 0.2s ease',
+          }}>← Back to Profile</Link>
 
         <h1 style={{ fontFamily: 'var(--font-cinzel)', fontSize: isMobile ? '1.6rem' : '2rem', color: 'var(--offwhite)', marginBottom: '0.5rem' }}>
           Submit a Check
@@ -368,19 +398,22 @@ export default function SubmitCheckPage() {
             <button
               type="button"
               onClick={handleToggleSplit}
+              onMouseEnter={() => setSplitToggleHovered(true)}
+              onMouseLeave={() => setSplitToggleHovered(false)}
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 width: '100%',
-                background: 'transparent',
-                border: '1px solid rgba(255,255,255,0.1)',
-                color: 'rgba(245,242,236,0.7)',
+                background: splitToggleHovered ? 'rgba(255,255,255,0.04)' : 'transparent',
+                border: `1px solid ${splitToggleHovered ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.1)'}`,
+                color: splitToggleHovered ? 'var(--offwhite)' : 'rgba(245,242,236,0.7)',
                 padding: '0.8rem 1rem',
                 borderRadius: '4px',
                 fontSize: '0.8rem',
                 fontFamily: 'var(--font-inter)',
                 cursor: 'pointer',
+                transition: 'all 0.2s ease',
               }}
             >
               <span>Split with Friends</span>
@@ -437,10 +470,16 @@ export default function SubmitCheckPage() {
                           )}
                         </div>
                         <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.78rem', color: 'var(--offwhite)' }}>{f.displayName}</span>
-                        <button type="button" onClick={() => removeFromSplit(f.uid)} style={{
-                          background: 'transparent', border: 'none', color: 'rgba(228,51,41,0.7)',
-                          cursor: 'pointer', fontSize: '0.85rem', padding: '0 0.2rem', lineHeight: 1,
-                        }}>✕</button>
+                        <button type="button" onClick={() => removeFromSplit(f.uid)}
+                          onMouseEnter={() => setHoveredBtn(`removechip-${f.uid}`)}
+                          onMouseLeave={() => setHoveredBtn(null)}
+                          style={{
+                            background: 'transparent', border: 'none',
+                            color: hoveredBtn === `removechip-${f.uid}` ? 'var(--red)' : 'rgba(228,51,41,0.7)',
+                            cursor: 'pointer', fontSize: '0.85rem', padding: '0 0.2rem', lineHeight: 1,
+                            transform: hoveredBtn === `removechip-${f.uid}` ? 'scale(1.2)' : 'scale(1)',
+                            transition: 'all 0.2s ease',
+                          }}>✕</button>
                       </div>
                     ))}
                   </div>
@@ -462,15 +501,18 @@ export default function SubmitCheckPage() {
                             key={f.uid}
                             type="button"
                             onClick={() => addFriend({ uid: f.uid, displayName: f.displayName, avatarUrl: f.avatarUrl, email: '' })}
+                            onMouseEnter={() => setHoveredBtn(`quickadd-${f.uid}`)}
+                            onMouseLeave={() => setHoveredBtn(null)}
                             style={{
                               display: 'flex',
                               alignItems: 'center',
                               gap: '0.5rem',
-                              backgroundColor: 'rgba(255,255,255,0.04)',
-                              border: '1px solid rgba(255,255,255,0.1)',
+                              backgroundColor: hoveredBtn === `quickadd-${f.uid}` ? 'rgba(106,106,183,0.15)' : 'rgba(255,255,255,0.04)',
+                              border: `1px solid ${hoveredBtn === `quickadd-${f.uid}` ? 'rgba(106,106,183,0.5)' : 'rgba(255,255,255,0.1)'}`,
                               borderRadius: '20px',
                               padding: '0.3rem 0.8rem 0.3rem 0.3rem',
                               cursor: 'pointer',
+                              transition: 'all 0.2s ease',
                             }}
                           >
                             <div style={{
@@ -529,17 +571,20 @@ export default function SubmitCheckPage() {
                             key={u.uid}
                             type="button"
                             onClick={() => addFriend(u)}
+                            onMouseEnter={() => setHoveredBtn(`searchresult-${u.uid}`)}
+                            onMouseLeave={() => setHoveredBtn(null)}
                             style={{
                               display: 'flex',
                               alignItems: 'center',
                               gap: '0.7rem',
                               width: '100%',
                               padding: '0.7rem 1rem',
-                              background: 'transparent',
+                              background: hoveredBtn === `searchresult-${u.uid}` ? 'rgba(255,255,255,0.05)' : 'transparent',
                               border: 'none',
                               borderBottom: '1px solid rgba(255,255,255,0.04)',
                               cursor: 'pointer',
                               textAlign: 'left',
+                              transition: 'background 0.15s ease',
                             }}
                           >
                             <div style={{
@@ -582,20 +627,25 @@ export default function SubmitCheckPage() {
               (the mobile one is just visually repositioned via fixed
               positioning), so either one triggers the same onSubmit handler. */}
           {!isMobile && (
-            <button type="submit" disabled={!canSubmit} style={{
-              width: '100%',
-              backgroundColor: 'var(--purple)',
-              color: '#fff',
-              border: 'none',
-              padding: '1rem',
-              borderRadius: '4px',
-              fontSize: '0.82rem',
-              letterSpacing: '0.08em',
-              textTransform: 'uppercase',
-              fontFamily: 'var(--font-inter)',
-              cursor: canSubmit ? 'pointer' : 'not-allowed',
-              opacity: canSubmit ? 1 : 0.5,
-            }}>
+            <button type="submit" disabled={!canSubmit}
+              onMouseEnter={() => setSubmitHovered(true)}
+              onMouseLeave={() => setSubmitHovered(false)}
+              style={{
+                width: '100%',
+                backgroundColor: canSubmit && submitHovered ? 'rgba(106,106,183,0.8)' : 'var(--purple)',
+                color: '#fff',
+                border: 'none',
+                padding: '1rem',
+                borderRadius: '4px',
+                fontSize: '0.82rem',
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase',
+                fontFamily: 'var(--font-inter)',
+                cursor: canSubmit ? 'pointer' : 'not-allowed',
+                opacity: canSubmit ? 1 : 0.5,
+                boxShadow: canSubmit && submitHovered ? '0 8px 20px rgba(106,106,183,0.4)' : 'none',
+                transition: 'all 0.2s ease',
+              }}>
               {submitting ? 'Submitting…' : 'Submit Check'}
             </button>
           )}

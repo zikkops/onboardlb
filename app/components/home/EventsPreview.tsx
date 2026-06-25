@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 import { collection, getDocs } from 'firebase/firestore'
 import { db } from '../../lib/firebase'
 import Skeleton from '../Skeleton'
+import EventReservationModal from '../events/EventReservationModal'
 
 interface GameEvent {
   id: string
@@ -38,6 +39,12 @@ export default function EventsPreview() {
   const [events, setEvents] = useState<GameEvent[]>([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<GameEvent | null>(null)
+  const [reserving, setReserving] = useState<GameEvent | null>(null)
+  const [hoveredEventId, setHoveredEventId] = useState<string | null>(null)
+  const [viewAllHovered, setViewAllHovered] = useState(false)
+  const [closeHovered, setCloseHovered] = useState(false)
+  const [reserveHovered, setReserveHovered] = useState(false)
+  const [registerHovered, setRegisterHovered] = useState(false)
   const isMobile = useIsMobile()
 
   useEffect(() => {
@@ -90,19 +97,23 @@ export default function EventsPreview() {
               Always Something<br />On the Board
             </h2>
           </div>
-          <Link href="/events" style={{
-            backgroundColor: 'transparent',
-            border: '1px solid rgba(255,255,255,0.2)',
-            color: 'var(--offwhite)',
-            padding: '0.8rem 2rem',
-            borderRadius: '2px',
-            fontSize: '0.75rem',
-            letterSpacing: '0.12em',
-            textTransform: 'uppercase',
-            textDecoration: 'none',
-            fontFamily: 'var(--font-inter)',
-            alignSelf: isMobile ? 'flex-start' : 'auto',
-          }}>
+          <Link href="/events"
+            onMouseEnter={() => setViewAllHovered(true)}
+            onMouseLeave={() => setViewAllHovered(false)}
+            style={{
+              backgroundColor: viewAllHovered ? 'rgba(106,106,183,0.12)' : 'transparent',
+              border: `1px solid ${viewAllHovered ? 'var(--purple)' : 'rgba(255,255,255,0.2)'}`,
+              color: viewAllHovered ? 'var(--purple)' : 'var(--offwhite)',
+              padding: '0.8rem 2rem',
+              borderRadius: '2px',
+              fontSize: '0.75rem',
+              letterSpacing: '0.12em',
+              textTransform: 'uppercase',
+              textDecoration: 'none',
+              fontFamily: 'var(--font-inter)',
+              alignSelf: isMobile ? 'flex-start' : 'auto',
+              transition: 'all 0.2s ease',
+            }}>
             View All Events
           </Link>
         </div>
@@ -143,42 +154,57 @@ export default function EventsPreview() {
           }}>
             {events.map(ev => {
               const d = new Date(ev.date)
+              const hovered = hoveredEventId === ev.id
               return (
-                <div key={ev.id} onClick={() => setSelected(ev)} style={{
-                  border: '1px solid rgba(106,106,183,0.2)',
-                  borderRadius: '4px',
-                  overflow: 'hidden',
-                  cursor: 'pointer',
-                  transition: 'border-color 0.2s',
-                }}
-                onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(106,106,183,0.5)' }}
-                onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(106,106,183,0.2)' }}
-                >
-                  {/* Image */}
-                  {ev.image ? (
-                    <div style={{
-                      height: isMobile ? '90px' : '140px',
-                      backgroundImage: `url(${ev.image})`,
-                      backgroundSize: 'cover',
-                      backgroundPosition: 'center',
-                    }} />
-                  ) : (
-                    <div style={{
-                      height: isMobile ? '90px' : '140px',
-                      background: 'rgba(50,50,124,0.2)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}>
-                      <span style={{
-                        fontFamily: 'var(--font-cinzel)',
-                        fontSize: isMobile ? '1.4rem' : '2rem',
-                        color: 'rgba(106,106,183,0.4)',
+                <div key={ev.id} onClick={() => setSelected(ev)}
+                  onMouseEnter={() => setHoveredEventId(ev.id)}
+                  onMouseLeave={() => setHoveredEventId(null)}
+                  style={{
+                    // box-shadow lives on this outer, overflow-visible
+                    // wrapper — a child with `overflow: hidden` clips its
+                    // own outer box-shadow, which cut the glow off at the
+                    // border instead of letting it render smoothly.
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    transform: hovered ? 'translateY(-6px)' : 'translateY(0)',
+                    boxShadow: hovered ? '0 16px 28px rgba(0,0,0,0.35)' : '0 0px 0px rgba(0,0,0,0)',
+                    transition: 'transform 0.45s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.45s cubic-bezier(0.16, 1, 0.3, 1)',
+                  }}>
+                  <div style={{
+                    border: `1px solid ${hovered ? 'rgba(106,106,183,0.6)' : 'rgba(106,106,183,0.2)'}`,
+                    borderRadius: '4px',
+                    overflow: 'hidden',
+                    transition: 'border-color 0.45s cubic-bezier(0.16, 1, 0.3, 1)',
+                  }}>
+                  {/* Image — landscape 16:9 */}
+                  <div style={{ position: 'relative', width: '100%', paddingTop: '56.25%', overflow: 'hidden' }}>
+                    {ev.image ? (
+                      <div style={{
+                        position: 'absolute', inset: 0,
+                        backgroundImage: `url(${ev.image})`,
+                        backgroundSize: 'cover',
+                        backgroundPosition: 'center',
+                        transform: hovered ? 'scale(1.08)' : 'scale(1)',
+                        transition: 'transform 0.45s cubic-bezier(0.16, 1, 0.3, 1)',
+                      }} />
+                    ) : (
+                      <div style={{
+                        position: 'absolute', inset: 0,
+                        background: 'rgba(50,50,124,0.2)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
                       }}>
-                        {d.getDate()}
-                      </span>
-                    </div>
-                  )}
+                        <span style={{
+                          fontFamily: 'var(--font-cinzel)',
+                          fontSize: isMobile ? '1.4rem' : '2rem',
+                          color: 'rgba(106,106,183,0.4)',
+                        }}>
+                          {d.getDate()}
+                        </span>
+                      </div>
+                    )}
+                  </div>
 
                   <div style={{ padding: isMobile ? '1rem' : '1.5rem' }}>
                     {/* Date + Type */}
@@ -258,8 +284,8 @@ export default function EventsPreview() {
                       width: '100%',
                       textAlign: 'center',
                       background: 'transparent',
-                      border: '1px solid rgba(106,106,183,0.3)',
-                      color: 'var(--offwhite)',
+                      border: `1px solid ${hovered ? 'var(--purple)' : 'rgba(106,106,183,0.3)'}`,
+                      color: hovered ? 'var(--purple)' : 'var(--offwhite)',
                       padding: '0.6rem',
                       borderRadius: '2px',
                       fontSize: '0.72rem',
@@ -267,9 +293,11 @@ export default function EventsPreview() {
                       textTransform: 'uppercase',
                       cursor: 'pointer',
                       fontFamily: 'var(--font-inter)',
+                      transition: 'border-color 0.45s cubic-bezier(0.16, 1, 0.3, 1), color 0.45s cubic-bezier(0.16, 1, 0.3, 1)',
                     }}>
                       Learn More
                     </button>
+                  </div>
                   </div>
                 </div>
               )
@@ -366,15 +394,20 @@ export default function EventsPreview() {
             <div style={{ padding: isMobile ? '1.5rem' : '2.5rem' }}>
 
               {/* Close */}
-              <button onClick={() => setSelected(null)} style={{
-                float: 'right',
-                background: 'transparent',
-                border: 'none',
-                color: 'rgba(245,242,236,0.4)',
-                fontSize: '1.2rem',
-                cursor: 'pointer',
-                marginBottom: '1rem',
-              }}>✕</button>
+              <button onClick={() => setSelected(null)}
+                onMouseEnter={() => setCloseHovered(true)}
+                onMouseLeave={() => setCloseHovered(false)}
+                style={{
+                  float: 'right',
+                  background: 'transparent',
+                  border: 'none',
+                  color: closeHovered ? 'var(--offwhite)' : 'rgba(245,242,236,0.4)',
+                  fontSize: '1.2rem',
+                  cursor: 'pointer',
+                  marginBottom: '1rem',
+                  transform: closeHovered ? 'rotate(90deg)' : 'none',
+                  transition: 'all 0.25s ease',
+                }}>✕</button>
 
               {/* Type badge */}
               <span style={{
@@ -448,13 +481,52 @@ export default function EventsPreview() {
 
               {/* CTAs */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                <button
+                  onClick={() => setReserving(selected)}
+                  onMouseEnter={() => setReserveHovered(true)}
+                  onMouseLeave={() => setReserveHovered(false)}
+                  style={{
+                    position: 'relative',
+                    overflow: 'hidden',
+                    display: 'block',
+                    width: '100%',
+                    textAlign: 'center',
+                    backgroundColor: reserveHovered ? 'rgba(106,106,183,0.15)' : 'var(--purple)',
+                    color: '#fff',
+                    border: '1px solid var(--purple)',
+                    padding: '0.9rem',
+                    borderRadius: '2px',
+                    fontSize: '0.78rem',
+                    letterSpacing: '0.12em',
+                    textTransform: 'uppercase',
+                    fontFamily: 'var(--font-inter)',
+                    cursor: 'pointer',
+                    backdropFilter: reserveHovered ? 'blur(10px)' : 'none',
+                    transition: 'all 0.3s ease',
+                  }}>
+                  <span style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: reserveHovered ? '120%' : '-60%',
+                    width: '40%',
+                    height: '100%',
+                    background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent)',
+                    transform: 'skewX(-20deg)',
+                    transition: 'left 0.5s ease',
+                    pointerEvents: 'none',
+                  }} />
+                  Reserve a Spot
+                </button>
                 {selected.registrationLink && (
                   <a href={selected.registrationLink} target="_blank" rel="noopener noreferrer"
+                    onMouseEnter={() => setRegisterHovered(true)}
+                    onMouseLeave={() => setRegisterHovered(false)}
                     style={{
                       display: 'block',
                       textAlign: 'center',
-                      backgroundColor: 'var(--purple)',
-                      color: '#fff',
+                      backgroundColor: registerHovered ? 'rgba(255,255,255,0.06)' : 'transparent',
+                      border: `1px solid ${registerHovered ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.15)'}`,
+                      color: registerHovered ? 'var(--offwhite)' : 'rgba(245,242,236,0.7)',
                       padding: '0.9rem',
                       borderRadius: '2px',
                       fontSize: '0.78rem',
@@ -462,32 +534,29 @@ export default function EventsPreview() {
                       textTransform: 'uppercase',
                       textDecoration: 'none',
                       fontFamily: 'var(--font-inter)',
-                    }}>Register Now</a>
+                      transition: 'all 0.2s ease',
+                    }}>Register Externally</a>
                 )}
-                <a
-                  href={`https://wa.me/${(selected.contactNumber ?? '96181950042').replace(/\+/g, '')}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{
-                    display: 'block',
-                    textAlign: 'center',
-                    backgroundColor: 'var(--teal)',
-                    color: '#fff',
-                    padding: '0.9rem',
-                    borderRadius: '2px',
-                    fontSize: '0.78rem',
-                    letterSpacing: '0.12em',
-                    textTransform: 'uppercase',
-                    textDecoration: 'none',
-                    fontFamily: 'var(--font-inter)',
-                  }}
-                >
-                  Contact Us on WhatsApp
-                </a>
               </div>
             </div>
           </div>
         </div>
+      )}
+
+      {reserving && (
+        <EventReservationModal
+          event={{
+            id: reserving.id,
+            title: reserving.title,
+            date: reserving.date,
+            timeStart: reserving.timeStart,
+            timeEnd: reserving.timeEnd,
+            branch: reserving.branch,
+            minPlayers: reserving.minPlayers,
+            maxPlayers: reserving.maxPlayers,
+          }}
+          onClose={() => setReserving(null)}
+        />
       )}
     </section>
   )

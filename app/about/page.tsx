@@ -16,6 +16,138 @@ function useIsMobile(breakpoint = 768) {
   return isMobile
 }
 
+function BranchActions({ color, mapsUrl }: { color: string; mapsUrl: string }) {
+  const [dirHovered, setDirHovered] = useState(false)
+  const [resHovered, setResHovered] = useState(false)
+  return (
+    <div style={{ display: 'flex', gap: '0.8rem', marginTop: '2rem' }}>
+      <a
+        href={mapsUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        onMouseEnter={() => setDirHovered(true)}
+        onMouseLeave={() => setDirHovered(false)}
+        style={{
+          flex: 1,
+          display: 'block',
+          textAlign: 'center',
+          textDecoration: 'none',
+          background: dirHovered ? 'rgba(255,255,255,0.06)' : 'transparent',
+          border: `1px solid ${dirHovered ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.1)'}`,
+          color: dirHovered ? 'var(--offwhite)' : 'rgba(245,242,236,0.6)',
+          padding: '0.6rem',
+          borderRadius: '2px',
+          fontSize: '0.72rem',
+          letterSpacing: '0.08em',
+          textTransform: 'uppercase',
+          cursor: 'pointer',
+          fontFamily: 'var(--font-inter)',
+          transition: 'all 0.2s ease',
+        }}>Directions</a>
+      <a href="#contact"
+        onMouseEnter={() => setResHovered(true)}
+        onMouseLeave={() => setResHovered(false)}
+        style={{
+          flex: 1,
+          backgroundColor: color,
+          color: '#fff',
+          padding: '0.6rem',
+          borderRadius: '2px',
+          fontSize: '0.72rem',
+          letterSpacing: '0.08em',
+          textTransform: 'uppercase',
+          textDecoration: 'none',
+          textAlign: 'center',
+          fontFamily: 'var(--font-inter)',
+          opacity: resHovered ? 0.85 : 1,
+          transform: resHovered ? 'translateY(-2px)' : 'none',
+          boxShadow: resHovered ? `0 8px 16px ${color}50` : 'none',
+          transition: 'all 0.2s ease',
+        }}>Reserve</a>
+    </div>
+  )
+}
+
+function ContactLink({ label, value, href, color }: { label: string; value: string; href: string; color: string }) {
+  const [hovered, setHovered] = useState(false)
+  return (
+    <a href={href} target="_blank" rel="noopener noreferrer"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '1.5rem',
+        textDecoration: 'none',
+        transform: hovered ? 'translateX(4px)' : 'none',
+        transition: 'transform 0.2s ease',
+      }}>
+      <div style={{
+        width: '4px',
+        height: '40px',
+        backgroundColor: color,
+        borderRadius: '2px',
+        flexShrink: 0,
+      }} />
+      <div>
+        <p style={{
+          fontSize: '0.68rem',
+          letterSpacing: '0.2em',
+          textTransform: 'uppercase',
+          color: 'rgba(245,242,236,0.3)',
+          fontFamily: 'var(--font-inter)',
+          marginBottom: '0.3rem',
+        }}>{label}</p>
+        <p style={{
+          fontFamily: 'var(--font-cinzel)',
+          fontSize: '1rem',
+          color: hovered ? color : 'var(--offwhite)',
+          transition: 'color 0.2s ease',
+        }}>{value}</p>
+      </div>
+    </a>
+  )
+}
+
+function SendMessageButton() {
+  const [hovered, setHovered] = useState(false)
+  return (
+    <button
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        position: 'relative',
+        overflow: 'hidden',
+        backgroundColor: hovered ? 'rgba(0,160,152,0.15)' : 'var(--teal)',
+        color: '#fff',
+        padding: '0.9rem',
+        border: '1px solid var(--teal)',
+        borderRadius: '2px',
+        fontSize: '0.78rem',
+        letterSpacing: '0.15em',
+        textTransform: 'uppercase',
+        cursor: 'pointer',
+        fontFamily: 'var(--font-inter)',
+        marginTop: '0.5rem',
+        backdropFilter: hovered ? 'blur(10px)' : 'none',
+        transition: 'all 0.3s ease',
+      }}>
+      <span style={{
+        position: 'absolute',
+        top: 0,
+        left: hovered ? '120%' : '-60%',
+        width: '40%',
+        height: '100%',
+        background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent)',
+        transform: 'skewX(-20deg)',
+        transition: 'left 0.5s ease',
+        pointerEvents: 'none',
+      }} />
+      Send Message
+    </button>
+  )
+}
+
 export default function AboutPage() {
   const isMobile = useIsMobile()
   return (
@@ -134,6 +266,7 @@ export default function AboutPage() {
                 src="/images/BG-img1.webp"
                 alt="Onboard interior"
                 fill
+                sizes="(max-width: 768px) 100vw, 50vw"
                 style={{ objectFit: 'cover' }}
               />
             </div>
@@ -305,28 +438,31 @@ export default function AboutPage() {
                 {
                   city: 'Beirut',
                   label: 'Flagship Branch',
-                  address: 'Hamra Street, Beirut',
-                  hours: 'Mon–Thu 12pm–1am · Fri–Sun 12pm–2am',
-                  phone: '+961 1 XXX XXX',
+                  address: 'Bliss Street, Hamra, Beirut',
+                  hours: '10:00 AM – 1:30 AM',
+                  phone: '+961 81 950 042',
                   color: 'var(--teal)',
+                  mapsUrl: 'https://www.google.com/maps/place/On+Board+Games+and+Tales,+Blue+Building,+Rooftop,+Bliss,+Beirut/data=!4m2!3m1!1s0x151f17f4a23fd687:0x4f509441b5d61e73',
                 },
                 {
                   city: 'Zouk',
                   label: 'Zouk Mikael',
-                  address: 'Zouk Mikael Main Road, Keserwan',
-                  hours: 'Mon–Thu 12pm–1am · Fri–Sun 12pm–2am',
-                  phone: '+961 9 XXX XXX',
+                  address: 'Zouk Mikael, Keserwan',
+                  hours: '4:30 PM – 1:30 AM',
+                  phone: '+961 70 973 242',
                   color: 'var(--red)',
+                  mapsUrl: 'https://www.google.com/maps/place/33%C2%B058\'10.4%22N+35%C2%B036\'24.9%22E/@33.969564,35.60692,17z',
                 },
                 {
                   city: 'Broummana',
                   label: 'Mountain Branch',
-                  address: 'Broummana Main Street, Metn',
-                  hours: 'Mon–Thu 2pm–1am · Fri–Sun 12pm–2am',
-                  phone: '+961 4 XXX XXX',
+                  address: 'Broummana, Metn',
+                  hours: '4:30 PM – 1:30 AM',
+                  phone: '+961 76 648 054',
                   color: 'var(--purple)',
+                  mapsUrl: 'https://www.google.com/maps/place/On+Board+Games+and+Tales+-+Broumana/@33.8844684,35.6338904,17z',
                 },
-              ].map(({ city, label, address, hours, phone, color }) => (
+              ].map(({ city, label, address, hours, phone, color, mapsUrl }) => (
                 <div key={city} style={{
                   border: '1px solid rgba(255,255,255,0.06)',
                   borderRadius: '4px',
@@ -367,34 +503,7 @@ export default function AboutPage() {
                         </div>
                       ))}
                     </div>
-                    <div style={{ display: 'flex', gap: '0.8rem', marginTop: '2rem' }}>
-                      <button style={{
-                        flex: 1,
-                        background: 'transparent',
-                        border: '1px solid rgba(255,255,255,0.1)',
-                        color: 'rgba(245,242,236,0.6)',
-                        padding: '0.6rem',
-                        borderRadius: '2px',
-                        fontSize: '0.72rem',
-                        letterSpacing: '0.08em',
-                        textTransform: 'uppercase',
-                        cursor: 'pointer',
-                        fontFamily: 'var(--font-inter)',
-                      }}>Directions</button>
-                      <a href="#contact" style={{
-                        flex: 1,
-                        backgroundColor: color,
-                        color: '#fff',
-                        padding: '0.6rem',
-                        borderRadius: '2px',
-                        fontSize: '0.72rem',
-                        letterSpacing: '0.08em',
-                        textTransform: 'uppercase',
-                        textDecoration: 'none',
-                        textAlign: 'center',
-                        fontFamily: 'var(--font-inter)',
-                      }}>Reserve</a>
-                    </div>
+                    <BranchActions color={color} mapsUrl={mapsUrl} />
                   </div>
                 </div>
               ))}
@@ -463,35 +572,7 @@ export default function AboutPage() {
                   color: 'var(--red)',
                 },
               ].map(({ label, value, href, color }) => (
-                <a key={label} href={href} target="_blank" rel="noopener noreferrer" style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '1.5rem',
-                  textDecoration: 'none',
-                }}>
-                  <div style={{
-                    width: '4px',
-                    height: '40px',
-                    backgroundColor: color,
-                    borderRadius: '2px',
-                    flexShrink: 0,
-                  }} />
-                  <div>
-                    <p style={{
-                      fontSize: '0.68rem',
-                      letterSpacing: '0.2em',
-                      textTransform: 'uppercase',
-                      color: 'rgba(245,242,236,0.3)',
-                      fontFamily: 'var(--font-inter)',
-                      marginBottom: '0.3rem',
-                    }}>{label}</p>
-                    <p style={{
-                      fontFamily: 'var(--font-cinzel)',
-                      fontSize: '1rem',
-                      color: 'var(--offwhite)',
-                    }}>{value}</p>
-                  </div>
-                </a>
+                <ContactLink key={label} label={label} value={value} href={href} color={color} />
               ))}
             </div>
 
@@ -563,21 +644,7 @@ export default function AboutPage() {
                   }} />
                 </div>
 
-                <button style={{
-                  backgroundColor: 'var(--teal)',
-                  color: '#fff',
-                  padding: '0.9rem',
-                  border: 'none',
-                  borderRadius: '2px',
-                  fontSize: '0.78rem',
-                  letterSpacing: '0.15em',
-                  textTransform: 'uppercase',
-                  cursor: 'pointer',
-                  fontFamily: 'var(--font-inter)',
-                  marginTop: '0.5rem',
-                }}>
-                  Send Message
-                </button>
+                <SendMessageButton />
               </div>
             </div>
           </div>

@@ -68,6 +68,8 @@ export default function MenuPage() {
   })
   const isMobile = useIsMobile()
   const [categoriesOpen, setCategoriesOpen] = useState(false)
+  const [categoriesTabHovered, setCategoriesTabHovered] = useState(false)
+  const [hoveredSection, setHoveredSection] = useState<string | null>(null)
 
 
   function toggleSection(s: string) {
@@ -179,28 +181,32 @@ export default function MenuPage() {
 
             {/* Mobile categories tab — fixed, vertically centered on the left edge */}
             {isMobile && !categoriesOpen && (
-              <button onClick={() => setCategoriesOpen(true)} style={{
-                position: 'fixed',
-                left: 0,
-                top: '50%',
-                transform: 'translateY(-50%)',
-                zIndex: 60,
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: '0.4rem',
-                background: 'var(--teal)',
-                border: 'none',
-                color: '#fff',
-                padding: '1rem 0.6rem',
-                borderRadius: '0 6px 6px 0',
-                fontSize: '0.65rem',
-                letterSpacing: '0.08em',
-                textTransform: 'uppercase',
-                cursor: 'pointer',
-                fontFamily: 'var(--font-inter)',
-                boxShadow: '4px 0 12px rgba(0,0,0,0.4)',
-              }}>
+              <button onClick={() => setCategoriesOpen(true)}
+                onMouseEnter={() => setCategoriesTabHovered(true)}
+                onMouseLeave={() => setCategoriesTabHovered(false)}
+                style={{
+                  position: 'fixed',
+                  left: 0,
+                  top: '50%',
+                  transform: categoriesTabHovered ? 'translateY(-50%) translateX(3px)' : 'translateY(-50%)',
+                  zIndex: 60,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                  background: categoriesTabHovered ? 'rgba(0,160,152,0.85)' : 'var(--teal)',
+                  border: 'none',
+                  color: '#fff',
+                  padding: '1rem 0.6rem',
+                  borderRadius: '0 6px 6px 0',
+                  fontSize: '0.65rem',
+                  letterSpacing: '0.08em',
+                  textTransform: 'uppercase',
+                  cursor: 'pointer',
+                  fontFamily: 'var(--font-inter)',
+                  boxShadow: categoriesTabHovered ? '6px 0 16px rgba(0,0,0,0.5)' : '4px 0 12px rgba(0,0,0,0.4)',
+                  transition: 'all 0.2s ease',
+                }}>
                 <FontAwesomeIcon icon={faList} style={{ width: '13px' }} />
                 Categories
               </button>
@@ -251,6 +257,8 @@ export default function MenuPage() {
                     {/* Section Header — collapsible */}
                     <button
                       onClick={() => toggleSection(s)}
+                      onMouseEnter={() => setHoveredSection(s)}
+                      onMouseLeave={() => setHoveredSection(null)}
                       style={{
                         width: '100%',
                         display: 'flex',
@@ -259,9 +267,10 @@ export default function MenuPage() {
                         padding: '0.9rem 1.5rem',
                         borderLeft: `3px solid ${sectionColors[s]}`,
                         marginBottom: isCollapsed ? '0.5rem' : '0.5rem',
-                        background: sectionBg[s],
+                        background: hoveredSection === s ? `${sectionColors[s]}20` : sectionBg[s],
                         border: 'none',
                         cursor: 'pointer',
+                        transition: 'background 0.2s ease',
                       }}>
                       <p style={{
                         fontFamily: 'var(--font-cinzel)',

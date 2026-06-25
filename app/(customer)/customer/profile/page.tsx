@@ -11,6 +11,9 @@ import { db, auth } from '../../../lib/firebase'
 import { useCustomerUser, signOutCustomer } from '../../../lib/customerAuth'
 import { useIsMobile } from '../../../lib/useIsMobile'
 import { useUserRedemptions, type Redemption } from '../../../lib/redemptions'
+import { useUserReservations, type Reservation } from '../../../lib/dndReservations'
+import { useUserEventReservations, type EventReservation } from '../../../lib/eventReservations'
+import { usePendingInvites, acceptInvite, declineInvite, type ParticipantInvite } from '../../../lib/participantInvites'
 import Skeleton from '../../../components/Skeleton'
 import { getLevelFromXP, TIER_COLORS } from '../../../lib/levelConfig'
 import { resolveBranchName } from '../../../lib/branches'
@@ -66,6 +69,16 @@ const REDEMPTION_STATUS_COLORS: Record<Redemption['status'], string> = {
   rejected: 'var(--red)',
 }
 
+const RESERVATION_STATUS_COLORS: Record<Reservation['status'], string> = {
+  pending:  '#E5A33D',
+  approved: '#2ECC71',
+  rejected: 'var(--red)',
+}
+
+function formatSessionDateTime(ts: Reservation['startAt']): string {
+  return ts.toDate().toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })
+}
+
 function formatDate(ts: Timestamp | null): string {
   if (!ts) return '—'
   return ts.toDate().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
@@ -115,6 +128,7 @@ function TransactionCard({
   onImageClick: (url: string) => void
 }) {
   const info = TYPE_INFO[tx.type]
+  const [photoHovered, setPhotoHovered] = useState(false)
   return (
     <div style={{
       display: 'flex',
@@ -174,15 +188,19 @@ function TransactionCard({
             {tx.checkPhotoUrl && (
               <button
                 onClick={() => onImageClick(tx.checkPhotoUrl!)}
+                onMouseEnter={() => setPhotoHovered(true)}
+                onMouseLeave={() => setPhotoHovered(false)}
                 style={{
                   width: isMobile ? '60px' : '50px',
                   height: isMobile ? '60px' : '50px',
                   borderRadius: '4px',
                   overflow: 'hidden',
-                  border: '1px solid rgba(255,255,255,0.1)',
+                  border: `1px solid ${photoHovered ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.1)'}`,
                   padding: 0,
                   cursor: 'pointer',
                   flexShrink: 0,
+                  transform: photoHovered ? 'scale(1.05)' : 'scale(1)',
+                  transition: 'all 0.2s ease',
                 }}
               >
                 <img src={tx.checkPhotoUrl} alt="Check" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -268,7 +286,7 @@ export default function CustomerProfilePage() {
   const [fullHistory, setFullHistory] = useState<Transaction[]>([])
   const [pending, setPending]         = useState<Transaction[]>([])
   const [loadingPublicFeed, setLoadingPublicFeed] = useState(true)
-  const [privateTab, setPrivateTab]   = useState<'history' | 'pending' | 'redemptions'>('history')
+  const [privateTab, setPrivateTab]   = useState<'history' | 'pending' | 'redemptions' | 'dnd' | 'events'>('history')
   const [viewingImage, setViewingImage] = useState<string | null>(null)
 
   // This page only ever shows the signed-in user's own profile right now —
@@ -280,6 +298,28 @@ export default function CustomerProfilePage() {
   const isOwnProfile = !!user && !!profileUid && user.uid === profileUid
 
   const { redemptions } = useUserRedemptions(isOwnProfile ? profileUid : null)
+  const { reservations } = useUserReservations(isOwnProfile ? profileUid : null)
+  const { reservations: eventReservations } = useUserEventReservations(isOwnProfile ? profileUid : null)
+  const { invites } = usePendingInvites(isOwnProfile ? profileUid : null)
+  const [busyInviteId, setBusyInviteId] = useState<string | null>(null)
+  const [hoveredAcceptId, setHoveredAcceptId] = useState<string | null>(null)
+  const [hoveredDeclineId, setHoveredDeclineId] = useState<string | null>(null)
+  const [hoveredTab, setHoveredTab] = useState<string | null>(null)
+  const [signOutHovered, setSignOutHovered] = useState(false)
+  const [modalCloseHovered, setModalCloseHovered] = useState(false)
+  const [hoveredAvatarOption, setHoveredAvatarOption] = useState<string | null>(null)
+  const [uploadBtnHovered, setUploadBtnHovered] = useState(false)
+  const [hoveredThemeId, setHoveredThemeId] = useState<string | null>(null)
+
+  async function handleAcceptInvite(invite: ParticipantInvite) {
+    setBusyInviteId(invite.id)
+    try { await acceptInvite(invite) } finally { setBusyInviteId(null) }
+  }
+
+  async function handleDeclineInvite(invite: ParticipantInvite) {
+    setBusyInviteId(invite.id)
+    try { await declineInvite(invite) } finally { setBusyInviteId(null) }
+  }
 
   useEffect(() => {
     if (!user) return
@@ -573,9 +613,21 @@ export default function CustomerProfilePage() {
                   fontSize: '0.62rem',
                   padding: '0.2rem 0.6rem',
                   borderRadius: '2px',
-                  backgroundColor: `${tierColor}30`,
-                  color: tierColor,
+                  // Solid fill + white text + a dark outline, rather than a
+                  // translucent tint of the tier color over the page's own
+                  // background — a translucent badge reads fine on the
+                  // admin's fixed dark background elsewhere in the app, but
+                  // here it sits on one of 8 customer-chosen theme colors,
+                  // several of which are close enough in hue to a tier color
+                  // (e.g. Adventurer's teal-green vs. the Forest theme) that
+                  // the badge nearly disappeared. A solid chip is legible
+                  // against any background.
+                  backgroundColor: tierColor,
+                  color: '#fff',
+                  border: '1px solid rgba(0,0,0,0.25)',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
                   fontFamily: 'var(--font-inter)',
+                  fontWeight: 600,
                   letterSpacing: '0.08em',
                   textTransform: 'uppercase',
                   whiteSpace: 'nowrap',
@@ -656,6 +708,72 @@ export default function CustomerProfilePage() {
           <ActionButton href="/customer/friends" label="Friends" color="#00A098" variant="outline" />
         </div>
 
+        {/* Pending Invites — someone added you (by account) to their D&D
+            session or event and you haven't responded yet. */}
+        {invites.length > 0 && (
+          <div>
+            <p style={sectionLabelStyle}>Pending Invites</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+              {invites.map(invite => {
+                const isBusy = busyInviteId === invite.id
+                return (
+                  <div key={invite.id} style={{
+                    display: 'flex',
+                    flexDirection: isMobile ? 'column' : 'row',
+                    justifyContent: 'space-between',
+                    alignItems: isMobile ? 'stretch' : 'center',
+                    gap: '0.8rem',
+                    padding: isMobile ? '1rem' : '1.2rem',
+                    backgroundColor: 'rgba(106,106,183,0.06)',
+                    border: '1px solid rgba(106,106,183,0.2)',
+                    borderRadius: '4px',
+                  }}>
+                    <div style={{ minWidth: 0 }}>
+                      <p style={{ fontFamily: 'var(--font-cinzel)', fontSize: '0.9rem', color: 'var(--offwhite)' }}>
+                        {invite.reservationLabel}
+                      </p>
+                      <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.78rem', color: 'rgba(245,242,236,0.5)', marginTop: '0.2rem' }}>
+                        {invite.reservationDate} · invited by {invite.inviterName}
+                      </p>
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
+                      <button
+                        onClick={() => handleAcceptInvite(invite)}
+                        disabled={isBusy}
+                        onMouseEnter={() => setHoveredAcceptId(invite.id)}
+                        onMouseLeave={() => setHoveredAcceptId(null)}
+                        style={{
+                          flex: isMobile ? 1 : 'initial',
+                          backgroundColor: !isBusy && hoveredAcceptId === invite.id ? 'rgba(0,160,152,0.8)' : 'var(--teal)', color: '#fff', border: 'none',
+                          padding: '0.6rem 1.2rem', borderRadius: '2px', fontSize: '0.72rem',
+                          letterSpacing: '0.06em', textTransform: 'uppercase', fontFamily: 'var(--font-inter)',
+                          cursor: isBusy ? 'not-allowed' : 'pointer', opacity: isBusy ? 0.6 : 1,
+                          boxShadow: !isBusy && hoveredAcceptId === invite.id ? '0 6px 14px rgba(0,160,152,0.4)' : 'none',
+                          transition: 'all 0.2s ease',
+                        }}>Accept</button>
+                      <button
+                        onClick={() => handleDeclineInvite(invite)}
+                        disabled={isBusy}
+                        onMouseEnter={() => setHoveredDeclineId(invite.id)}
+                        onMouseLeave={() => setHoveredDeclineId(null)}
+                        style={{
+                          flex: isMobile ? 1 : 'initial',
+                          background: !isBusy && hoveredDeclineId === invite.id ? 'rgba(228,51,41,0.1)' : 'transparent',
+                          border: `1px solid ${!isBusy && hoveredDeclineId === invite.id ? 'var(--red)' : 'rgba(228,51,41,0.3)'}`,
+                          color: 'var(--red)',
+                          padding: '0.6rem 1.2rem', borderRadius: '2px', fontSize: '0.72rem',
+                          letterSpacing: '0.06em', textTransform: 'uppercase', fontFamily: 'var(--font-inter)',
+                          cursor: isBusy ? 'not-allowed' : 'pointer', opacity: isBusy ? 0.6 : 1,
+                          transition: 'all 0.2s ease',
+                        }}>Decline</button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Public Activity Feed — last 5 approved transactions, visible to anyone */}
         <div>
           <p style={sectionLabelStyle}>Recent Activity</p>
@@ -680,27 +798,34 @@ export default function CustomerProfilePage() {
             <p style={sectionLabelStyle}>Your History</p>
 
             <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
-              {(['history', 'pending', 'redemptions'] as const).map(tab => (
-                <button
-                  key={tab}
-                  onClick={() => setPrivateTab(tab)}
-                  style={{
-                    flex: isMobile ? 1 : 'initial',
-                    backgroundColor: privateTab === tab ? theme.accent : 'transparent',
-                    border: `1px solid ${privateTab === tab ? theme.accent : 'rgba(255,255,255,0.1)'}`,
-                    color: privateTab === tab ? '#fff' : 'rgba(245,242,236,0.5)',
-                    padding: '0.6rem 1.2rem',
-                    borderRadius: '2px',
-                    fontSize: '0.75rem',
-                    letterSpacing: '0.06em',
-                    textTransform: 'uppercase',
-                    cursor: 'pointer',
-                    fontFamily: 'var(--font-inter)',
-                  }}
-                >
-                  {tab === 'history' ? 'Full History' : tab === 'pending' ? `Pending${pending.length > 0 ? ` (${pending.length})` : ''}` : 'Redemptions'}
-                </button>
-              ))}
+              {(['history', 'pending', 'redemptions', 'dnd', 'events'] as const).map(tab => {
+                const active = privateTab === tab
+                const hov = hoveredTab === tab
+                return (
+                  <button
+                    key={tab}
+                    onClick={() => setPrivateTab(tab)}
+                    onMouseEnter={() => setHoveredTab(tab)}
+                    onMouseLeave={() => setHoveredTab(null)}
+                    style={{
+                      flex: isMobile ? 1 : 'initial',
+                      backgroundColor: active ? theme.accent : hov ? `${theme.accent}25` : 'transparent',
+                      border: `1px solid ${active || hov ? theme.accent : 'rgba(255,255,255,0.1)'}`,
+                      color: active ? '#fff' : hov ? 'var(--offwhite)' : 'rgba(245,242,236,0.5)',
+                      padding: '0.6rem 1.2rem',
+                      borderRadius: '2px',
+                      fontSize: '0.75rem',
+                      letterSpacing: '0.06em',
+                      textTransform: 'uppercase',
+                      cursor: 'pointer',
+                      fontFamily: 'var(--font-inter)',
+                      transition: 'all 0.2s ease',
+                    }}
+                  >
+                    {tab === 'history' ? 'Full History' : tab === 'pending' ? `Pending${pending.length > 0 ? ` (${pending.length})` : ''}` : tab === 'redemptions' ? 'Redemptions' : tab === 'dnd' ? 'D&D Sessions' : 'Events'}
+                  </button>
+                )
+              })}
             </div>
 
             {privateTab === 'history' ? (
@@ -729,7 +854,7 @@ export default function CustomerProfilePage() {
                   ))}
                 </div>
               )
-            ) : (
+            ) : privateTab === 'redemptions' ? (
               redemptions.length === 0 ? (
                 <div style={emptyStateStyle}>No redemption requests yet</div>
               ) : (
@@ -779,23 +904,121 @@ export default function CustomerProfilePage() {
                   ))}
                 </div>
               )
+            ) : privateTab === 'dnd' ? (
+              reservations.length === 0 ? (
+                <div style={emptyStateStyle}>No D&amp;D reservations yet</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                  {reservations.map(r => (
+                    <div key={r.id} style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: isMobile ? '0.8rem' : '1rem',
+                      padding: isMobile ? '1rem' : '1.2rem',
+                      backgroundColor: 'rgba(255,255,255,0.02)',
+                      border: '1px solid rgba(255,255,255,0.06)',
+                      borderRadius: '4px',
+                      width: '100%',
+                    }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem', flexWrap: 'wrap' }}>
+                          <p style={{ fontFamily: 'var(--font-cinzel)', fontSize: '0.9rem', color: 'var(--offwhite)' }}>{r.campaignTitle}</p>
+                          <span style={{
+                            fontSize: '0.62rem',
+                            padding: '0.2rem 0.6rem',
+                            borderRadius: '2px',
+                            backgroundColor: `${RESERVATION_STATUS_COLORS[r.status]}25`,
+                            color: RESERVATION_STATUS_COLORS[r.status],
+                            fontFamily: 'var(--font-inter)',
+                            letterSpacing: '0.06em',
+                            textTransform: 'uppercase',
+                            whiteSpace: 'nowrap',
+                          }}>{r.status}</span>
+                        </div>
+                        <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.78rem', color: 'rgba(245,242,236,0.5)', marginTop: '0.3rem' }}>
+                          📍 {r.location} · {formatSessionDateTime(r.startAt)}
+                        </p>
+                        <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.75rem', color: 'rgba(245,242,236,0.4)', marginTop: '0.3rem' }}>
+                          {1 + r.participants.length + r.participantPhones.length} {1 + r.participants.length + r.participantPhones.length === 1 ? 'person' : 'people'}
+                        </p>
+                        {r.status === 'rejected' && r.rejectionReason && (
+                          <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.75rem', color: 'var(--red)', marginTop: '0.4rem' }}>
+                            Reason: {r.rejectionReason}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
+            ) : (
+              eventReservations.length === 0 ? (
+                <div style={emptyStateStyle}>No event reservations yet</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                  {eventReservations.map(r => (
+                    <div key={r.id} style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: isMobile ? '0.8rem' : '1rem',
+                      padding: isMobile ? '1rem' : '1.2rem',
+                      backgroundColor: 'rgba(255,255,255,0.02)',
+                      border: '1px solid rgba(255,255,255,0.06)',
+                      borderRadius: '4px',
+                      width: '100%',
+                    }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem', flexWrap: 'wrap' }}>
+                          <p style={{ fontFamily: 'var(--font-cinzel)', fontSize: '0.9rem', color: 'var(--offwhite)' }}>{r.eventTitle}</p>
+                          <span style={{
+                            fontSize: '0.62rem',
+                            padding: '0.2rem 0.6rem',
+                            borderRadius: '2px',
+                            backgroundColor: `${RESERVATION_STATUS_COLORS[r.status]}25`,
+                            color: RESERVATION_STATUS_COLORS[r.status],
+                            fontFamily: 'var(--font-inter)',
+                            letterSpacing: '0.06em',
+                            textTransform: 'uppercase',
+                            whiteSpace: 'nowrap',
+                          }}>{r.status}</span>
+                        </div>
+                        <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.78rem', color: 'rgba(245,242,236,0.5)', marginTop: '0.3rem' }}>
+                          📍 {r.branch} · {r.eventDate} · {r.eventTimeStart}–{r.eventTimeEnd}
+                        </p>
+                        <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.75rem', color: 'rgba(245,242,236,0.4)', marginTop: '0.3rem' }}>
+                          {r.partySize} {r.partySize === 1 ? 'person' : 'people'}
+                        </p>
+                        {r.status === 'rejected' && r.rejectionReason && (
+                          <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.75rem', color: 'var(--red)', marginTop: '0.4rem' }}>
+                            Reason: {r.rejectionReason}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
             )}
           </div>
         )}
 
-        <button onClick={handleSignOut} style={{
-          alignSelf: isMobile ? 'stretch' : 'flex-start',
-          background: 'transparent',
-          border: '1px solid rgba(255,255,255,0.1)',
-          color: 'rgba(245,242,236,0.6)',
-          padding: '0.7rem 1.5rem',
-          borderRadius: '2px',
-          fontSize: '0.75rem',
-          letterSpacing: '0.1em',
-          textTransform: 'uppercase',
-          cursor: 'pointer',
-          fontFamily: 'var(--font-inter)',
-        }}>Sign Out</button>
+        <button onClick={handleSignOut}
+          onMouseEnter={() => setSignOutHovered(true)}
+          onMouseLeave={() => setSignOutHovered(false)}
+          style={{
+            alignSelf: isMobile ? 'stretch' : 'flex-start',
+            background: signOutHovered ? 'rgba(228,51,41,0.1)' : 'transparent',
+            border: `1px solid ${signOutHovered ? 'var(--red)' : 'rgba(255,255,255,0.1)'}`,
+            color: signOutHovered ? 'var(--red)' : 'rgba(245,242,236,0.6)',
+            padding: '0.7rem 1.5rem',
+            borderRadius: '2px',
+            fontSize: '0.75rem',
+            letterSpacing: '0.1em',
+            textTransform: 'uppercase',
+            cursor: 'pointer',
+            fontFamily: 'var(--font-inter)',
+            transition: 'all 0.2s ease',
+          }}>Sign Out</button>
       </div>
 
       {/* Customize Profile Modal — avatar + theme color */}
@@ -836,18 +1059,22 @@ export default function CustomerProfilePage() {
               <h3 style={{ fontFamily: 'var(--font-cinzel)', fontSize: '1.1rem', color: 'var(--offwhite)' }}>
                 Customize Profile
               </h3>
-              <button onClick={() => setModalOpen(false)} style={{
-                background: 'transparent',
-                border: '1px solid rgba(255,255,255,0.1)',
-                color: 'rgba(245,242,236,0.5)',
-                padding: '0.4rem 1rem',
-                borderRadius: '2px',
-                fontSize: '0.72rem',
-                cursor: 'pointer',
-                fontFamily: 'var(--font-inter)',
-                letterSpacing: '0.08em',
-                textTransform: 'uppercase',
-              }}>✕ Close</button>
+              <button onClick={() => setModalOpen(false)}
+                onMouseEnter={() => setModalCloseHovered(true)}
+                onMouseLeave={() => setModalCloseHovered(false)}
+                style={{
+                  background: modalCloseHovered ? 'rgba(255,255,255,0.08)' : 'transparent',
+                  border: `1px solid ${modalCloseHovered ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.1)'}`,
+                  color: modalCloseHovered ? 'var(--offwhite)' : 'rgba(245,242,236,0.5)',
+                  padding: '0.4rem 1rem',
+                  borderRadius: '2px',
+                  fontSize: '0.72rem',
+                  cursor: 'pointer',
+                  fontFamily: 'var(--font-inter)',
+                  letterSpacing: '0.08em',
+                  textTransform: 'uppercase',
+                  transition: 'all 0.2s ease',
+                }}>✕ Close</button>
             </div>
 
             <div style={{
@@ -877,19 +1104,24 @@ export default function CustomerProfilePage() {
                 }}>
                   {PREMADE_AVATARS.map(url => {
                     const selected = profile.avatarUrl === url
+                    const hov = hoveredAvatarOption === url
                     return (
                       <button
                         key={url}
                         onClick={() => handleSelectPremadeAvatar(url)}
                         disabled={uploadingAvatar}
+                        onMouseEnter={() => setHoveredAvatarOption(url)}
+                        onMouseLeave={() => setHoveredAvatarOption(null)}
                         style={{
                           aspectRatio: '1',
                           borderRadius: '50%',
                           overflow: 'hidden',
                           padding: 0,
                           backgroundColor: '#1a1a1a',
-                          border: selected ? `3px solid ${theme.accent}` : '2px solid rgba(255,255,255,0.1)',
+                          border: selected ? `3px solid ${theme.accent}` : `2px solid ${hov ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.1)'}`,
                           cursor: uploadingAvatar ? 'not-allowed' : 'pointer',
+                          transform: hov && !selected ? 'scale(1.06)' : 'scale(1)',
+                          transition: 'all 0.2s ease',
                         }}
                       >
                         <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -908,9 +1140,11 @@ export default function CustomerProfilePage() {
                 <button
                   onClick={() => fileRef.current?.click()}
                   disabled={uploadingAvatar}
+                  onMouseEnter={() => setUploadBtnHovered(true)}
+                  onMouseLeave={() => setUploadBtnHovered(false)}
                   style={{
                     width: '100%',
-                    backgroundColor: theme.accent,
+                    backgroundColor: !uploadingAvatar && uploadBtnHovered ? `${theme.accent}cc` : theme.accent,
                     color: '#fff',
                     border: 'none',
                     padding: '0.8rem',
@@ -921,6 +1155,8 @@ export default function CustomerProfilePage() {
                     fontFamily: 'var(--font-inter)',
                     cursor: uploadingAvatar ? 'not-allowed' : 'pointer',
                     opacity: uploadingAvatar ? 0.6 : 1,
+                    boxShadow: !uploadingAvatar && uploadBtnHovered ? `0 6px 16px ${theme.accent}50` : 'none',
+                    transition: 'all 0.2s ease',
                   }}
                 >
                   {uploadingAvatar ? 'Uploading…' : 'Upload Your Own Image'}
@@ -946,10 +1182,13 @@ export default function CustomerProfilePage() {
                 }}>
                   {THEMES.map(t => {
                     const selected = t.id === profile.themeId
+                    const hov = hoveredThemeId === t.id
                     return (
                       <button
                         key={t.id}
                         onClick={() => handleSelectTheme(t.id)}
+                        onMouseEnter={() => setHoveredThemeId(t.id)}
+                        onMouseLeave={() => setHoveredThemeId(null)}
                         aria-label={t.label}
                         title={t.label}
                         style={{
@@ -957,10 +1196,12 @@ export default function CustomerProfilePage() {
                           height: '44px',
                           borderRadius: '50%',
                           backgroundColor: t.background,
-                          border: selected ? `3px solid ${t.accent}` : '2px solid rgba(255,255,255,0.15)',
+                          border: selected ? `3px solid ${t.accent}` : `2px solid ${hov ? t.accent : 'rgba(255,255,255,0.15)'}`,
                           boxShadow: selected ? `0 0 0 2px #0d0d0d, 0 0 0 4px ${t.accent}` : 'none',
                           cursor: 'pointer',
                           padding: 0,
+                          transform: hov && !selected ? 'scale(1.1)' : 'scale(1)',
+                          transition: 'all 0.2s ease',
                         }}
                       />
                     )

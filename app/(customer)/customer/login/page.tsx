@@ -91,6 +91,13 @@ export default function CustomerLoginPage() {
   const [pendingUsername, setPendingUsername] = useState('')
   const [pendingPhone, setPendingPhone] = useState('')
 
+  const [continueHovered, setContinueHovered] = useState(false)
+  const [googleHovered, setGoogleHovered] = useState(false)
+  const [eyeHovered, setEyeHovered] = useState(false)
+  const [submitHovered, setSubmitHovered] = useState(false)
+  const [linkGoogleHovered, setLinkGoogleHovered] = useState(false)
+  const [modeSwitchHovered, setModeSwitchHovered] = useState(false)
+
   async function handleGoogle() {
     setBusy(true)
     setError('')
@@ -235,19 +242,35 @@ export default function CustomerLoginPage() {
               onChange={e => setPendingPhone(e.target.value)}
               style={inputStyle}
             />
-            <button type="submit" disabled={busy} style={{
-              backgroundColor: 'var(--purple)',
-              color: '#fff',
-              padding: '0.9rem',
-              borderRadius: '4px',
-              border: 'none',
-              fontSize: '0.8rem',
-              letterSpacing: '0.08em',
-              textTransform: 'uppercase',
-              fontFamily: 'var(--font-inter)',
-              cursor: busy ? 'not-allowed' : 'pointer',
-              opacity: busy ? 0.6 : 1,
-            }}>
+            <button type="submit" disabled={busy}
+              onMouseEnter={() => setContinueHovered(true)}
+              onMouseLeave={() => setContinueHovered(false)}
+              style={{
+                position: 'relative',
+                overflow: 'hidden',
+                backgroundColor: !busy && continueHovered ? 'rgba(106,106,183,0.15)' : 'var(--purple)',
+                color: '#fff',
+                padding: '0.9rem',
+                borderRadius: '4px',
+                border: '1px solid var(--purple)',
+                fontSize: '0.8rem',
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase',
+                fontFamily: 'var(--font-inter)',
+                cursor: busy ? 'not-allowed' : 'pointer',
+                opacity: busy ? 0.6 : 1,
+                backdropFilter: !busy && continueHovered ? 'blur(10px)' : 'none',
+                transition: 'all 0.3s ease',
+              }}>
+              <span style={{
+                position: 'absolute', top: 0,
+                left: !busy && continueHovered ? '120%' : '-60%',
+                width: '40%', height: '100%',
+                background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent)',
+                transform: 'skewX(-20deg)',
+                transition: 'left 0.5s ease',
+                pointerEvents: 'none',
+              }} />
               {busy ? 'Please wait…' : 'Continue'}
             </button>
           </form>
@@ -291,23 +314,29 @@ export default function CustomerLoginPage() {
         </div>
 
         {/* Google */}
-        <button onClick={handleGoogle} disabled={busy} style={{
-          width: '100%',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '0.75rem',
-          backgroundColor: 'var(--offwhite)',
-          color: '#1a1a1a',
-          padding: '0.9rem',
-          borderRadius: '4px',
-          border: 'none',
-          fontSize: '0.85rem',
-          fontFamily: 'var(--font-inter)',
-          cursor: busy ? 'not-allowed' : 'pointer',
-          opacity: busy ? 0.6 : 1,
-          marginBottom: '1.5rem',
-        }}>
+        <button onClick={handleGoogle} disabled={busy}
+          onMouseEnter={() => setGoogleHovered(true)}
+          onMouseLeave={() => setGoogleHovered(false)}
+          style={{
+            width: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '0.75rem',
+            backgroundColor: !busy && googleHovered ? '#fff' : 'var(--offwhite)',
+            color: '#1a1a1a',
+            padding: '0.9rem',
+            borderRadius: '4px',
+            border: 'none',
+            fontSize: '0.85rem',
+            fontFamily: 'var(--font-inter)',
+            cursor: busy ? 'not-allowed' : 'pointer',
+            opacity: busy ? 0.6 : 1,
+            marginBottom: '1.5rem',
+            boxShadow: !busy && googleHovered ? '0 4px 16px rgba(255,255,255,0.15)' : 'none',
+            transform: !busy && googleHovered ? 'translateY(-2px)' : 'none',
+            transition: 'all 0.2s ease',
+          }}>
           <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
             <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.9C16.64 14.2 17.64 11.9 17.64 9.2Z" />
             <path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.9-2.26c-.8.54-1.84.86-3.06.86-2.36 0-4.36-1.6-5.08-3.74H.9v2.33A9 9 0 0 0 9 18Z" />
@@ -375,6 +404,8 @@ export default function CustomerLoginPage() {
             <button
               type="button"
               onClick={() => setShowPassword(s => !s)}
+              onMouseEnter={() => setEyeHovered(true)}
+              onMouseLeave={() => setEyeHovered(false)}
               aria-label={showPassword ? 'Hide password' : 'Show password'}
               style={{
                 position: 'absolute',
@@ -383,31 +414,48 @@ export default function CustomerLoginPage() {
                 transform: 'translateY(-50%)',
                 background: 'transparent',
                 border: 'none',
-                color: 'rgba(245,242,236,0.4)',
+                color: eyeHovered ? 'var(--offwhite)' : 'rgba(245,242,236,0.4)',
                 cursor: 'pointer',
                 padding: 0,
                 display: 'flex',
                 alignItems: 'center',
+                transition: 'color 0.2s ease',
               }}
             >
               <FontAwesomeIcon icon={showPassword ? faEyeSlash : faEye} style={{ width: '16px' }} />
             </button>
           </div>
 
-          <button type="submit" disabled={busy} style={{
-            backgroundColor: 'var(--purple)',
-            color: '#fff',
-            padding: '0.9rem',
-            borderRadius: '4px',
-            border: 'none',
-            fontSize: '0.8rem',
-            letterSpacing: '0.08em',
-            textTransform: 'uppercase',
-            fontFamily: 'var(--font-inter)',
-            cursor: busy ? 'not-allowed' : 'pointer',
-            opacity: busy ? 0.6 : 1,
-            marginTop: '0.3rem',
-          }}>
+          <button type="submit" disabled={busy}
+            onMouseEnter={() => setSubmitHovered(true)}
+            onMouseLeave={() => setSubmitHovered(false)}
+            style={{
+              position: 'relative',
+              overflow: 'hidden',
+              backgroundColor: !busy && submitHovered ? 'rgba(106,106,183,0.15)' : 'var(--purple)',
+              color: '#fff',
+              padding: '0.9rem',
+              borderRadius: '4px',
+              border: '1px solid var(--purple)',
+              fontSize: '0.8rem',
+              letterSpacing: '0.08em',
+              textTransform: 'uppercase',
+              fontFamily: 'var(--font-inter)',
+              cursor: busy ? 'not-allowed' : 'pointer',
+              opacity: busy ? 0.6 : 1,
+              marginTop: '0.3rem',
+              backdropFilter: !busy && submitHovered ? 'blur(10px)' : 'none',
+              transition: 'all 0.3s ease',
+            }}>
+            <span style={{
+              position: 'absolute', top: 0,
+              left: !busy && submitHovered ? '120%' : '-60%',
+              width: '40%', height: '100%',
+              background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent)',
+              transform: 'skewX(-20deg)',
+              transition: 'left 0.5s ease',
+              pointerEvents: 'none',
+            }} />
             {busy ? 'Please wait…' : mode === 'signup' ? 'Create Account' : 'Log In'}
           </button>
         </form>
@@ -441,20 +489,25 @@ export default function CustomerLoginPage() {
               This is probably your Google account. Sign in with Google to confirm it&apos;s you, and
               we&apos;ll set this password on it so you can log in either way next time.
             </p>
-            <button onClick={handleLinkGoogle} disabled={busy} style={{
-              width: '100%',
-              backgroundColor: 'var(--teal)',
-              color: '#fff',
-              padding: '0.7rem',
-              borderRadius: '2px',
-              border: 'none',
-              fontSize: '0.75rem',
-              letterSpacing: '0.06em',
-              textTransform: 'uppercase',
-              fontFamily: 'var(--font-inter)',
-              cursor: busy ? 'not-allowed' : 'pointer',
-              opacity: busy ? 0.6 : 1,
-            }}>Continue with Google</button>
+            <button onClick={handleLinkGoogle} disabled={busy}
+              onMouseEnter={() => setLinkGoogleHovered(true)}
+              onMouseLeave={() => setLinkGoogleHovered(false)}
+              style={{
+                width: '100%',
+                backgroundColor: !busy && linkGoogleHovered ? 'rgba(0,160,152,0.15)' : 'var(--teal)',
+                color: '#fff',
+                padding: '0.7rem',
+                borderRadius: '2px',
+                border: '1px solid var(--teal)',
+                fontSize: '0.75rem',
+                letterSpacing: '0.06em',
+                textTransform: 'uppercase',
+                fontFamily: 'var(--font-inter)',
+                cursor: busy ? 'not-allowed' : 'pointer',
+                opacity: busy ? 0.6 : 1,
+                backdropFilter: !busy && linkGoogleHovered ? 'blur(10px)' : 'none',
+                transition: 'all 0.3s ease',
+              }}>Continue with Google</button>
           </div>
         )}
 
@@ -469,6 +522,8 @@ export default function CustomerLoginPage() {
           <button
             type="button"
             onClick={() => { setMode(mode === 'signup' ? 'login' : 'signup'); setError(''); setShowLinkPrompt(false) }}
+            onMouseEnter={() => setModeSwitchHovered(true)}
+            onMouseLeave={() => setModeSwitchHovered(false)}
             style={{
               background: 'transparent',
               border: 'none',
@@ -477,6 +532,7 @@ export default function CustomerLoginPage() {
               fontFamily: 'var(--font-inter)',
               fontSize: '0.8rem',
               padding: 0,
+              textDecoration: modeSwitchHovered ? 'underline' : 'none',
             }}>
             {mode === 'signup' ? 'Log In' : 'Sign Up'}
           </button>

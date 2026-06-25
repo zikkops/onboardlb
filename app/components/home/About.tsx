@@ -103,6 +103,7 @@ function InfinityNumber() {
 
 export default function About() {
   const isMobile = useIsMobile()
+  const [storyHovered, setStoryHovered] = useState(false)
 
   return (
     <section id="about" style={{
@@ -132,6 +133,7 @@ export default function About() {
             src="/images/BG-img1.webp"
             alt="Onboard interior"
             fill
+            sizes="(max-width: 768px) 100vw, 50vw"
             style={{ objectFit: 'cover' }}
           />
         </div>
@@ -177,18 +179,37 @@ export default function About() {
             board game library — all under one roof. Three locations, one community.
           </p>
 
-          <Link href="/about" style={{
-            display: 'inline-block',
-            backgroundColor: 'var(--teal)',
-            color: '#fff',
-            padding: '0.85rem 2.5rem',
-            borderRadius: '2px',
-            fontSize: '0.78rem',
-            letterSpacing: '0.12em',
-            textTransform: 'uppercase',
-            textDecoration: 'none',
-            fontFamily: 'var(--font-inter)',
-          }}>
+          <Link href="/about"
+            onMouseEnter={() => setStoryHovered(true)}
+            onMouseLeave={() => setStoryHovered(false)}
+            style={{
+              position: 'relative',
+              overflow: 'hidden',
+              display: 'inline-block',
+              backgroundColor: storyHovered ? 'rgba(0,160,152,0.15)' : 'var(--teal)',
+              color: '#fff',
+              padding: '0.85rem 2.5rem',
+              borderRadius: '2px',
+              fontSize: '0.78rem',
+              letterSpacing: '0.12em',
+              textTransform: 'uppercase',
+              textDecoration: 'none',
+              fontFamily: 'var(--font-inter)',
+              border: '1px solid var(--teal)',
+              backdropFilter: storyHovered ? 'blur(10px)' : 'none',
+              transition: 'all 0.3s ease',
+            }}>
+            <span style={{
+              position: 'absolute',
+              top: 0,
+              left: storyHovered ? '120%' : '-60%',
+              width: '40%',
+              height: '100%',
+              background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent)',
+              transform: 'skewX(-20deg)',
+              transition: 'left 0.5s ease',
+              pointerEvents: 'none',
+            }} />
             Our Story
           </Link>
         </div>

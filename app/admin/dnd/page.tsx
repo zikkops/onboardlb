@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react'
 import {
-  collection, getDocs, addDoc, deleteDoc,
+  collection, getDocs, addDoc, deleteDoc, query, where,
   doc, updateDoc, serverTimestamp, writeBatch
 } from 'firebase/firestore'
 import { db } from '../../lib/firebase'
@@ -10,6 +10,7 @@ import { useRequireRole, SECTION_ACCESS } from '../../lib/adminAuth'
 import { logCreate, logUpdate, logDelete } from '../../lib/activityLog'
 import { recordMediaUpload } from '../../lib/media'
 import MediaPickerModal from '../../components/admin/MediaPickerModal'
+import { DEFAULT_OPENING_START, DEFAULT_OPENING_END } from '../../lib/dndReservations'
 
 interface Campaign {
   id: string
@@ -24,7 +25,33 @@ interface Campaign {
   color: string
   locations: string[]
   contactNumber?: string
+  dmUid?: string | null
+  // Snapshot of the assigned DM's own branchIds/opening hours at the moment
+  // the campaign was last saved — kept on the campaign doc (not looked up
+  // live) so the public /dnd page can compute bookable locations and times
+  // without needing to read adminUsers, which it has no permission to do as
+  // a guest.
+  dmBranchIds?: string[]
+  dmOpeningStart?: string
+  dmOpeningEnd?: string
+  dmDaysOff?: string[]
   order: number
+}
+
+interface DmAccount {
+  id: string
+  email: string
+  branchIds: string[]
+  openingStart: string
+  openingEnd: string
+  daysOff: string[]
+}
+
+// Reads either the new `branchIds` array or the older singular `branchId`
+// from accounts created before multi-branch support existed.
+function normalizeBranchIds(data: { branchIds?: unknown; branchId?: unknown }): string[] {
+  if (Array.isArray(data.branchIds)) return data.branchIds as string[]
+  return data.branchId ? [data.branchId as string] : []
 }
 
 const EMPTY = {
@@ -39,6 +66,7 @@ const EMPTY = {
   color: '#6A6AB7',
   locations: [] as string[],
   contactNumber: '+96181950042',
+  dmUid: '' as string,
   order: 0,
 }
 
@@ -71,6 +99,7 @@ export default function AdminDndPage() {
   const { checking } = useRequireRole(SECTION_ACCESS.dnd)
   const isMobile = useIsMobile()
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
+  const [dms, setDms]             = useState<DmAccount[]>([])
   const [loading, setLoading]     = useState(true)
   const [open, setOpen]           = useState(false)
   const [editing, setEditing]     = useState<Campaign | null>(null)
@@ -89,7 +118,30 @@ export default function AdminDndPage() {
     setLoading(false)
   }
 
-  useEffect(() => { loadCampaigns() }, [])
+  // Anyone with the dungeonmaster role, plus anyone of any other role who's
+  // been separately flagged isDungeonMaster in Manage Users — merged and
+  // deduped since the two queries can't be combined into one `where`.
+  async function loadDms() {
+    const [byRole, byFlag] = await Promise.all([
+      getDocs(query(collection(db, 'adminUsers'), where('role', '==', 'dungeonmaster'))),
+      getDocs(query(collection(db, 'adminUsers'), where('isDungeonMaster', '==', true))),
+    ])
+    const map = new Map<string, DmAccount>()
+    for (const d of [...byRole.docs, ...byFlag.docs]) {
+      const data = d.data()
+      map.set(d.id, {
+        id: d.id,
+        email: (data.email as string) ?? d.id,
+        branchIds: normalizeBranchIds(data),
+        openingStart: (data.openingStart as string) || DEFAULT_OPENING_START,
+        openingEnd: (data.openingEnd as string) || DEFAULT_OPENING_END,
+        daysOff: Array.isArray(data.daysOff) ? data.daysOff as string[] : [],
+      })
+    }
+    setDms([...map.values()].sort((a, b) => a.email.localeCompare(b.email)))
+  }
+
+  useEffect(() => { loadCampaigns(); loadDms() }, [])
 
   async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -134,6 +186,7 @@ export default function AdminDndPage() {
       color:         campaign.color,
       locations:     campaign.locations ?? [],
       contactNumber: campaign.contactNumber ?? '+96181950042',
+      dmUid:         campaign.dmUid ?? '',
       order:         campaign.order ?? 0,
     })
     setOpen(true)
@@ -142,19 +195,28 @@ export default function AdminDndPage() {
   async function handleSave(e: React.FormEvent) {
     e.preventDefault()
     setSaving(true)
+    // Refreshed from the live `dms` list on every save, so re-saving a
+    // campaign (even with no other changes) picks up the DM's latest
+    // branches/opening hours from Manage Users / their own Availability page.
+    const selectedDm = form.dmUid ? dms.find(d => d.id === form.dmUid) : undefined
+    const dmBranchIds = selectedDm?.branchIds ?? []
+    const dmOpeningStart = selectedDm?.openingStart ?? DEFAULT_OPENING_START
+    const dmOpeningEnd = selectedDm?.openingEnd ?? DEFAULT_OPENING_END
+    const dmDaysOff = selectedDm?.daysOff ?? []
+    const payload = { ...form, dmUid: form.dmUid || null, dmBranchIds, dmOpeningStart, dmOpeningEnd, dmDaysOff }
     if (editing) {
       await updateDoc(doc(db, 'dndCampaigns', editing.id), {
-        ...form,
+        ...payload,
         updatedAt: serverTimestamp(),
       })
-      await logUpdate('D&D Campaign', form.title, editing, form)
+      await logUpdate('D&D Campaign', form.title, editing, payload)
     } else {
       await addDoc(collection(db, 'dndCampaigns'), {
-        ...form,
+        ...payload,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       })
-      await logCreate('D&D Campaign', form.title, form)
+      await logCreate('D&D Campaign', form.title, payload)
     }
     setSaving(false)
     setOpen(false)
@@ -330,6 +392,9 @@ export default function AdminDndPage() {
                     <span>👥 {campaign.players}</span>
                     <span>📅 {campaign.sessions}</span>
                     <span style={{ color: campaign.color }}>{campaign.level}</span>
+                  </div>
+                  <div style={{ fontSize: '0.72rem', color: campaign.dmUid ? 'var(--teal)' : 'rgba(228,51,41,0.7)', fontFamily: 'var(--font-inter)', marginBottom: '0.4rem' }}>
+                    🎲 {campaign.dmUid ? (dms.find(d => d.id === campaign.dmUid)?.email ?? 'DM assigned') : 'No DM assigned — not bookable yet'}
                   </div>
                   {campaign.locations?.length > 0 && (
                     <div style={{
@@ -595,6 +660,39 @@ export default function AdminDndPage() {
                     </button>
                   ))}
                 </div>
+              </div>
+
+              {/* Dungeon Master */}
+              <div>
+                <label style={labelStyle}>Assigned Dungeon Master</label>
+                <select value={form.dmUid}
+                  onChange={e => setForm(f => ({ ...f, dmUid: e.target.value }))}
+                  style={{ ...inputStyle, color: '#F5F2EC', backgroundColor: '#1a1a1a' }}>
+                  <option value="">— Unassigned —</option>
+                  {dms.map(dm => (
+                    <option key={dm.id} value={dm.id} style={{ backgroundColor: '#1a1a1a', color: '#F5F2EC' }}>{dm.email}</option>
+                  ))}
+                </select>
+                <p style={{ fontSize: '0.72rem', color: 'rgba(245,242,236,0.3)', fontFamily: 'var(--font-inter)', marginTop: '0.5rem' }}>
+                  Customers can only book a session once a Dungeon Master is assigned. A DM's booked time is blocked across every campaign and location they're assigned to.
+                </p>
+                {form.dmUid && (() => {
+                  const dm = dms.find(d => d.id === form.dmUid)
+                  const dmBranches = dm?.branchIds ?? []
+                  return (
+                    <>
+                      <p style={{ fontSize: '0.72rem', fontFamily: 'var(--font-inter)', marginTop: '0.4rem', color: dmBranches.length > 0 ? 'var(--teal)' : 'var(--red)' }}>
+                        {dmBranches.length > 0
+                          ? `This DM is assigned to: ${dmBranches.join(', ')}. Only locations on both lists are bookable.`
+                          : `This DM has no branches assigned yet — set their branches in Manage Users, or nothing above will be bookable.`}
+                      </p>
+                      <p style={{ fontSize: '0.72rem', fontFamily: 'var(--font-inter)', marginTop: '0.3rem', color: 'rgba(245,242,236,0.3)' }}>
+                        Bookable start times: {dm?.openingStart ?? DEFAULT_OPENING_START}–{dm?.openingEnd ?? DEFAULT_OPENING_END} (set by the DM in their Availability page).
+                        {dm && dm.daysOff.length > 0 && ` This DM has ${dm.daysOff.length} day${dm.daysOff.length === 1 ? '' : 's'} off blocked.`}
+                      </p>
+                    </>
+                  )
+                })()}
               </div>
             </div>
 

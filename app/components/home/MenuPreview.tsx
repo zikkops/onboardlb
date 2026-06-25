@@ -29,6 +29,8 @@ function useIsMobile(breakpoint = 768) {
 export default function MenuPreview() {
   const [categories, setCategories] = useState<Category[]>([])
   const [loading, setLoading]       = useState(true)
+  const [hoveredId, setHoveredId]   = useState<string | null>(null)
+  const [menuHovered, setMenuHovered] = useState(false)
   const isMobile = useIsMobile()
 
   useEffect(() => {
@@ -108,16 +110,23 @@ export default function MenuPreview() {
                 ? 'var(--purple)'
                 : 'var(--red)'
 
+              const hovered = hoveredId === id
               return (
-                <Link key={id} href="/menu" style={{
-                  position: 'relative',
-                  height: isMobile ? '140px' : '180px',
-                  borderRadius: '4px',
-                  overflow: 'hidden',
-                  textDecoration: 'none',
-                  display: 'block',
-                  border: '1px solid rgba(255,255,255,0.06)',
-                }}>
+                <Link key={id} href="/menu"
+                  onMouseEnter={() => setHoveredId(id)}
+                  onMouseLeave={() => setHoveredId(null)}
+                  style={{
+                    position: 'relative',
+                    height: isMobile ? '140px' : '180px',
+                    borderRadius: '4px',
+                    overflow: 'hidden',
+                    textDecoration: 'none',
+                    display: 'block',
+                    border: `1px solid ${hovered ? color : 'rgba(255,255,255,0.06)'}`,
+                    transform: hovered ? 'translateY(-4px)' : 'none',
+                    boxShadow: hovered ? '0 12px 24px rgba(0,0,0,0.35)' : 'none',
+                    transition: 'transform 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease',
+                  }}>
                   {/* Background image or color */}
                   {image ? (
                     <Image
@@ -125,7 +134,11 @@ export default function MenuPreview() {
                       alt={name}
                       fill
                       sizes="(max-width: 768px) 45vw, 20vw"
-                      style={{ objectFit: 'cover' }}
+                      style={{
+                        objectFit: 'cover',
+                        transform: hovered ? 'scale(1.08)' : 'scale(1)',
+                        transition: 'transform 0.35s ease',
+                      }}
                     />
                   ) : (
                     <div style={{
@@ -145,10 +158,11 @@ export default function MenuPreview() {
                     position: 'absolute',
                     top: '0.7rem',
                     right: '0.7rem',
-                    width: '6px',
-                    height: '6px',
+                    width: hovered ? '8px' : '6px',
+                    height: hovered ? '8px' : '6px',
                     borderRadius: '50%',
                     backgroundColor: color,
+                    transition: 'all 0.3s ease',
                   }} />
 
                   {/* Label */}
@@ -178,30 +192,39 @@ export default function MenuPreview() {
             })}
 
             {/* Last card — Go to Menu */}
-            <Link href="/menu" style={{
-              position: 'relative',
-              height: isMobile ? '140px' : '180px',
-              borderRadius: '4px',
-              overflow: 'hidden',
-              textDecoration: 'none',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '0.8rem',
-              border: '1px solid rgba(0,160,152,0.25)',
-              background: 'rgba(0,160,152,0.05)',
-            }}>
+            <Link href="/menu"
+              onMouseEnter={() => setMenuHovered(true)}
+              onMouseLeave={() => setMenuHovered(false)}
+              style={{
+                position: 'relative',
+                height: isMobile ? '140px' : '180px',
+                borderRadius: '4px',
+                overflow: 'hidden',
+                textDecoration: 'none',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.8rem',
+                border: `1px solid ${menuHovered ? 'rgba(0,160,152,0.6)' : 'rgba(0,160,152,0.25)'}`,
+                background: menuHovered ? 'rgba(0,160,152,0.12)' : 'rgba(0,160,152,0.05)',
+                transform: menuHovered ? 'translateY(-4px)' : 'none',
+                boxShadow: menuHovered ? '0 12px 24px rgba(0,160,152,0.2)' : 'none',
+                transition: 'all 0.3s ease',
+              }}>
               <div style={{
                 width: isMobile ? '36px' : '44px',
                 height: isMobile ? '36px' : '44px',
                 borderRadius: '50%',
-                border: '1px solid rgba(0,160,152,0.4)',
+                border: `1px solid ${menuHovered ? 'var(--teal)' : 'rgba(0,160,152,0.4)'}`,
+                backgroundColor: menuHovered ? 'var(--teal)' : 'transparent',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: 'var(--teal)',
+                color: menuHovered ? '#fff' : 'var(--teal)',
                 fontSize: isMobile ? '1rem' : '1.2rem',
+                transform: menuHovered ? 'translateX(4px)' : 'none',
+                transition: 'all 0.3s ease',
               }}>{'→'}</div>
               <p style={{
                 fontFamily: 'var(--font-cinzel)',
