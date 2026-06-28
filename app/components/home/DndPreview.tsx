@@ -1,10 +1,15 @@
 'use client'
 
 import Link from 'next/link'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { collection, getDocs } from 'firebase/firestore'
 import { db } from '../../lib/firebase'
 import Skeleton from '../Skeleton'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faChevronLeft, faChevronRight } from '@fortawesome/free-solid-svg-icons'
+
+// Swipes shorter than this are treated as taps/scrolls, not navigation.
+const SWIPE_THRESHOLD = 40
 
 interface Campaign {
   id: string
@@ -33,7 +38,9 @@ export default function DndPreview() {
   const [loading, setLoading]     = useState(true)
   const [exploreHovered, setExploreHovered] = useState(false)
   const [hoveredDot, setHoveredDot] = useState<number | null>(null)
+  const [hoveredArrow, setHoveredArrow] = useState<'prev' | 'next' | null>(null)
   const isMobile = useIsMobile()
+  const touchStartX = useRef<number | null>(null)
 
   useEffect(() => {
     async function load() {
@@ -47,13 +54,36 @@ export default function DndPreview() {
     load()
   }, [])
 
+  // Depends on `current` too, not just `campaigns.length` — so manually
+  // jumping to a slide (arrow click, dot, or swipe) restarts the 4-second
+  // countdown instead of potentially auto-advancing again a moment later.
   useEffect(() => {
     if (campaigns.length === 0) return
     const timer = setInterval(() => {
       setCurrent(prev => (prev + 1) % campaigns.length)
     }, 4000)
     return () => clearInterval(timer)
-  }, [campaigns])
+  }, [campaigns, current])
+
+  function goToPrev() {
+    setCurrent(prev => (prev - 1 + campaigns.length) % campaigns.length)
+  }
+
+  function goToNext() {
+    setCurrent(prev => (prev + 1) % campaigns.length)
+  }
+
+  function handleTouchStart(e: React.TouchEvent) {
+    touchStartX.current = e.touches[0].clientX
+  }
+
+  function handleTouchEnd(e: React.TouchEvent) {
+    if (touchStartX.current === null) return
+    const delta = e.changedTouches[0].clientX - touchStartX.current
+    touchStartX.current = null
+    if (delta > SWIPE_THRESHOLD) goToPrev()
+    else if (delta < -SWIPE_THRESHOLD) goToNext()
+  }
 
   const campaign = campaigns[current]
 
@@ -212,13 +242,17 @@ export default function DndPreview() {
               </div>
             ) : (
               <>
-                <div style={{
-                  position: 'relative',
-                  height: isMobile ? '320px' : '480px',
-                  borderRadius: '4px',
-                  overflow: 'hidden',
-                  border: '1px solid rgba(106,106,183,0.2)',
-                }}>
+                <div
+                  onTouchStart={handleTouchStart}
+                  onTouchEnd={handleTouchEnd}
+                  style={{
+                    position: 'relative',
+                    height: isMobile ? '320px' : '480px',
+                    borderRadius: '4px',
+                    overflow: 'hidden',
+                    border: '1px solid rgba(106,106,183,0.2)',
+                    touchAction: 'pan-y',
+                  }}>
                   {/* Background image */}
                   <div style={{
                     position: 'absolute', inset: 0,
@@ -234,6 +268,64 @@ export default function DndPreview() {
                     background: `linear-gradient(to top, rgba(10,10,10,0.95) 0%, ${campaign.color}40 100%)`,
                     transition: 'all 0.6s ease',
                   }} />
+
+                  {/* Prev/Next arrows */}
+                  {campaigns.length > 1 && (
+                    <>
+                      <button
+                        onClick={goToPrev}
+                        onMouseEnter={() => setHoveredArrow('prev')}
+                        onMouseLeave={() => setHoveredArrow(null)}
+                        aria-label="Previous campaign"
+                        style={{
+                          position: 'absolute',
+                          top: '50%',
+                          left: isMobile ? '0.6rem' : '1rem',
+                          transform: 'translateY(-50%)',
+                          width: isMobile ? '34px' : '40px',
+                          height: isMobile ? '34px' : '40px',
+                          borderRadius: '50%',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          backgroundColor: hoveredArrow === 'prev' ? 'rgba(106,106,183,0.7)' : 'rgba(10,10,10,0.6)',
+                          border: `1px solid ${hoveredArrow === 'prev' ? 'var(--purple)' : 'rgba(255,255,255,0.2)'}`,
+                          backdropFilter: 'blur(6px)',
+                          color: '#fff',
+                          cursor: 'pointer',
+                          zIndex: 1,
+                          transition: 'all 0.2s ease',
+                        }}>
+                        <FontAwesomeIcon icon={faChevronLeft} style={{ width: '13px' }} />
+                      </button>
+                      <button
+                        onClick={goToNext}
+                        onMouseEnter={() => setHoveredArrow('next')}
+                        onMouseLeave={() => setHoveredArrow(null)}
+                        aria-label="Next campaign"
+                        style={{
+                          position: 'absolute',
+                          top: '50%',
+                          right: isMobile ? '0.6rem' : '1rem',
+                          transform: 'translateY(-50%)',
+                          width: isMobile ? '34px' : '40px',
+                          height: isMobile ? '34px' : '40px',
+                          borderRadius: '50%',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          backgroundColor: hoveredArrow === 'next' ? 'rgba(106,106,183,0.7)' : 'rgba(10,10,10,0.6)',
+                          border: `1px solid ${hoveredArrow === 'next' ? 'var(--purple)' : 'rgba(255,255,255,0.2)'}`,
+                          backdropFilter: 'blur(6px)',
+                          color: '#fff',
+                          cursor: 'pointer',
+                          zIndex: 1,
+                          transition: 'all 0.2s ease',
+                        }}>
+                        <FontAwesomeIcon icon={faChevronRight} style={{ width: '13px' }} />
+                      </button>
+                    </>
+                  )}
 
                   {/* Badge */}
                   <div style={{

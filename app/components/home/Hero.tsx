@@ -170,8 +170,8 @@ export default function Hero() {
               <HeroButton label="Events"    color="#E43329" onClick={() => scrollTo('events-section')} />
               <HeroButton label="Reserve"   color="#32327C" onClick={() => router.push('/about#contact')} />
             </div>
-            <div style={{ width: '50%' }}>
-              <HeroButton label="D&D"       color="#6A6AB7" onClick={() => scrollTo('dnd-section')} />
+            <div style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
+              <HeroButton label="Dungeons & Dragons" color="#6A6AB7" onClick={() => scrollTo('dnd-section')} />
             </div>
           </>
         ) : (

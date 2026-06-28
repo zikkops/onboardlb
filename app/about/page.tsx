@@ -549,8 +549,8 @@ export default function AboutPage() {
               {[
                 {
                   label: 'WhatsApp',
-                  value: '+961 XX XXX XXX',
-                  href: 'https://wa.me/96100000000',
+                  value: '+961 81 950 042',
+                  href: 'https://wa.me/96181950042',
                   color: 'var(--teal)',
                 },
                 {

@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import {
-  collection, query, where, orderBy, onSnapshot, doc, getDoc, getDocs, addDoc,
-  writeBatch, serverTimestamp, documentId, type Timestamp,
+  collection, query, where, orderBy, limit, onSnapshot, doc, getDoc, getDocs, addDoc,
+  updateDoc, writeBatch, serverTimestamp, documentId, type Timestamp,
 } from 'firebase/firestore'
 import { db } from './firebase'
 import { getLevelFromXP } from './levelConfig'
@@ -19,7 +19,7 @@ export interface Transaction {
   userId: string[]
   xpAmount: number
   coinsAmount: number
-  status: 'pending' | 'approved' | 'rejected'
+  status: 'pending' | 'approved' | 'rejected' | 'cancelled'
   submittedBy: string
   approvedBy?: string | null
   rejectedBy?: string | null
@@ -97,6 +97,39 @@ export async function resolveUserProfiles(uids: string[]): Promise<Map<string, R
     })
   }
   return map
+}
+
+// Blocks re-submitting a check that's already been credited, or
+// re-submitting your own still-pending one — the two cases a customer's
+// own client can actually see. Firestore rules only let a customer read
+// *another* customer's transaction once it's 'approved' (or if they're
+// staff), so a different customer's still-pending claim on the same check
+// number genuinely can't be checked from here; that gap is covered by the
+// duplicate flag on the staff approval queue instead (app/admin/loyalty/
+// approvals/page.tsx), which has full read access to every pending one.
+export async function checkNumberAlreadyUsed(branchId: string, checkNumber: string, ownUid: string): Promise<boolean> {
+  const trimmed = checkNumber.trim()
+  if (!trimmed) return false
+
+  const approvedQuery = query(
+    collection(db, 'transactions'),
+    where('type', '==', 'check'),
+    where('branchId', '==', branchId),
+    where('checkNumber', '==', trimmed),
+    where('status', '==', 'approved'),
+    limit(1)
+  )
+  const ownPendingQuery = query(
+    collection(db, 'transactions'),
+    where('type', '==', 'check'),
+    where('branchId', '==', branchId),
+    where('checkNumber', '==', trimmed),
+    where('userId', 'array-contains', ownUid),
+    where('status', '==', 'pending'),
+    limit(1)
+  )
+  const [approvedSnap, ownPendingSnap] = await Promise.all([getDocs(approvedQuery), getDocs(ownPendingQuery)])
+  return !approvedSnap.empty || !ownPendingSnap.empty
 }
 
 // Staff submitters (event/dnd types) live in adminUsers, which has no
@@ -181,6 +214,16 @@ export async function rejectTransaction(tx: Transaction, managerUid: string, rea
 
   await batch.commit()
   await logUpdate('Loyalty Management', txLabel(tx), { status: 'pending' }, { status: 'rejected', rejectionReason: reason })
+}
+
+// Customer-initiated — withdrawing their own submission before staff act on
+// it (e.g. they forgot to add a friend to the split, or mistyped something).
+// Not logged via logUpdate: activityLog is staff-write-only (see
+// firestore.rules), and this isn't a staff action — the transaction's own
+// status change is the record. Only the original submitter may cancel, not
+// every person tagged in a split.
+export async function cancelTransaction(tx: Transaction): Promise<void> {
+  await updateDoc(doc(db, 'transactions', tx.id), { status: 'cancelled' })
 }
 
 export async function createDndSessionTransaction(input: {

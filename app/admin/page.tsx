@@ -9,6 +9,7 @@ import { usePendingTransactions } from '../lib/loyalty'
 import { usePendingRedemptions } from '../lib/redemptions'
 import { usePendingReservations } from '../lib/dndReservations'
 import { usePendingEventReservations } from '../lib/eventReservations'
+import { checkAndRunLoyaltyReset, migratePrivateFieldsOnce } from '../lib/customerManagement'
 
 // Events can be set to the literal branch "All Branches" in Manage Events —
 // always include it alongside a manager's real branchIds so those events
@@ -62,6 +63,16 @@ export default function AdminPage() {
   }, [checking, role, branchIds])
   const { reservations: pendingEventReservations } = usePendingEventReservations(eventReservationFilter)
 
+  // No server/cron job exists in this app — the annual points reset is
+  // checked passively here instead, the first time an admin opens the
+  // dashboard on or after the configured date. See checkAndRunLoyaltyReset.
+  useEffect(() => {
+    if (!checking && role === 'admin') {
+      checkAndRunLoyaltyReset()
+      migratePrivateFieldsOnce()
+    }
+  }, [checking, role])
+
   async function handleSignOut() {
     await signOut(auth)
     router.replace('/admin/login')
@@ -101,6 +112,7 @@ export default function AdminPage() {
         { label: 'Redemption Items', desc: 'Add, edit or deactivate items customers can redeem with OB Coins', href: '/admin/loyalty/redemption-items', access: SECTION_ACCESS.loyalty },
         { label: 'Redemption Requests', desc: 'Confirm or reject pending OB Coin redemption requests', href: '/admin/loyalty/redemptions', access: SECTION_ACCESS.loyalty, badge: pendingRedemptions.length },
         { label: 'Loyalty Activity', desc: 'Submissions, approvals, rejections, and redemption item changes', href: '/admin/loyalty/activity', access: SECTION_ACCESS.loyalty },
+        { label: 'Manage Customers', desc: 'Edit XP and OB Coins, resend password resets, delete accounts, and set the annual points reset date', href: '/admin/loyalty/customers', access: ['admin'] as Role[] },
       ],
     },
     {

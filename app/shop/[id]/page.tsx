@@ -66,7 +66,7 @@ function WhatsAppCta() {
   const [hovered, setHovered] = useState(false)
   return (
     <a
-      href="https://wa.me/96100000000"
+      href="https://wa.me/96181950042"
       target="_blank"
       rel="noopener noreferrer"
       onMouseEnter={() => setHovered(true)}

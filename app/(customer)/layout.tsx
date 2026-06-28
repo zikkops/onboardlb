@@ -3,6 +3,8 @@
 import { useEffect } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { useCustomerUser } from '../lib/customerAuth'
+import Navbar from '../components/layout/Navbar'
+import Footer from '../components/layout/Footer'
 
 const LOGIN_PATH = '/customer/login'
 
@@ -23,5 +25,21 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
   if (loading) return null
   if (!user && pathname !== LOGIN_PATH) return null
 
-  return <>{children}</>
+  // Every page in this group previously had no way back to the public
+  // site at all — Navbar/Footer are added here once, for the whole group,
+  // rather than per-page like the public pages do, since every page here
+  // shares the same "customer area" framing. Navbar floats fixed on top
+  // (same as everywhere else it's used), so the extra top padding keeps
+  // it from covering each page's own content — those pages already have
+  // their own top padding on top of this, which just means a bit of extra
+  // breathing room, not an exact science.
+  return (
+    <>
+      <Navbar />
+      <div style={{ paddingTop: '5rem' }}>
+        {children}
+      </div>
+      <Footer />
+    </>
+  )
 }

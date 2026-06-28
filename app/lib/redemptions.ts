@@ -31,7 +31,7 @@ export interface Redemption {
   itemName: string
   itemDescription: string
   coinCost: number
-  status: 'pending' | 'redeemed' | 'rejected'
+  status: 'pending' | 'redeemed' | 'rejected' | 'cancelled'
   branchId: string
   requestedBy: string
   confirmedBy?: string | null
@@ -303,4 +303,12 @@ export async function rejectRedemption(redemption: Redemption, managerUid: strin
 
   await batch.commit()
   await logUpdate('Loyalty Management', `Redemption — ${redemption.itemName}`, { status: 'pending' }, { status: 'rejected', rejectionReason: reason })
+}
+
+// Customer-initiated — withdrawing their own request before staff act on
+// it. Not logged via logUpdate: activityLog is staff-write-only (see
+// firestore.rules), and this isn't a staff action — the redemption's own
+// status change is the record.
+export async function cancelRedemption(redemption: Redemption): Promise<void> {
+  await updateDoc(doc(db, 'redemptions', redemption.id), { status: 'cancelled' })
 }

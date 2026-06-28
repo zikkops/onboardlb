@@ -4,16 +4,18 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
-  doc, onSnapshot, updateDoc,
+  doc, onSnapshot, updateDoc, setDoc,
   collection, query, where, orderBy, limit, type Timestamp,
 } from 'firebase/firestore'
 import { db, auth } from '../../../lib/firebase'
-import { useCustomerUser, signOutCustomer } from '../../../lib/customerAuth'
+import { useCustomerUser, signOutCustomer, resendVerificationEmail, refreshEmailVerified } from '../../../lib/customerAuth'
 import { useIsMobile } from '../../../lib/useIsMobile'
-import { useUserRedemptions, type Redemption } from '../../../lib/redemptions'
+import { useUserRedemptions, cancelRedemption, type Redemption } from '../../../lib/redemptions'
+import { cancelTransaction } from '../../../lib/loyalty'
 import { useUserReservations, type Reservation } from '../../../lib/dndReservations'
 import { useUserEventReservations, type EventReservation } from '../../../lib/eventReservations'
 import { usePendingInvites, acceptInvite, declineInvite, type ParticipantInvite } from '../../../lib/participantInvites'
+import { uploadImage } from '../../../lib/media'
 import Skeleton from '../../../components/Skeleton'
 import { getLevelFromXP, TIER_COLORS } from '../../../lib/levelConfig'
 import { resolveBranchName } from '../../../lib/branches'
@@ -27,7 +29,6 @@ interface CustomerProfile {
   displayName: string
   email: string
   avatarUrl: string
-  avatarDeleteUrl?: string | null
   themeId: string
   xp: number
   level: number
@@ -42,7 +43,7 @@ interface Transaction {
   userId: string[]
   xpAmount: number
   coinsAmount: number
-  status: 'pending' | 'approved' | 'rejected'
+  status: 'pending' | 'approved' | 'rejected' | 'cancelled'
   submittedBy: string
   approvedBy?: string
   checkPhotoUrl?: string
@@ -58,15 +59,17 @@ const TYPE_INFO: Record<Transaction['type'], { label: string; icon: IconDefiniti
 }
 
 const STATUS_COLORS: Record<Transaction['status'], string> = {
-  pending:  '#E5A33D',
-  approved: '#2ECC71',
-  rejected: 'var(--red)',
+  pending:   '#E5A33D',
+  approved:  '#2ECC71',
+  rejected:  'var(--red)',
+  cancelled: 'rgba(245,242,236,0.35)',
 }
 
 const REDEMPTION_STATUS_COLORS: Record<Redemption['status'], string> = {
-  pending:  '#E5A33D',
-  redeemed: '#2ECC71',
-  rejected: 'var(--red)',
+  pending:   '#E5A33D',
+  redeemed:  '#2ECC71',
+  rejected:  'var(--red)',
+  cancelled: 'rgba(245,242,236,0.35)',
 }
 
 const RESERVATION_STATUS_COLORS: Record<Reservation['status'], string> = {
@@ -117,7 +120,7 @@ const PREMADE_AVATARS = [
 ]
 
 function TransactionCard({
-  tx, theme, isMobile, showStatus, showCheckDetails, showSplit, onImageClick,
+  tx, theme, isMobile, showStatus, showCheckDetails, showSplit, onImageClick, onCancel, cancelling,
 }: {
   tx: Transaction
   theme: Theme
@@ -126,9 +129,12 @@ function TransactionCard({
   showCheckDetails?: boolean
   showSplit?: boolean
   onImageClick: (url: string) => void
+  onCancel?: () => void
+  cancelling?: boolean
 }) {
   const info = TYPE_INFO[tx.type]
   const [photoHovered, setPhotoHovered] = useState(false)
+  const [cancelHovered, setCancelHovered] = useState(false)
   return (
     <div style={{
       display: 'flex',
@@ -213,6 +219,27 @@ function TransactionCard({
             )}
           </div>
         )}
+
+        {onCancel && tx.status === 'pending' && (
+          <button onClick={onCancel} disabled={cancelling}
+            onMouseEnter={() => setCancelHovered(true)}
+            onMouseLeave={() => setCancelHovered(false)}
+            style={{
+              marginTop: '0.7rem',
+              background: cancelHovered ? 'rgba(228,51,41,0.1)' : 'transparent',
+              border: `1px solid ${cancelHovered ? 'var(--red)' : 'rgba(255,255,255,0.1)'}`,
+              color: cancelHovered ? 'var(--red)' : 'rgba(245,242,236,0.5)',
+              padding: '0.5rem 1rem',
+              borderRadius: '2px',
+              fontSize: '0.7rem',
+              letterSpacing: '0.08em',
+              textTransform: 'uppercase',
+              cursor: cancelling ? 'not-allowed' : 'pointer',
+              opacity: cancelling ? 0.6 : 1,
+              fontFamily: 'var(--font-inter)',
+              transition: 'all 0.2s ease',
+            }}>{cancelling ? 'Cancelling…' : 'Cancel'}</button>
+        )}
       </div>
     </div>
   )
@@ -277,10 +304,49 @@ export default function CustomerProfilePage() {
   const isMobile = useIsMobile()
   const { user } = useCustomerUser()
   const [profile, setProfile] = useState<CustomerProfile | null>(null)
+  // Lives in users/{uid}/private/contact, not the main profile doc — phone
+  // number and the imgbb delete-hash aren't safe to expose to the broad
+  // "any signed-in customer can read another user's doc" rule that friend
+  // search and the leaderboard rely on (see firestore.rules).
+  const [avatarDeleteUrl, setAvatarDeleteUrl] = useState<string | null>(null)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
+  const [avatarError, setAvatarError] = useState('')
   const [avatarHovered, setAvatarHovered] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
+
+  // Local copy rather than reading `user.emailVerified` directly — the
+  // cached Auth object only refreshes on a real sign-in event, not when the
+  // customer clicks the verification link in another tab, so refreshing
+  // this needs an explicit reload() (see handleRefreshVerified below).
+  const [emailVerified, setEmailVerified] = useState(true)
+  const [resendingVerification, setResendingVerification] = useState(false)
+  const [verificationSent, setVerificationSent] = useState(false)
+  const [checkingVerified, setCheckingVerified] = useState(false)
+
+  useEffect(() => {
+    if (user) setEmailVerified(user.emailVerified)
+  }, [user])
+
+  async function handleResendVerification() {
+    setResendingVerification(true)
+    try {
+      await resendVerificationEmail()
+      setVerificationSent(true)
+      setTimeout(() => setVerificationSent(false), 4000)
+    } finally {
+      setResendingVerification(false)
+    }
+  }
+
+  async function handleCheckVerified() {
+    setCheckingVerified(true)
+    try {
+      setEmailVerified(await refreshEmailVerified())
+    } finally {
+      setCheckingVerified(false)
+    }
+  }
 
   const [publicFeed, setPublicFeed]   = useState<Transaction[]>([])
   const [fullHistory, setFullHistory] = useState<Transaction[]>([])
@@ -302,6 +368,8 @@ export default function CustomerProfilePage() {
   const { reservations: eventReservations } = useUserEventReservations(isOwnProfile ? profileUid : null)
   const { invites } = usePendingInvites(isOwnProfile ? profileUid : null)
   const [busyInviteId, setBusyInviteId] = useState<string | null>(null)
+  const [cancellingId, setCancellingId] = useState<string | null>(null)
+  const [hoveredCancelId, setHoveredCancelId] = useState<string | null>(null)
   const [hoveredAcceptId, setHoveredAcceptId] = useState<string | null>(null)
   const [hoveredDeclineId, setHoveredDeclineId] = useState<string | null>(null)
   const [hoveredTab, setHoveredTab] = useState<string | null>(null)
@@ -321,6 +389,18 @@ export default function CustomerProfilePage() {
     try { await declineInvite(invite) } finally { setBusyInviteId(null) }
   }
 
+  async function handleCancelTransaction(tx: Transaction) {
+    if (!confirm('Cancel this submission? This can\'t be undone — you\'d need to resubmit from scratch.')) return
+    setCancellingId(tx.id)
+    try { await cancelTransaction(tx) } finally { setCancellingId(null) }
+  }
+
+  async function handleCancelRedemption(redemption: Redemption) {
+    if (!confirm('Cancel this redemption request? This can\'t be undone.')) return
+    setCancellingId(redemption.id)
+    try { await cancelRedemption(redemption) } finally { setCancellingId(null) }
+  }
+
   useEffect(() => {
     if (!user) return
     const ref = doc(db, 'users', user.uid)
@@ -336,6 +416,15 @@ export default function CustomerProfilePage() {
       if (data.level !== computed.level || data.levelTitle !== computed.levelTitle) {
         updateDoc(ref, { level: computed.level, levelTitle: computed.levelTitle }).catch(() => {})
       }
+    })
+    return unsub
+  }, [user])
+
+  useEffect(() => {
+    if (!user) { setAvatarDeleteUrl(null); return }
+    const ref = doc(db, 'users', user.uid, 'private', 'avatar')
+    const unsub = onSnapshot(ref, snap => {
+      setAvatarDeleteUrl((snap.data()?.avatarDeleteUrl as string | undefined) ?? null)
     })
     return unsub
   }, [user])
@@ -396,7 +485,7 @@ export default function CustomerProfilePage() {
   // anything if the old one was a custom upload we host (premade avatars
   // and Google photos have no delete URL, so this is a no-op for those).
   async function deleteOldAvatarIfAny() {
-    const deleteUrl = profile?.avatarDeleteUrl
+    const deleteUrl = avatarDeleteUrl
     if (!deleteUrl) return
     try {
       const idToken = await auth.currentUser?.getIdToken()
@@ -413,24 +502,23 @@ export default function CustomerProfilePage() {
   async function handleSelectPremadeAvatar(url: string) {
     if (!user) return
     await deleteOldAvatarIfAny()
-    await updateDoc(doc(db, 'users', user.uid), { avatarUrl: url, avatarDeleteUrl: null })
+    await updateDoc(doc(db, 'users', user.uid), { avatarUrl: url })
+    await setDoc(doc(db, 'users', user.uid, 'private', 'avatar'), { avatarDeleteUrl: null }, { merge: true })
   }
 
   async function handleAvatarUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file || !user) return
+    setAvatarError('')
     setUploadingAvatar(true)
     try {
-      const formData = new FormData()
-      formData.append('image', file)
-      formData.append('key', process.env.NEXT_PUBLIC_IMGBB_API_KEY!)
-      const res  = await fetch('https://api.imgbb.com/1/upload', { method: 'POST', body: formData })
-      const data = await res.json()
+      const { url, deleteUrl } = await uploadImage(file)
       await deleteOldAvatarIfAny()
-      await updateDoc(doc(db, 'users', user.uid), {
-        avatarUrl: data.data.url,
-        avatarDeleteUrl: data.data.delete_url ?? null,
-      })
+      await updateDoc(doc(db, 'users', user.uid), { avatarUrl: url })
+      await setDoc(doc(db, 'users', user.uid, 'private', 'avatar'), { avatarDeleteUrl: deleteUrl }, { merge: true })
+    } catch (err) {
+      setAvatarError(err instanceof Error ? err.message : 'Upload failed.')
+      if (fileRef.current) fileRef.current.value = ''
     } finally {
       setUploadingAvatar(false)
       if (fileRef.current) fileRef.current.value = ''
@@ -501,6 +589,7 @@ export default function CustomerProfilePage() {
 
           {/* Banner */}
           <div style={{
+            position: 'relative',
             backgroundColor: theme.background,
             padding: isMobile ? '2rem 1.25rem' : '3rem',
             display: 'flex',
@@ -509,6 +598,26 @@ export default function CustomerProfilePage() {
             gap: isMobile ? '1.25rem' : '2rem',
             textAlign: isMobile ? 'center' : 'left',
           }}>
+
+            <button onClick={handleSignOut}
+              onMouseEnter={() => setSignOutHovered(true)}
+              onMouseLeave={() => setSignOutHovered(false)}
+              style={{
+                position: 'absolute',
+                top: isMobile ? '0.8rem' : '1.2rem',
+                right: isMobile ? '0.8rem' : '1.2rem',
+                background: signOutHovered ? 'rgba(228,51,41,0.15)' : 'rgba(0,0,0,0.25)',
+                border: `1px solid ${signOutHovered ? 'var(--red)' : 'rgba(255,255,255,0.25)'}`,
+                color: signOutHovered ? 'var(--red)' : 'rgba(255,255,255,0.8)',
+                padding: isMobile ? '0.5rem 0.9rem' : '0.6rem 1.2rem',
+                borderRadius: '2px',
+                fontSize: '0.7rem',
+                letterSpacing: '0.1em',
+                textTransform: 'uppercase',
+                cursor: 'pointer',
+                fontFamily: 'var(--font-inter)',
+                transition: 'all 0.2s ease',
+              }}>Sign Out</button>
 
             {/* Avatar — click to open the customize popup */}
             <button
@@ -702,6 +811,51 @@ export default function CustomerProfilePage() {
           </div>
         </div>
 
+        {/* Email verification reminder — only the email/password signup path
+            can ever be unverified; a Google sign-in is already verified by
+            Google itself. Submitting checks and redeeming coins are gated
+            on this (see those pages) — everything else here still works. */}
+        {!emailVerified && (
+          <div style={{
+            display: 'flex',
+            flexDirection: isMobile ? 'column' : 'row',
+            justifyContent: 'space-between',
+            alignItems: isMobile ? 'stretch' : 'center',
+            gap: '0.8rem',
+            padding: isMobile ? '1rem' : '1.2rem',
+            backgroundColor: 'rgba(229,163,61,0.08)',
+            border: '1px solid rgba(229,163,61,0.3)',
+            borderRadius: '4px',
+          }}>
+            <div>
+              <p style={{ fontFamily: 'var(--font-cinzel)', fontSize: '0.85rem', color: '#E5A33D' }}>
+                Verify your email
+              </p>
+              <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.78rem', color: 'rgba(245,242,236,0.5)', marginTop: '0.2rem' }}>
+                {verificationSent
+                  ? `Sent to ${profile.email} — check your inbox, then tap "I've Verified."`
+                  : 'Submitting checks and redeeming OB Coins are locked until you verify your email.'}
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
+              <button onClick={handleResendVerification} disabled={resendingVerification} style={{
+                flex: isMobile ? 1 : 'initial',
+                background: 'transparent', border: '1px solid rgba(229,163,61,0.4)', color: '#E5A33D',
+                padding: '0.6rem 1.1rem', borderRadius: '2px', fontSize: '0.72rem',
+                letterSpacing: '0.06em', textTransform: 'uppercase', fontFamily: 'var(--font-inter)',
+                cursor: resendingVerification ? 'not-allowed' : 'pointer', opacity: resendingVerification ? 0.6 : 1,
+              }}>{resendingVerification ? 'Sending…' : 'Resend Email'}</button>
+              <button onClick={handleCheckVerified} disabled={checkingVerified} style={{
+                flex: isMobile ? 1 : 'initial',
+                backgroundColor: '#E5A33D', color: '#000', border: 'none',
+                padding: '0.6rem 1.1rem', borderRadius: '2px', fontSize: '0.72rem',
+                letterSpacing: '0.06em', textTransform: 'uppercase', fontFamily: 'var(--font-inter)',
+                cursor: checkingVerified ? 'not-allowed' : 'pointer', opacity: checkingVerified ? 0.6 : 1,
+              }}>{checkingVerified ? 'Checking…' : "I've Verified"}</button>
+            </div>
+          </div>
+        )}
+
         <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: '0.8rem' }}>
           <ActionButton href="/customer/submit-check" label="Submit a Check" color="#6A6AB7" />
           <ActionButton href="/customer/redeem" label="Redeem OB Coins" color="#00A098" />
@@ -797,7 +951,7 @@ export default function CustomerProfilePage() {
           <div>
             <p style={sectionLabelStyle}>Your History</p>
 
-            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
               {(['history', 'pending', 'redemptions', 'dnd', 'events'] as const).map(tab => {
                 const active = privateTab === tab
                 const hov = hoveredTab === tab
@@ -808,15 +962,15 @@ export default function CustomerProfilePage() {
                     onMouseEnter={() => setHoveredTab(tab)}
                     onMouseLeave={() => setHoveredTab(null)}
                     style={{
-                      flex: isMobile ? 1 : 'initial',
                       backgroundColor: active ? theme.accent : hov ? `${theme.accent}25` : 'transparent',
                       border: `1px solid ${active || hov ? theme.accent : 'rgba(255,255,255,0.1)'}`,
                       color: active ? '#fff' : hov ? 'var(--offwhite)' : 'rgba(245,242,236,0.5)',
-                      padding: '0.6rem 1.2rem',
+                      padding: isMobile ? '0.55rem 0.8rem' : '0.6rem 1.2rem',
                       borderRadius: '2px',
-                      fontSize: '0.75rem',
+                      fontSize: isMobile ? '0.7rem' : '0.75rem',
                       letterSpacing: '0.06em',
                       textTransform: 'uppercase',
+                      whiteSpace: 'nowrap',
                       cursor: 'pointer',
                       fontFamily: 'var(--font-inter)',
                       transition: 'all 0.2s ease',
@@ -850,6 +1004,8 @@ export default function CustomerProfilePage() {
                     <TransactionCard
                       key={tx.id} tx={tx} theme={theme} isMobile={isMobile}
                       showStatus onImageClick={setViewingImage}
+                      cancelling={cancellingId === tx.id}
+                      onCancel={tx.submittedBy === user?.uid ? () => handleCancelTransaction(tx) : undefined}
                     />
                   ))}
                 </div>
@@ -898,6 +1054,26 @@ export default function CustomerProfilePage() {
                           <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.75rem', color: 'var(--red)', marginTop: '0.4rem' }}>
                             Reason: {r.rejectionReason}
                           </p>
+                        )}
+                        {r.status === 'pending' && (
+                          <button onClick={() => handleCancelRedemption(r)} disabled={cancellingId === r.id}
+                            onMouseEnter={() => setHoveredCancelId(r.id)}
+                            onMouseLeave={() => setHoveredCancelId(null)}
+                            style={{
+                              marginTop: '0.7rem',
+                              background: hoveredCancelId === r.id ? 'rgba(228,51,41,0.1)' : 'transparent',
+                              border: `1px solid ${hoveredCancelId === r.id ? 'var(--red)' : 'rgba(255,255,255,0.1)'}`,
+                              color: hoveredCancelId === r.id ? 'var(--red)' : 'rgba(245,242,236,0.5)',
+                              padding: '0.5rem 1rem',
+                              borderRadius: '2px',
+                              fontSize: '0.7rem',
+                              letterSpacing: '0.08em',
+                              textTransform: 'uppercase',
+                              cursor: cancellingId === r.id ? 'not-allowed' : 'pointer',
+                              opacity: cancellingId === r.id ? 0.6 : 1,
+                              fontFamily: 'var(--font-inter)',
+                              transition: 'all 0.2s ease',
+                            }}>{cancellingId === r.id ? 'Cancelling…' : 'Cancel'}</button>
                         )}
                       </div>
                     </div>
@@ -1001,24 +1177,6 @@ export default function CustomerProfilePage() {
             )}
           </div>
         )}
-
-        <button onClick={handleSignOut}
-          onMouseEnter={() => setSignOutHovered(true)}
-          onMouseLeave={() => setSignOutHovered(false)}
-          style={{
-            alignSelf: isMobile ? 'stretch' : 'flex-start',
-            background: signOutHovered ? 'rgba(228,51,41,0.1)' : 'transparent',
-            border: `1px solid ${signOutHovered ? 'var(--red)' : 'rgba(255,255,255,0.1)'}`,
-            color: signOutHovered ? 'var(--red)' : 'rgba(245,242,236,0.6)',
-            padding: '0.7rem 1.5rem',
-            borderRadius: '2px',
-            fontSize: '0.75rem',
-            letterSpacing: '0.1em',
-            textTransform: 'uppercase',
-            cursor: 'pointer',
-            fontFamily: 'var(--font-inter)',
-            transition: 'all 0.2s ease',
-          }}>Sign Out</button>
       </div>
 
       {/* Customize Profile Modal — avatar + theme color */}
@@ -1052,11 +1210,12 @@ export default function CustomerProfilePage() {
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
+              gap: '0.75rem',
               padding: isMobile ? '1rem 1.25rem' : '1.25rem 1.75rem',
               borderBottom: '1px solid rgba(255,255,255,0.06)',
               flexShrink: 0,
             }}>
-              <h3 style={{ fontFamily: 'var(--font-cinzel)', fontSize: '1.1rem', color: 'var(--offwhite)' }}>
+              <h3 style={{ fontFamily: 'var(--font-cinzel)', fontSize: isMobile ? '0.95rem' : '1.1rem', color: 'var(--offwhite)' }}>
                 Customize Profile
               </h3>
               <button onClick={() => setModalOpen(false)}
@@ -1066,13 +1225,15 @@ export default function CustomerProfilePage() {
                   background: modalCloseHovered ? 'rgba(255,255,255,0.08)' : 'transparent',
                   border: `1px solid ${modalCloseHovered ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.1)'}`,
                   color: modalCloseHovered ? 'var(--offwhite)' : 'rgba(245,242,236,0.5)',
-                  padding: '0.4rem 1rem',
+                  padding: isMobile ? '0.35rem 0.7rem' : '0.4rem 1rem',
                   borderRadius: '2px',
-                  fontSize: '0.72rem',
+                  fontSize: isMobile ? '0.65rem' : '0.72rem',
                   cursor: 'pointer',
                   fontFamily: 'var(--font-inter)',
                   letterSpacing: '0.08em',
                   textTransform: 'uppercase',
+                  whiteSpace: 'nowrap',
+                  flexShrink: 0,
                   transition: 'all 0.2s ease',
                 }}>✕ Close</button>
             </div>
@@ -1161,6 +1322,11 @@ export default function CustomerProfilePage() {
                 >
                   {uploadingAvatar ? 'Uploading…' : 'Upload Your Own Image'}
                 </button>
+                {avatarError && (
+                  <p style={{ color: 'var(--red)', fontSize: '0.78rem', fontFamily: 'var(--font-inter)', marginTop: '0.6rem' }}>
+                    {avatarError}
+                  </p>
+                )}
               </div>
 
               {/* Theme picker */}

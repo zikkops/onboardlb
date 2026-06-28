@@ -133,7 +133,7 @@ export default function Footer() {
               {[
                 { icon: faInstagram, href: '#' },
                 { icon: faFacebook,  href: '#' },
-                { icon: faWhatsapp,  href: '#' },
+                { icon: faWhatsapp,  href: 'https://wa.me/96181950042' },
               ].map(({ icon, href }, i) => {
                 const hovered = hoveredSocial === i
                 return (
@@ -167,8 +167,10 @@ export default function Footer() {
           borderTop: '1px solid rgba(255,255,255,0.05)',
           paddingTop: isMobile ? '1.25rem' : '1.5rem',
           display: 'flex',
+          flexDirection: isMobile ? 'column' : 'row',
           justifyContent: 'space-between',
-          alignItems: 'center',
+          alignItems: isMobile ? 'flex-start' : 'center',
+          gap: isMobile ? '0.5rem' : 0,
         }}>
           <p style={{
             fontSize: isMobile ? '0.7rem' : '0.74rem',
@@ -176,6 +178,13 @@ export default function Footer() {
             fontFamily: 'var(--font-inter)',
           }}>
             © 2026 Onboard — Games & Tales. All rights reserved.
+          </p>
+          <p style={{
+            fontSize: isMobile ? '0.7rem' : '0.74rem',
+            color: 'rgba(245,242,236,0.2)',
+            fontFamily: 'var(--font-inter)',
+          }}>
+            Developed by Mark Zakkak
           </p>
         </div>
 

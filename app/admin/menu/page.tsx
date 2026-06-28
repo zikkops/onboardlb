@@ -8,7 +8,7 @@ import {
 import { db } from '../../lib/firebase'
 import { useRequireRole, SECTION_ACCESS } from '../../lib/adminAuth'
 import { logActivity, logCreate, logUpdate, logDelete } from '../../lib/activityLog'
-import { recordMediaUpload } from '../../lib/media'
+import { recordMediaUpload, uploadImage } from '../../lib/media'
 import MediaPickerModal from '../../components/admin/MediaPickerModal'
 import {
   DndContext, closestCenter, KeyboardSensor,
@@ -231,28 +231,32 @@ export default function AdminMenuPage() {
     const file = e.target.files?.[0]
     if (!file) return
     setUploadingCat(true)
-    const formData = new FormData()
-    formData.append('image', file)
-    formData.append('key', process.env.NEXT_PUBLIC_IMGBB_API_KEY!)
-    const res  = await fetch('https://api.imgbb.com/1/upload', { method: 'POST', body: formData })
-    const data = await res.json()
-    setNewCatImage(data.data.url)
-    await recordMediaUpload({ url: data.data.url, deleteUrl: data.data.delete_url, fileName: file.name })
-    setUploadingCat(false)
+    try {
+      const { url, deleteUrl, fileName } = await uploadImage(file)
+      setNewCatImage(url)
+      await recordMediaUpload({ url, deleteUrl, fileName })
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Upload failed.')
+      e.target.value = ''
+    } finally {
+      setUploadingCat(false)
+    }
   }
 
   async function handleEditCatImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
     setUploadingEditCat(true)
-    const formData = new FormData()
-    formData.append('image', file)
-    formData.append('key', process.env.NEXT_PUBLIC_IMGBB_API_KEY!)
-    const res  = await fetch('https://api.imgbb.com/1/upload', { method: 'POST', body: formData })
-    const data = await res.json()
-    setEditCatImage(data.data.url)
-    await recordMediaUpload({ url: data.data.url, deleteUrl: data.data.delete_url, fileName: file.name })
-    setUploadingEditCat(false)
+    try {
+      const { url, deleteUrl, fileName } = await uploadImage(file)
+      setEditCatImage(url)
+      await recordMediaUpload({ url, deleteUrl, fileName })
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Upload failed.')
+      e.target.value = ''
+    } finally {
+      setUploadingEditCat(false)
+    }
   }
 
   async function addCategory() {

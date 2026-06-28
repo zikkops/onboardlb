@@ -3,12 +3,14 @@
 // fetch has no such restriction. Downloads the source image, then re-hosts
 // it on imgbb exactly like the existing manual upload flow does.
 
-import { verifyIdToken, bearerToken } from '../../lib/serverAuth'
+import { verifyStaffToken, bearerToken } from '../../lib/serverAuth'
+
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024
 
 export async function POST(request: Request) {
   const idToken = bearerToken(request)
-  if (!idToken || !(await verifyIdToken(idToken))) {
-    return Response.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!idToken || !(await verifyStaffToken(idToken))) {
+    return Response.json({ error: 'Forbidden' }, { status: 403 })
   }
 
   const { url } = await request.json()
@@ -26,12 +28,25 @@ export async function POST(request: Request) {
     const contentType = imgRes.headers.get('content-type') ?? ''
     if (!contentType.startsWith('image/')) throw new Error('URL did not return an image')
 
+    // Checked before reading the body, so a well-behaved server reporting
+    // its real size rejects without ever being downloaded. This isn't
+    // airtight against a server that omits Content-Length or under-reports
+    // it (chunked transfer, no length header) — that response still gets
+    // fully buffered into memory before the post-download check below
+    // catches it. A true cap would need to read the body as a stream and
+    // abort mid-transfer; not done here since this route is staff-only
+    // (see verifyStaffToken above) and the realistic threat model is a
+    // compromised staff session, not an anonymous attacker.
+    const contentLength = Number(imgRes.headers.get('content-length') ?? 0)
+    if (contentLength > MAX_IMAGE_BYTES) throw new Error('Source image is too large (max 10MB)')
+
     const buffer = Buffer.from(await imgRes.arrayBuffer())
+    if (buffer.byteLength > MAX_IMAGE_BYTES) throw new Error('Source image is too large (max 10MB)')
     const base64 = buffer.toString('base64')
 
     const form = new FormData()
     form.append('image', base64)
-    form.append('key', process.env.NEXT_PUBLIC_IMGBB_API_KEY ?? '')
+    form.append('key', process.env.IMGBB_API_KEY ?? '')
 
     const uploadRes = await fetch('https://api.imgbb.com/1/upload', { method: 'POST', body: form })
     const data = await uploadRes.json()

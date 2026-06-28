@@ -8,7 +8,7 @@ import {
   createUserWithEmailAndPassword, type User,
 } from 'firebase/auth'
 import {
-  collection, doc, getDoc, getDocs, setDoc, updateDoc, serverTimestamp,
+  doc, getDoc, setDoc, updateDoc, serverTimestamp,
 } from 'firebase/firestore'
 import { auth, db, firebaseConfig } from './firebase'
 import { logActivity, logUpdate } from './activityLog'
@@ -59,6 +59,30 @@ function normalizeBranchIds(data: { branchIds?: unknown; branchId?: unknown }): 
   return data.branchId ? [data.branchId as string] : []
 }
 
+// Firebase Auth keeps its session in IndexedDB, not a cookie — proxy.ts (see
+// project root) only ever sees HTTP requests, so it has no way to know a
+// Firebase session exists unless the app also tells it via a cookie. This
+// cookie is *not* cryptographic proof of anything — it's just "this browser
+// has a Firebase session," so proxy.ts can redirect a fully-anonymous
+// request away before the admin page's shell ever renders. The actual
+// security boundary stays exactly where it already was: Firestore rules.
+// A signed-in-but-unauthorized visitor still reaches the page; useRequireRole
+// below is what bounces them from there.
+const ADMIN_SESSION_COOKIE = 'admin_session'
+
+// Exported — /admin/login calls setAdminSessionCookie() itself, right after
+// a successful sign-in and before its redirect to /admin. That page never
+// calls useAdminUser() (no reason to — it's the one page a signed-out visitor
+// is supposed to reach), so without this, the cookie wouldn't exist yet at
+// the exact moment proxy.ts needs it for that first post-login navigation.
+export function setAdminSessionCookie() {
+  document.cookie = `${ADMIN_SESSION_COOKIE}=1; path=/; max-age=2592000; SameSite=Lax`
+}
+
+export function clearAdminSessionCookie() {
+  document.cookie = `${ADMIN_SESSION_COOKIE}=; path=/; max-age=0; SameSite=Lax`
+}
+
 export function useAdminUser() {
   const [user, setUser]             = useState<User | null>(null)
   const [role, setRole]             = useState<Role | null>(null)
@@ -70,6 +94,7 @@ export function useAdminUser() {
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
       if (!u) {
+        clearAdminSessionCookie()
         setUser(null)
         setRole(null)
         setBranchIds([])
@@ -78,6 +103,7 @@ export function useAdminUser() {
         setLoading(false)
         return
       }
+      setAdminSessionCookie()
       setUser(u)
       const ref  = doc(db, 'adminUsers', u.uid)
       const snap = await getDoc(ref)
@@ -88,12 +114,26 @@ export function useAdminUser() {
         setIsDungeonMaster(data.isDungeonMaster === true)
         setProvisioned(true)
       } else {
-        // No role record yet. If this is the very first sign-in (the account that
-        // pre-dates this access-control system), self-elect it as admin instead
-        // of locking everyone out.
-        const allSnap = await getDocs(collection(db, 'adminUsers'))
-        if (allSnap.empty) {
+        // No role record yet. This used to try to self-elect the very first
+        // sign-in as admin (so a fresh project wouldn't lock everyone out),
+        // but Firestore rules can no longer allow that write — rules have
+        // no way to check "is this whole collection empty" (only "does this
+        // one document exist"), so the permissive write that made
+        // self-election possible also let *any* signup grant itself admin,
+        // not just the first. That's now closed (see firestore.rules), so
+        // the first admin account has to be created by hand in the Firebase
+        // Console instead. This just falls through to "not provisioned."
+        let isFirstEverAdmin = false
+        try {
           await setDoc(ref, { email: u.email, role: 'admin', createdAt: serverTimestamp() })
+          isFirstEverAdmin = true
+        } catch {
+          // Expected once a real admin already exists — rules reject this
+          // write for everyone except the (now Console-provisioned) first
+          // admin's own uid, which would already have hit the snap.exists()
+          // branch above instead of reaching here.
+        }
+        if (isFirstEverAdmin) {
           setRole('admin')
           setBranchIds([])
           setIsDungeonMaster(false)

@@ -1,0 +1,278 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Is the signed-in user a CMS/admin-panel staff member?
+    // (Role-specific gating — e.g. admin vs manager vs gamer — happens
+    // client-side in app/lib/adminAuth.ts; this only checks "is staff at all".)
+    function isStaff() {
+      return request.auth != null &&
+        exists(/databases/$(database)/documents/adminUsers/$(request.auth.uid));
+    }
+
+    // ---- Public storefront content, staff-managed ----
+    match /games/{id}          { allow read: if true; allow write: if isStaff(); }
+    match /gameCategories/{id} { allow read: if true; allow write: if isStaff(); }
+    match /menuCategories/{id} { allow read: if true; allow write: if isStaff(); }
+    match /menuItems/{id}      { allow read: if true; allow write: if isStaff(); }
+    match /events/{id}         { allow read: if true; allow write: if isStaff(); }
+    match /eventTypes/{id}     { allow read: if true; allow write: if isStaff(); }
+    match /dndCampaigns/{id}   { allow read: if true; allow write: if isStaff(); }
+
+    // ---- Staff-only ----
+    match /activityLog/{id}  { allow read, write: if isStaff(); }
+    match /mediaLibrary/{id} { allow read, write: if isStaff(); }
+
+    // Staff directory. Anyone signed in may read (the app needs to look up
+    // its own role on every load). Only existing staff may write — rules
+    // have no way to check "is this collection empty," only "does this one
+    // document exist," so there's no safe way to auto-elect a first admin
+    // here. Provision the first admin by hand instead: Firebase Console →
+    // Firestore → create one `adminUsers/{uid}` document with
+    // `role: "admin"`, using the uid from Authentication → Users after that
+    // person signs in once. See ARCHITECTURE.md for more detail.
+    match /adminUsers/{uid} {
+      allow read: if request.auth != null;
+      allow write: if isStaff();
+    }
+
+    // ---- Customer accounts ----
+    // A customer may freely edit their own profile fields (avatar, theme,
+    // username, the level/levelTitle display cache), but xp/obCoins must
+    // stay unchanged in a customer-initiated update — the only legitimate
+    // way to change a balance is a staff-approved transaction or redemption
+    // (see approveTransaction in app/lib/loyalty.ts and confirmRedemption in
+    // app/lib/redemptions.ts). On creation, a customer may only set
+    // xp/obCoins to 0, matching the initial value ensureCustomerDoc always
+    // writes (app/lib/customerAuth.ts).
+    //
+    // This top-level doc is readable by any signed-in customer (friend
+    // search and the leaderboard both read other customers' profiles), so
+    // anything that shouldn't be that widely exposed lives in one of the
+    // two private sub-docs below instead — split into two, not one,
+    // because they need different read access: a customer can read back
+    // their own avatarDeleteUrl (the profile page's own avatar-cleanup
+    // flow needs it), but a phone number is admin-lookup-only — not even
+    // the customer who gave it can read it back through this doc.
+    //
+    // isBoundedString caps a free-text field's length on customer-initiated
+    // writes (not staff writes — staff are trusted, same as the xp/obCoins
+    // checks above) without requiring the field to be present at all, so
+    // accounts that predate a given field (e.g. firstName/lastName, added
+    // after this app already had customers) can still update *other*
+    // fields on their own doc without being blocked by a field they were
+    // never asked to set.
+    function isBoundedString(data, field, maxLen) {
+      return !(field in data) || (data[field] is string && data[field].size() <= maxLen);
+    }
+    match /users/{userId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && (
+        isStaff() ||
+        (request.auth.uid == userId &&
+          request.resource.data.xp == 0 &&
+          request.resource.data.obCoins == 0 &&
+          isBoundedString(request.resource.data, 'firstName', 50) &&
+          isBoundedString(request.resource.data, 'lastName', 50))
+      );
+      allow update: if request.auth != null && (
+        isStaff() ||
+        (request.auth.uid == userId &&
+          request.resource.data.xp == resource.data.xp &&
+          request.resource.data.obCoins == resource.data.obCoins &&
+          isBoundedString(request.resource.data, 'firstName', 50) &&
+          isBoundedString(request.resource.data, 'lastName', 50))
+      );
+      allow delete: if isStaff();
+
+      // avatarDeleteUrl: the customer needs to read this back themselves
+      // (profile page's own avatar-replacement cleanup, and the
+      // /api/media/delete route reading it server-side as the calling
+      // customer) — see app/(customer)/customer/profile/page.tsx and
+      // app/lib/serverAuth.ts.
+      match /private/avatar {
+        allow read, write: if request.auth != null && (request.auth.uid == userId || isStaff());
+      }
+
+      // contact: phone number, staff-lookup only — write access stays with
+      // the owner (they're the one providing it at signup), but nobody,
+      // including the customer themselves, can read it back through here
+      // except staff.
+      match /private/contact {
+        allow read: if isStaff();
+        allow write: if request.auth != null && (request.auth.uid == userId || isStaff());
+      }
+    }
+    match /usernames/{username} {
+      allow read: if true;
+      allow create: if request.auth != null && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    // xpAmount/coinsAmount are bounds-checked on creation rather than
+    // trusted as-is — a customer submitting their own check is the only
+    // transaction type created directly by a customer (event/D&D attendance
+    // is logged by staff), so the caps are generous-but-bounded upper
+    // limits, not exact expected values. Customer self-submissions also
+    // require a verified email; staff-logged attendance is exempted since
+    // it isn't self-reported.
+    match /transactions/{id} {
+      allow read: if request.auth != null && (
+        resource.data.status == 'approved' ||
+        request.auth.uid in resource.data.userId ||
+        isStaff()
+      );
+      allow create: if request.auth != null &&
+        request.auth.uid == request.resource.data.submittedBy &&
+        request.resource.data.status == 'pending' &&
+        (isStaff() || request.auth.token.email_verified == true) &&
+        request.resource.data.xpAmount is int &&
+        request.resource.data.xpAmount >= 0 && request.resource.data.xpAmount <= 10000 &&
+        request.resource.data.coinsAmount is int &&
+        request.resource.data.coinsAmount >= 0 && request.resource.data.coinsAmount <= 2000;
+      // Staff can update any field (approve/reject). The original submitter
+      // may also cancel their own still-pending submission — not every
+      // person tagged in a split, just whoever created it — and that's the
+      // only transition they get: pending -> cancelled, nothing else.
+      allow update: if isStaff() ||
+        (request.auth != null &&
+          request.auth.uid == resource.data.submittedBy &&
+          resource.data.status == 'pending' &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']) &&
+          request.resource.data.status == 'cancelled');
+    }
+    match /transactionLog/{id} {
+      allow read, write: if isStaff();
+    }
+
+    match /friendRequests/{id} {
+      allow read: if request.auth != null && (
+        request.auth.uid == resource.data.fromUid || request.auth.uid == resource.data.toUid
+      );
+      allow create: if request.auth != null &&
+        request.auth.uid == request.resource.data.fromUid &&
+        request.resource.data.status == 'pending';
+      allow update: if request.auth != null &&
+        request.auth.uid == resource.data.toUid &&
+        resource.data.status == 'pending' &&
+        request.resource.data.status == 'accepted';
+      allow delete: if request.auth != null && (
+        request.auth.uid == resource.data.fromUid || request.auth.uid == resource.data.toUid
+      );
+    }
+
+    match /redemptionItems/{itemId} {
+      allow read: if request.auth != null;
+      allow write: if isStaff();
+    }
+    // Every redemption request is customer-initiated (staff only approve —
+    // see allow update), so the verified-email requirement applies
+    // unconditionally here, unlike transactions' isStaff() exemption above.
+    // coinCost is pinned to redemptionItems' own current price rather than
+    // trusted from the request — otherwise a customer could request a
+    // pricey item while claiming whatever low coinCost they like, and
+    // confirmRedemption (app/lib/redemptions.ts) deducts exactly what's
+    // stored on the redemption, not the item's real price.
+    match /redemptions/{redemptionId} {
+      allow read: if request.auth != null &&
+        (request.auth.uid == resource.data.userId || isStaff());
+      allow create: if request.auth != null &&
+        request.auth.uid == request.resource.data.requestedBy &&
+        request.auth.token.email_verified == true &&
+        request.resource.data.status == 'pending' &&
+        request.resource.data.coinCost ==
+          get(/databases/$(database)/documents/redemptionItems/$(request.resource.data.itemId)).data.coinCost;
+      // Staff can update any field (confirm/reject). The requester may also
+      // cancel their own still-pending request — pending -> cancelled only.
+      allow update: if isStaff() ||
+        (request.auth != null &&
+          request.auth.uid == resource.data.requestedBy &&
+          resource.data.status == 'pending' &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']) &&
+          request.resource.data.status == 'cancelled');
+    }
+
+    // Update is the invitee responding — acceptInvite()/declineInvite() in
+    // app/lib/participantInvites.ts only ever flip status pending -> accepted
+    // or declined, so that's all this rule allows too; nothing lets the
+    // invitee rewrite reservationId, inviterUid, or any other field on a
+    // doc they don't own the content of.
+    match /participantInvites/{id} {
+      allow read: if request.auth != null && (request.auth.uid == resource.data.inviteeUid || request.auth.uid == resource.data.inviterUid || isStaff());
+      allow create: if request.auth != null &&
+        request.auth.uid == request.resource.data.inviterUid &&
+        request.resource.data.status == 'pending';
+      allow update: if request.auth != null &&
+        request.auth.uid == resource.data.inviteeUid &&
+        resource.data.status == 'pending' &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']) &&
+        request.resource.data.status in ['accepted', 'declined'];
+    }
+
+    // Update is allowed for staff (approving/rejecting, any field), or for
+    // any signed-in user but *only* to drop exactly one entry from
+    // `participants` — the shape of declineInvite's update in
+    // app/lib/participantInvites.ts. This is deliberately narrow: it
+    // doesn't (and can't, with rules alone) confirm the removed entry was
+    // the requester's own, but it does stop a non-staff update from
+    // touching `dmUid`, `startAt`, `status`, or any other field on
+    // somebody else's reservation.
+    match /dndReservations/{id} {
+      allow read: if request.auth != null && (request.auth.uid == resource.data.userId || isStaff());
+      allow create: if request.auth != null &&
+        request.auth.uid == request.resource.data.requestedBy &&
+        request.resource.data.status == 'pending';
+      allow update: if isStaff() ||
+        (request.auth != null &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['participants']) &&
+          request.resource.data.participants.size() == resource.data.participants.size() - 1);
+    }
+    // Same as dndReservations above, except declining also decrements the
+    // separate `partySize` counter (D&D has no such field — its party size
+    // is computed on the fly from `participants`).
+    match /eventReservations/{id} {
+      allow read: if request.auth != null && (request.auth.uid == resource.data.userId || isStaff());
+      allow create: if request.auth != null &&
+        request.auth.uid == request.resource.data.requestedBy &&
+        request.resource.data.status == 'pending';
+      allow update: if isStaff() ||
+        (request.auth != null &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['participants', 'partySize']) &&
+          request.resource.data.participants.size() == resource.data.participants.size() - 1 &&
+          request.resource.data.partySize == resource.data.partySize - 1);
+    }
+    // A lock only blocks a DM's calendar if it's backed by a real,
+    // already-created reservation owned by the same person creating the
+    // lock, for the same DM, within that reservation's own booked time
+    // range — otherwise any signed-in customer could read a DM's public
+    // dmUid off /dnd and lock out their entire calendar with no
+    // reservation behind it at all (nothing else ever cleans up a lock
+    // that isn't tied to a real reservation's reject flow).
+    function lockReservation(resId) {
+      return get(/databases/$(database)/documents/dndReservations/$(resId)).data;
+    }
+    match /dndDmLocks/{id} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null &&
+        request.resource.data.reservationId is string &&
+        request.resource.data.bucketStart is timestamp &&
+        lockReservation(request.resource.data.reservationId).requestedBy == request.auth.uid &&
+        lockReservation(request.resource.data.reservationId).dmUid == request.resource.data.dmUid &&
+        request.resource.data.bucketStart >= lockReservation(request.resource.data.reservationId).startAt &&
+        request.resource.data.bucketStart < lockReservation(request.resource.data.reservationId).blockedUntil;
+      allow delete: if isStaff();
+    }
+
+    match /appSettings/{id} {
+      allow read, write: if isStaff();
+    }
+
+    // Everything else is denied by default — Firestore rejects any
+    // collection with no matching `match` block above, so this isn't
+    // strictly required, but it's written out explicitly so that's never
+    // ambiguous to a future reader of this file.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

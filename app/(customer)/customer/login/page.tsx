@@ -22,6 +22,8 @@ function formatError(err: unknown): string {
   if (message === 'username-taken')    return 'That username is already taken — please choose another.'
   if (message === 'username-required') return 'Choose a username.'
   if (message === 'phone-required')    return 'Enter a valid phone number (7-20 digits).'
+  if (message === 'name-required')     return 'Enter your first and last name.'
+  if (message === 'name-too-long')     return 'First and last name must each be 50 characters or fewer.'
   if (message === 'email-mismatch')    return "That Google account doesn't match the email you entered."
   if (message === 'user-not-found')    return 'Incorrect email/username or password.'
 
@@ -76,6 +78,8 @@ export default function CustomerLoginPage() {
   const router = useRouter()
   const [mode, setMode]         = useState<Mode>('login')
   const [username, setUsername] = useState('')
+  const [firstName, setFirstName] = useState('')
+  const [lastName, setLastName] = useState('')
   const [phone, setPhone]       = useState('')
   const [identifier, setIdentifier] = useState('') // email (signup) or email-or-username (login)
   const [password, setPassword] = useState('')
@@ -90,6 +94,8 @@ export default function CustomerLoginPage() {
   const [pendingUser, setPendingUser] = useState<User | null>(null)
   const [pendingUsername, setPendingUsername] = useState('')
   const [pendingPhone, setPendingPhone] = useState('')
+  const [pendingFirstName, setPendingFirstName] = useState('')
+  const [pendingLastName, setPendingLastName] = useState('')
 
   const [continueHovered, setContinueHovered] = useState(false)
   const [googleHovered, setGoogleHovered] = useState(false)
@@ -124,7 +130,7 @@ export default function CustomerLoginPage() {
 
     if (mode === 'signup') {
       try {
-        await signUpWithEmail(username, identifier, password, phone)
+        await signUpWithEmail(username, identifier, password, phone, firstName, lastName)
         router.replace('/customer/profile')
       } catch (err) {
         setError(formatError(err))
@@ -190,7 +196,7 @@ export default function CustomerLoginPage() {
     setBusy(true)
     setError('')
     try {
-      await completeAccountSetup(pendingUser.uid, pendingUser.email ?? '', pendingUsername, pendingPhone)
+      await completeAccountSetup(pendingUser.uid, pendingUser.email ?? '', pendingUsername, pendingPhone, pendingFirstName, pendingLastName)
       router.replace('/customer/profile')
     } catch (err) {
       setError(formatError(err))
@@ -233,6 +239,26 @@ export default function CustomerLoginPage() {
               onChange={e => setPendingUsername(e.target.value)}
               style={inputStyle}
             />
+            <div style={{ display: 'flex', gap: '0.8rem' }}>
+              <input
+                type="text"
+                placeholder="First Name"
+                value={pendingFirstName}
+                required
+                maxLength={50}
+                onChange={e => setPendingFirstName(e.target.value)}
+                style={{ ...inputStyle, flex: 1 }}
+              />
+              <input
+                type="text"
+                placeholder="Last Name"
+                value={pendingLastName}
+                required
+                maxLength={50}
+                onChange={e => setPendingLastName(e.target.value)}
+                style={{ ...inputStyle, flex: 1 }}
+              />
+            </div>
             <input
               type="tel"
               placeholder="Phone Number"
@@ -372,6 +398,26 @@ export default function CustomerLoginPage() {
                 onChange={e => setUsername(e.target.value)}
                 style={inputStyle}
               />
+              <div style={{ display: 'flex', gap: '0.8rem' }}>
+                <input
+                  type="text"
+                  placeholder="First Name"
+                  value={firstName}
+                  required
+                  maxLength={50}
+                  onChange={e => setFirstName(e.target.value)}
+                  style={{ ...inputStyle, flex: 1 }}
+                />
+                <input
+                  type="text"
+                  placeholder="Last Name"
+                  value={lastName}
+                  required
+                  maxLength={50}
+                  onChange={e => setLastName(e.target.value)}
+                  style={{ ...inputStyle, flex: 1 }}
+                />
+              </div>
               <input
                 type="tel"
                 placeholder="Phone Number"

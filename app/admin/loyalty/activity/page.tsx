@@ -6,7 +6,7 @@ import { db } from '../../../lib/firebase'
 import { useRequireRole, SECTION_ACCESS } from '../../../lib/adminAuth'
 import type { FieldChange } from '../../../lib/activityLog'
 
-const LOYALTY_SECTIONS = ['Loyalty Submission', 'Loyalty Management'] as const
+const LOYALTY_SECTIONS = ['Loyalty Submission', 'Loyalty Management', 'Customer Account'] as const
 
 interface LogEntry {
   id: string
@@ -34,6 +34,7 @@ const ACTION_COLORS: Record<LogEntry['action'], string> = {
 const SECTION_COLORS: Record<string, string> = {
   'Loyalty Submission': 'var(--navy)',
   'Loyalty Management': 'var(--purple)',
+  'Customer Account': 'var(--teal)',
 }
 
 function formatValue(v: unknown): string {
@@ -186,7 +187,7 @@ export default function LoyaltyActivityPage() {
           marginBottom: '2rem',
         }}>
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-            {(['all', 'Loyalty Submission', 'Loyalty Management'] as const).map(s => (
+            {(['all', 'Loyalty Submission', 'Loyalty Management', 'Customer Account'] as const).map(s => (
               <button key={s} onClick={() => setSectionFilter(s)} style={{
                 backgroundColor: sectionFilter === s ? (s === 'all' ? 'var(--offwhite)' : SECTION_COLORS[s]) : 'transparent',
                 border: `1px solid ${sectionFilter === s ? 'transparent' : 'rgba(255,255,255,0.1)'}`,

@@ -8,7 +8,7 @@ import {
 import { db } from '../../lib/firebase'
 import { useRequireRole, SECTION_ACCESS } from '../../lib/adminAuth'
 import { logActivity, logCreate, logUpdate, logDelete } from '../../lib/activityLog'
-import { recordMediaUpload } from '../../lib/media'
+import { recordMediaUpload, uploadImage } from '../../lib/media'
 import MediaPickerModal from '../../components/admin/MediaPickerModal'
 
 interface GameEvent {
@@ -125,14 +125,16 @@ export default function AdminEventsPage() {
     const file = e.target.files?.[0]
     if (!file) return
     setUploading(true)
-    const formData = new FormData()
-    formData.append('image', file)
-    formData.append('key', process.env.NEXT_PUBLIC_IMGBB_API_KEY!)
-    const res  = await fetch('https://api.imgbb.com/1/upload', { method: 'POST', body: formData })
-    const data = await res.json()
-    setForm(f => ({ ...f, image: data.data.url }))
-    await recordMediaUpload({ url: data.data.url, deleteUrl: data.data.delete_url, fileName: file.name })
-    setUploading(false)
+    try {
+      const { url, deleteUrl, fileName } = await uploadImage(file)
+      setForm(f => ({ ...f, image: url }))
+      await recordMediaUpload({ url, deleteUrl, fileName })
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Upload failed.')
+      e.target.value = ''
+    } finally {
+      setUploading(false)
+    }
   }
 
   function openNew() {

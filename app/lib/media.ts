@@ -3,6 +3,50 @@ import {
 } from 'firebase/firestore'
 import { db, auth } from './firebase'
 
+// `accept="image/*"` on a file input is a picker-dialog hint only — it
+// doesn't stop a renamed file or a drag-and-drop from being submitted as a
+// non-image, and it puts no cap on size. imgbb itself is the real backstop
+// against a genuinely malicious upload, but without this check a user only
+// finds out something's wrong after waiting for an upload to imgbb's API
+// (using the app's exposed key) to fail. Call this first in every upload
+// handler, before doing anything with the file.
+const MAX_UPLOAD_BYTES = 5 * 1024 * 1024
+
+export function validateImageFile(file: File): string | null {
+  if (!file.type.startsWith('image/')) return 'Please choose an image file.'
+  if (file.size > MAX_UPLOAD_BYTES) return 'Image must be under 5MB.'
+  return null
+}
+
+export interface UploadResult {
+  url: string
+  deleteUrl: string | null
+  fileName: string | null
+}
+
+// Every image upload in the app goes through this — it posts to
+// /api/upload-image (server-side proxy) rather than calling api.imgbb.com
+// directly with a key embedded in the browser bundle. Validates the file
+// first and throws with a message suitable for direct display if it's
+// invalid or the upload fails, so callers can just try/catch this one call.
+export async function uploadImage(file: File): Promise<UploadResult> {
+  const validationError = validateImageFile(file)
+  if (validationError) throw new Error(validationError)
+
+  const idToken = await auth.currentUser?.getIdToken()
+  const formData = new FormData()
+  formData.append('image', file)
+
+  const res = await fetch('/api/upload-image', {
+    method: 'POST',
+    headers: idToken ? { Authorization: `Bearer ${idToken}` } : {},
+    body: formData,
+  })
+  const data = await res.json()
+  if (!res.ok) throw new Error(data.error ?? 'Upload failed')
+  return { url: data.url, deleteUrl: data.deleteUrl ?? null, fileName: data.fileName ?? null }
+}
+
 export interface MediaItem {
   id: string
   url: string

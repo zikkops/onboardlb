@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { signInWithEmailAndPassword } from 'firebase/auth'
 import { auth } from '../../lib/firebase'
+import { setAdminSessionCookie } from '../../lib/adminAuth'
 
 export default function AdminLoginPage() {
   const router = useRouter()
@@ -18,6 +19,7 @@ export default function AdminLoginPage() {
     setError('')
     try {
       await signInWithEmailAndPassword(auth, email, password)
+      setAdminSessionCookie()
       router.replace('/admin')
     } catch {
       setError('Invalid email or password.')

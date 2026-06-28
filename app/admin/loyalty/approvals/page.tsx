@@ -101,6 +101,24 @@ export default function LoyaltyApprovalsPage() {
 
   const visible = transactions.filter(tx => !processedIds.has(tx.id))
 
+  // Same branchId+checkNumber on more than one pending check submission —
+  // possibly two different customers, which the customer-side duplicate
+  // check (checkNumberAlreadyUsed in app/lib/loyalty.ts) structurally can't
+  // see across accounts (Firestore rules only let a customer read another
+  // customer's transaction once it's approved). Purely a flag for the
+  // reviewer here; nothing is blocked.
+  const checkNumberCounts = new Map<string, number>()
+  transactions.forEach(tx => {
+    if (tx.type !== 'check' || !tx.checkNumber) return
+    const key = `${tx.branchId}|${tx.checkNumber.trim().toLowerCase()}`
+    checkNumberCounts.set(key, (checkNumberCounts.get(key) ?? 0) + 1)
+  })
+  function isDuplicateCheckNumber(tx: Transaction): boolean {
+    if (tx.type !== 'check' || !tx.checkNumber) return false
+    const key = `${tx.branchId}|${tx.checkNumber.trim().toLowerCase()}`
+    return (checkNumberCounts.get(key) ?? 0) > 1
+  }
+
   const cardStyle = {
     background: 'rgba(255,255,255,0.02)',
     border: '1px solid rgba(255,255,255,0.06)',
@@ -291,7 +309,22 @@ export default function LoyaltyApprovalsPage() {
                       </div>
                       <div style={fieldRowStyle}>
                         <span style={fieldLabelStyle}>Check Number</span>
-                        <span style={fieldValueStyle}>{tx.checkNumber || '—'}</span>
+                        <span style={{ ...fieldValueStyle, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          {tx.checkNumber || '—'}
+                          {isDuplicateCheckNumber(tx) && (
+                            <span style={{
+                              fontSize: '0.62rem',
+                              padding: '0.15rem 0.5rem',
+                              borderRadius: '2px',
+                              backgroundColor: 'rgba(228,51,41,0.15)',
+                              color: 'var(--red)',
+                              fontFamily: 'var(--font-inter)',
+                              letterSpacing: '0.04em',
+                              textTransform: 'uppercase',
+                              whiteSpace: 'nowrap',
+                            }}>⚠ Duplicate</span>
+                          )}
+                        </span>
                       </div>
                       <div style={fieldRowStyle}>
                         <span style={fieldLabelStyle}>Total Amount</span>

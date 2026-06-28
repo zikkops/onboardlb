@@ -75,6 +75,31 @@ export default function RedeemPage() {
     }
   }
 
+  // Only an email/password signup can ever land here — Google sign-in is
+  // already verified by Google. Gated here (not just hidden behind a
+  // disabled button) so this can't be bypassed by calling the Firestore
+  // write directly.
+  if (user && !user.emailVerified) {
+    return (
+      <div style={{ minHeight: '100vh', backgroundColor: 'var(--black)', padding: isMobile ? '1.25rem' : '3rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ maxWidth: '420px', width: '100%', textAlign: 'center' }}>
+          <h1 style={{ fontFamily: 'var(--font-cinzel)', fontSize: isMobile ? '1.4rem' : '1.7rem', color: 'var(--offwhite)', marginBottom: '0.8rem' }}>
+            Verify your email first
+          </h1>
+          <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.85rem', color: 'rgba(245,242,236,0.5)', lineHeight: 1.7, marginBottom: '2rem' }}>
+            Redeeming OB Coins spends real value, so we need to confirm it's really you first.
+            Check your inbox for the verification email, then head to your profile to confirm it.
+          </p>
+          <Link href="/customer/profile" style={{
+            display: 'inline-block', backgroundColor: 'var(--purple)', color: '#fff',
+            padding: '0.8rem 2rem', borderRadius: '2px', fontSize: '0.78rem',
+            letterSpacing: '0.08em', textTransform: 'uppercase', textDecoration: 'none', fontFamily: 'var(--font-inter)',
+          }}>Go to Profile</Link>
+        </div>
+      </div>
+    )
+  }
+
   if (success) {
     return (
       <div style={{ minHeight: '100vh', backgroundColor: 'var(--black)', padding: isMobile ? '1.25rem' : '3rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

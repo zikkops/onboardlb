@@ -153,13 +153,11 @@ export async function createReservationRequest(input: {
     const snaps = await Promise.all(lockRefs.map(ref => tx.get(ref)))
     if (snaps.some(s => s.exists())) throw new Error('slot-taken')
 
-    lockRefs.forEach((ref, i) => tx.set(ref, {
-      dmUid: input.dmUid,
-      dateKey: dateKey(lockBuckets[i]),
-      reservationId: reservationRef.id,
-      createdAt: serverTimestamp(),
-    }))
-
+    // Reservation is written before the locks that reference it — the lock
+    // create rule (firestore.rules) looks this doc up via get() to confirm
+    // each lock is backed by a real, owned reservation, and get() within a
+    // transaction only sees writes that happened earlier in that same
+    // transaction.
     tx.set(reservationRef, {
       campaignId: input.campaignId,
       campaignTitle: input.campaignTitle,
@@ -181,6 +179,14 @@ export async function createReservationRequest(input: {
       rejectedAt: null,
       rejectionReason: null,
     })
+
+    lockRefs.forEach((ref, i) => tx.set(ref, {
+      dmUid: input.dmUid,
+      dateKey: dateKey(lockBuckets[i]),
+      bucketStart: Timestamp.fromDate(lockBuckets[i]),
+      reservationId: reservationRef.id,
+      createdAt: serverTimestamp(),
+    }))
   })
 
   if (input.participants.length > 0) {

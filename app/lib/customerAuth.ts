@@ -5,7 +5,7 @@ import {
   GoogleAuthProvider, signInWithPopup,
   signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile,
   linkWithCredential, EmailAuthProvider,
-  onAuthStateChanged, signOut, type User,
+  onAuthStateChanged, signOut, sendEmailVerification, type User,
 } from 'firebase/auth'
 import { doc, getDoc, setDoc, updateDoc, serverTimestamp, runTransaction } from 'firebase/firestore'
 import { auth, db } from './firebase'
@@ -31,7 +31,9 @@ export function useCustomerUser() {
 
 // First-time sign-in only — if the doc already exists this is a no-op, so a
 // returning customer's xp/level/badges are never reset on repeat logins.
-async function ensureCustomerDoc(user: User, username?: string, phoneNumber?: string) {
+async function ensureCustomerDoc(
+  user: User, username?: string, phoneNumber?: string, firstName?: string, lastName?: string
+) {
   const ref = doc(db, 'users', user.uid)
   const snap = await getDoc(ref)
   if (snap.exists()) return
@@ -39,8 +41,9 @@ async function ensureCustomerDoc(user: User, username?: string, phoneNumber?: st
   await setDoc(ref, {
     username: username ?? '',
     displayName: username ?? user.displayName ?? '',
+    firstName: firstName ?? '',
+    lastName: lastName ?? '',
     email: user.email ?? '',
-    phoneNumber: phoneNumber ?? '',
     avatarUrl: user.photoURL ?? '',
     themeId: 'dungeon',
     xp: 0,
@@ -51,6 +54,12 @@ async function ensureCustomerDoc(user: User, username?: string, phoneNumber?: st
     createdAt: serverTimestamp(),
     role: 'customer',
   })
+  // Phone number lives in a private sub-doc, not the main profile — that
+  // doc is broadly readable by any signed-in customer (friend search,
+  // leaderboard), and a phone number has no business being part of that.
+  await setDoc(doc(db, 'users', user.uid, 'private', 'contact'), {
+    phoneNumber: phoneNumber ?? '',
+  }, { merge: true })
 }
 
 async function needsUsername(uid: string): Promise<boolean> {
@@ -104,21 +113,34 @@ const PHONE_PATTERN = /^[0-9+\-\s()]{7,20}$/
 
 // Lets a Google-only customer (no username yet, e.g. first Google login, or
 // any older account from before usernames existed) claim a username and
-// record their phone number — both required to finish registering.
-export async function completeAccountSetup(uid: string, email: string, username: string, phoneNumber: string): Promise<void> {
+// record their phone number/legal name — all required to finish registering.
+export async function completeAccountSetup(
+  uid: string, email: string, username: string, phoneNumber: string, firstName: string, lastName: string
+): Promise<void> {
   const trimmed = username.trim()
   const phone = phoneNumber.trim()
+  const first = firstName.trim()
+  const last = lastName.trim()
   if (!trimmed) throw new Error('username-required')
   if (!PHONE_PATTERN.test(phone)) throw new Error('phone-required')
+  if (!first || !last) throw new Error('name-required')
+  if (first.length > 50 || last.length > 50) throw new Error('name-too-long')
   await reserveUsername(trimmed, uid, email)
-  await updateDoc(doc(db, 'users', uid), { username: trimmed, phoneNumber: phone })
+  await updateDoc(doc(db, 'users', uid), { username: trimmed, firstName: first, lastName: last })
+  await setDoc(doc(db, 'users', uid, 'private', 'contact'), { phoneNumber: phone }, { merge: true })
 }
 
-export async function signUpWithEmail(username: string, email: string, password: string, phoneNumber: string): Promise<User> {
+export async function signUpWithEmail(
+  username: string, email: string, password: string, phoneNumber: string, firstName: string, lastName: string
+): Promise<User> {
   const trimmed = username.trim()
   const phone = phoneNumber.trim()
+  const first = firstName.trim()
+  const last = lastName.trim()
   if (!trimmed) throw new Error('username-required')
   if (!PHONE_PATTERN.test(phone)) throw new Error('phone-required')
+  if (!first || !last) throw new Error('name-required')
+  if (first.length > 50 || last.length > 50) throw new Error('name-too-long')
 
   const cred = await createUserWithEmailAndPassword(auth, email, password)
   try {
@@ -130,8 +152,31 @@ export async function signUpWithEmail(username: string, email: string, password:
     throw err
   }
   await updateProfile(cred.user, { displayName: trimmed })
-  await ensureCustomerDoc(cred.user, trimmed, phone)
+  await ensureCustomerDoc(cred.user, trimmed, phone, first, last)
+  // Best-effort — a customer who signed up with an email they don't
+  // control just won't be able to verify later; it shouldn't block the
+  // signup itself if Firebase's email send hiccups.
+  try { await sendEmailVerification(cred.user) } catch { /* not fatal */ }
   return cred.user
+}
+
+// Google accounts are already verified by Google itself (Firebase trusts
+// that), so this only ever matters for email/password signups — there's
+// nothing to resend for a Google-only account.
+export async function resendVerificationEmail(): Promise<void> {
+  if (!auth.currentUser) throw new Error('not-signed-in')
+  await sendEmailVerification(auth.currentUser)
+}
+
+// `user.emailVerified` on the cached Auth object only updates after a
+// fresh token fetch — clicking the link in the verification email doesn't
+// push a live update to an already-open tab. Call this (then re-read
+// `auth.currentUser?.emailVerified`) after the customer says they've
+// clicked it, rather than making them sign out and back in.
+export async function refreshEmailVerified(): Promise<boolean> {
+  if (!auth.currentUser) return false
+  await auth.currentUser.reload()
+  return auth.currentUser.emailVerified
 }
 
 // Accepts either an email or a username in `identifier`.
