@@ -162,8 +162,11 @@ service cloud.firestore {
       );
     }
 
+    // Public, like games/menuItems/events above — the Loyalty page shows
+    // what's redeemable to everyone, signed in or not, as part of the
+    // pitch for why someone should join the program in the first place.
     match /redemptionItems/{itemId} {
-      allow read: if request.auth != null;
+      allow read: if true;
       allow write: if isStaff();
     }
     // Every redemption request is customer-initiated (staff only approve —
