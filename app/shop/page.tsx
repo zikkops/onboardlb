@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useRef } from 'react'
 import { collection, getDocs } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import Navbar from '../components/layout/Navbar'
@@ -179,6 +179,38 @@ export default function ShopPage() {
       return matchCat && matchSearch && matchPrice && matchPlayers
     })
   }, [games, filter, search, maxPrice, minPlayers, maxPlayers])
+
+  // Render 20 at a time rather than the whole filtered list in one shot —
+  // with a big enough catalog, mounting every card's <img> at once is the
+  // actual source of a slow-feeling page load, not just missing
+  // placeholders. The sentinel below reveals the next batch automatically
+  // as it scrolls into view, so this just keeps going on its own.
+  const BATCH_SIZE = 20
+  const [visibleCount, setVisibleCount] = useState(BATCH_SIZE)
+  const loadMoreRef = useRef<HTMLDivElement>(null)
+
+  // A new filter/search/price/players result set starts back at the first
+  // batch — otherwise switching categories could leave visibleCount stuck
+  // at a number that doesn't mean anything for the new, different list.
+  useEffect(() => {
+    setVisibleCount(BATCH_SIZE)
+  }, [filter, search, maxPrice, minPlayers, maxPlayers])
+
+  const visibleGames = filtered.slice(0, visibleCount)
+  const hasMore = visibleCount < filtered.length
+
+  useEffect(() => {
+    if (!hasMore) return
+    const sentinel = loadMoreRef.current
+    if (!sentinel) return
+    const observer = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting) {
+        setVisibleCount(prev => Math.min(prev + BATCH_SIZE, filtered.length))
+      }
+    }, { rootMargin: '600px' })
+    observer.observe(sentinel)
+    return () => observer.disconnect()
+  }, [hasMore, filtered.length])
 
   function reset() {
     setSearch('')
@@ -695,7 +727,7 @@ export default function ShopPage() {
                 gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(3, 1fr)',
                 gap: isMobile ? '0.75rem' : '1.5rem',
               }}>
-                {filtered.map(game => {
+                {visibleGames.map(game => {
                   const stock       = totalStock(game.stock)
                   const outOfStock  = stock === 0
                   const hovered     = hoveredId === game.id
@@ -866,6 +898,28 @@ export default function ShopPage() {
                     </Link>
                   )
                 })}
+              </div>
+            )}
+
+            {/* Sentinel — scrolling this into view loads the next batch.
+                Shows a row of skeleton cards while there's more to come,
+                so the page never dumps every image on the DOM at once. */}
+            {hasMore && (
+              <div ref={loadMoreRef} style={{
+                display: 'grid',
+                gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(3, 1fr)',
+                gap: isMobile ? '0.75rem' : '1.5rem',
+                marginTop: isMobile ? '0.75rem' : '1.5rem',
+              }}>
+                {Array.from({ length: isMobile ? 2 : 3 }).map((_, i) => (
+                  <div key={i} style={{ border: '1px solid rgba(255,255,255,0.06)', borderRadius: '4px', overflow: 'hidden' }}>
+                    <Skeleton height={isMobile ? '120px' : '200px'} borderRadius="0" />
+                    <div style={{ padding: isMobile ? '0.8rem' : '1.2rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                      <Skeleton width="70%" height="1rem" />
+                      <Skeleton width="45%" height="0.8rem" />
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>
