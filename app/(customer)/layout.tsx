@@ -25,14 +25,12 @@ export default function CustomerLayout({ children }: { children: React.ReactNode
   if (loading) return null
   if (!user && pathname !== LOGIN_PATH) return null
 
-  // Every page in this group previously had no way back to the public
-  // site at all — Navbar/Footer are added here once, for the whole group,
-  // rather than per-page like the public pages do, since every page here
-  // shares the same "customer area" framing. Navbar floats fixed on top
-  // (same as everywhere else it's used), so the extra top padding keeps
-  // it from covering each page's own content — those pages already have
-  // their own top padding on top of this, which just means a bit of extra
-  // breathing room, not an exact science.
+  // Navbar/Footer are added here once for the whole group, rather than
+  // per-page like the public pages do, since every page here shares the
+  // same "customer area" framing. Navbar floats fixed on top, so the
+  // extra top padding keeps it from covering each page's own content —
+  // those pages already have their own top padding too, which just means
+  // a bit of extra breathing room, not an exact science.
   return (
     <>
       <Navbar />

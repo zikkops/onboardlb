@@ -18,6 +18,7 @@ service cloud.firestore {
     match /events/{id}         { allow read: if true; allow write: if isStaff(); }
     match /eventTypes/{id}     { allow read: if true; allow write: if isStaff(); }
     match /dndCampaigns/{id}   { allow read: if true; allow write: if isStaff(); }
+    match /levelPerks/{id}     { allow read: if true; allow write: if isStaff(); }
 
     // ---- Staff-only ----
     match /activityLog/{id}  { allow read, write: if isStaff(); }

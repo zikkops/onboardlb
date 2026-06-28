@@ -2,7 +2,9 @@
 
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useLayoutEffect, useRef } from 'react'
+import { gsap } from 'gsap'
+import { useIsStaff } from '../../lib/adminAuth'
 
 function HeroButton({
   label, color, onClick
@@ -57,13 +59,55 @@ function HeroButton({
 export default function Hero() {
   const router = useRouter()
   const [isMobile, setIsMobile] = useState(false)
+  const isStaff = useIsStaff()
+
+  const bgRef       = useRef<HTMLDivElement>(null)
+  const overlayRef  = useRef<HTMLDivElement>(null)
+  const eyebrowRef  = useRef<HTMLParagraphElement>(null)
+  const logoRef     = useRef<HTMLDivElement>(null)
+  const taglineRef  = useRef<HTMLParagraphElement>(null)
+  const buttonsRef  = useRef<HTMLDivElement>(null)
+  const scrollRef   = useRef<HTMLDivElement>(null)
+
+  // isMobile starts false (SSR-safe default) and corrects itself here on
+  // mount — introReady gates the animation below until *after* that
+  // correction lands, so it never captures the desktop button layout's
+  // children only to have them replaced by the mobile rows moments later.
+  const [introReady, setIntroReady] = useState(false)
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth <= 768)
     check()
+    setIntroReady(true)
     window.addEventListener('resize', check)
     return () => window.removeEventListener('resize', check)
   }, [])
+
+  // Fires once introReady flips true (the first render with the correct,
+  // final button layout already committed), never again afterward — a
+  // later resize toggling isMobile swaps the buttons' children but doesn't
+  // replay this entrance. Each button row (mobile: 3, desktop: 2) is
+  // staggered as a whole rather than reaching into HeroButton itself.
+  useLayoutEffect(() => {
+    if (!introReady) return
+    // Every target's hidden starting point (opacity/scale) is already
+    // baked into its JSX style below, not set here — that's what's in the
+    // very first paint (and the server-rendered HTML), so there's nothing
+    // to flash from before this timeline takes over and animates it in.
+    const tl = gsap.timeline({ defaults: { ease: 'power3.out' } })
+
+    tl.to(bgRef.current, { scale: 1, opacity: 1, duration: 1.6, ease: 'power2.out' })
+      .to(overlayRef.current, { opacity: 1, duration: 1.2 }, '<')
+      .to(eyebrowRef.current, { opacity: 1, y: 0, duration: 0.7 }, '-=0.9')
+      .to(logoRef.current, { opacity: 1, y: 0, duration: 0.9, ease: 'back.out(1.4)' }, '-=0.4')
+      .to(taglineRef.current, { opacity: 1, y: 0, duration: 0.7 }, '-=0.4')
+      .to(buttonsRef.current ? Array.from(buttonsRef.current.children) : [], {
+        opacity: 1, y: 0, duration: 0.6, stagger: 0.12,
+      }, '-=0.3')
+      .to(scrollRef.current, { opacity: 1, duration: 0.6 }, '-=0.1')
+
+    return () => { tl.kill() }
+  }, [introReady])
 
   function scrollTo(id: string) {
     const el = document.getElementById(id)
@@ -83,31 +127,35 @@ export default function Hero() {
       overflow: 'hidden',
     }}>
 
-      {/* Background Image */}
-      <Image
-        src="/images/BG-img1.webp"
-        alt="Onboard interior"
-        fill
-        priority
-        sizes="100vw"
-        style={{ objectFit: 'cover', objectPosition: 'center' }}
-      />
+      {/* Background Image — wrapped so GSAP scales/fades the wrapper, not
+          the next/image-managed <img> itself */}
+      <div ref={bgRef} style={{ position: 'absolute', inset: 0, opacity: 0, transform: 'scale(1.12)' }}>
+        <Image
+          src="/images/BG-img1.webp"
+          alt="Onboard interior"
+          fill
+          priority
+          sizes="100vw"
+          style={{ objectFit: 'cover', objectPosition: 'center' }}
+        />
+      </div>
 
-      {/* Dark overlay */}
-      <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.7)' }} />
-
-      {/* Color glows */}
-      <div style={{
-        position: 'absolute', inset: 0, pointerEvents: 'none',
-        background: `
-          radial-gradient(ellipse at 30% 60%, rgba(50,50,124,0.3) 0%, transparent 60%),
-          radial-gradient(ellipse at 70% 30%, rgba(0,160,152,0.15) 0%, transparent 50%)
-        `,
-      }} />
+      {/* Dark overlay + color glows, faded in together with the background */}
+      <div ref={overlayRef} style={{ opacity: 0 }}>
+        <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.7)' }} />
+        <div style={{
+          position: 'absolute', inset: 0, pointerEvents: 'none',
+          background: `
+            radial-gradient(ellipse at 30% 60%, rgba(50,50,124,0.3) 0%, transparent 60%),
+            radial-gradient(ellipse at 70% 30%, rgba(0,160,152,0.15) 0%, transparent 50%)
+          `,
+        }} />
+      </div>
 
       {/* Eyebrow */}
-      <p style={{
+      <p ref={eyebrowRef} style={{
         position: 'relative', zIndex: 1,
+        opacity: 0, transform: 'translateY(24px)',
         fontSize: isMobile ? '0.6rem' : '0.7rem',
         letterSpacing: '0.3em',
         textTransform: 'uppercase',
@@ -123,18 +171,20 @@ export default function Hero() {
       </p>
 
       {/* Logo */}
-      <Image
-        src="/images/logo.png"
-        alt="Onboard Games & Tales"
-        width={isMobile ? 200 : 340}
-        height={isMobile ? 134 : 227}
-        priority
-        style={{ position: 'relative', zIndex: 1, marginBottom: '1.5rem' }}
-      />
+      <div ref={logoRef} style={{ position: 'relative', zIndex: 1, marginBottom: '1.5rem', opacity: 0, transform: 'translateY(24px)' }}>
+        <Image
+          src="/images/logo.png"
+          alt="Onboard Games & Tales"
+          width={isMobile ? 200 : 340}
+          height={isMobile ? 134 : 227}
+          priority
+        />
+      </div>
 
       {/* Tagline */}
-      <p style={{
+      <p ref={taglineRef} style={{
         position: 'relative', zIndex: 1,
+        opacity: 0, transform: 'translateY(24px)',
         fontFamily: 'var(--font-inter)',
         fontSize: isMobile ? '0.85rem' : '1rem',
         fontWeight: 300,
@@ -149,7 +199,7 @@ export default function Hero() {
       </p>
 
       {/* Buttons */}
-      <div style={{
+      <div ref={buttonsRef} style={{
         position: 'relative', zIndex: 1,
         display: 'flex',
         flexDirection: 'column',
@@ -162,28 +212,28 @@ export default function Hero() {
         {isMobile ? (
           // Mobile — 2 columns
           <>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem', width: '100%' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem', width: '100%', opacity: 0, transform: 'translateY(20px)' }}>
               <HeroButton label="Our Menu"  color="#00A098" onClick={() => scrollTo('menu-section')} />
               <HeroButton label="Shop"      color="#6A6AB7" onClick={() => scrollTo('shop-section')} />
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem', width: '100%' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem', width: '100%', opacity: 0, transform: 'translateY(20px)' }}>
               <HeroButton label="Events"    color="#E43329" onClick={() => scrollTo('events-section')} />
-              <HeroButton label="Reserve"   color="#32327C" onClick={() => router.push('/about#contact')} />
+              <HeroButton label={isStaff ? 'CMS' : 'Reserve'} color="#32327C" onClick={() => router.push(isStaff ? '/admin' : '/about#branches')} />
             </div>
-            <div style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
+            <div style={{ display: 'flex', justifyContent: 'center', width: '100%', opacity: 0, transform: 'translateY(20px)' }}>
               <HeroButton label="Dungeons & Dragons" color="#6A6AB7" onClick={() => scrollTo('dnd-section')} />
             </div>
           </>
         ) : (
           // Desktop — 3 x 2
           <>
-            <div style={{ display: 'flex', gap: '1rem' }}>
+            <div style={{ display: 'flex', gap: '1rem', opacity: 0, transform: 'translateY(20px)' }}>
               <HeroButton label="Our Menu"          color="#00A098" onClick={() => scrollTo('menu-section')} />
               <HeroButton label="Shop"              color="#6A6AB7" onClick={() => scrollTo('shop-section')} />
               <HeroButton label="Events"            color="#E43329" onClick={() => scrollTo('events-section')} />
             </div>
-            <div style={{ display: 'flex', gap: '1rem' }}>
-              <HeroButton label="Reserve a Spot"     color="#32327C" onClick={() => router.push('/about#contact')} />
+            <div style={{ display: 'flex', gap: '1rem', opacity: 0, transform: 'translateY(20px)' }}>
+              <HeroButton label={isStaff ? 'CMS' : 'Reserve a Spot'} color="#32327C" onClick={() => router.push(isStaff ? '/admin' : '/about#branches')} />
               <HeroButton label="Dungeons & Dragons" color="#6A6AB7" onClick={() => scrollTo('dnd-section')} />
             </div>
           </>
@@ -191,8 +241,9 @@ export default function Hero() {
       </div>
 
       {/* Scroll hint */}
-      <div style={{
+      <div ref={scrollRef} style={{
         position: 'absolute', zIndex: 1,
+        opacity: 0,
         bottom: '2rem',
         left: '50%',
         transform: 'translateX(-50%)',

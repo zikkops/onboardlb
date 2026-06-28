@@ -150,6 +150,7 @@ function SendMessageButton() {
 
 export default function AboutPage() {
   const isMobile = useIsMobile()
+
   return (
     <>
       <Navbar />

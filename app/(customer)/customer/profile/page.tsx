@@ -17,7 +17,8 @@ import { useUserEventReservations, type EventReservation } from '../../../lib/ev
 import { usePendingInvites, acceptInvite, declineInvite, type ParticipantInvite } from '../../../lib/participantInvites'
 import { uploadImage } from '../../../lib/media'
 import Skeleton from '../../../components/Skeleton'
-import { getLevelFromXP, TIER_COLORS } from '../../../lib/levelConfig'
+import { getLevelFromXP, getTierFromLevel, TIER_COLORS } from '../../../lib/levelConfig'
+import { useLevelPerks } from '../../../lib/levelPerks'
 import { resolveBranchName } from '../../../lib/branches'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
@@ -535,6 +536,7 @@ export default function CustomerProfilePage() {
   const initials = (profile?.displayName || '?').trim().charAt(0).toUpperCase()
   const levelInfo = getLevelFromXP(profile?.xp ?? 0)
   const tierColor = TIER_COLORS[levelInfo.tier] ?? TIER_COLORS.Apprentice
+  const { perks } = useLevelPerks()
 
   const sectionLabelStyle = {
     fontSize: '0.65rem',
@@ -810,6 +812,61 @@ export default function CustomerProfilePage() {
             </div>
           </div>
         </div>
+
+        {/* Your Perks — every perk staff have configured (admin/loyalty/
+            perks), with which ones this account has actually reached.
+            Owner-only: it's framed around "what's unlocked for *you*",
+            not a general public perks list (that's app/loyalty/page.tsx). */}
+        {isOwnProfile && perks.length > 0 && (
+          <div>
+            <p style={sectionLabelStyle}>Your Perks</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+              {perks.map(p => {
+                const unlocked = levelInfo.level >= p.level
+                const color = TIER_COLORS[getTierFromLevel(p.level)]
+                return (
+                  <div key={p.id} style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '1rem',
+                    padding: isMobile ? '0.8rem 1rem' : '0.9rem 1.2rem',
+                    backgroundColor: unlocked ? `${color}0d` : 'rgba(255,255,255,0.02)',
+                    border: `1px solid ${unlocked ? `${color}40` : 'rgba(255,255,255,0.06)'}`,
+                    borderLeft: `3px solid ${unlocked ? color : 'rgba(255,255,255,0.1)'}`,
+                    borderRadius: '4px',
+                    opacity: unlocked ? 1 : 0.55,
+                  }}>
+                    <span style={{
+                      fontFamily: 'var(--font-cinzel)',
+                      fontSize: '0.85rem',
+                      color: unlocked ? color : 'rgba(245,242,236,0.4)',
+                      minWidth: isMobile ? '45px' : '55px',
+                      flexShrink: 0,
+                    }}>Lv {p.level}</span>
+                    <p style={{
+                      flex: 1,
+                      fontFamily: 'var(--font-inter)',
+                      fontSize: isMobile ? '0.78rem' : '0.85rem',
+                      color: unlocked ? 'rgba(245,242,236,0.8)' : 'rgba(245,242,236,0.4)',
+                    }}>{p.perk}</p>
+                    <span style={{
+                      fontSize: '0.62rem',
+                      padding: '0.2rem 0.6rem',
+                      borderRadius: '2px',
+                      backgroundColor: unlocked ? `${color}25` : 'rgba(255,255,255,0.06)',
+                      color: unlocked ? color : 'rgba(245,242,236,0.35)',
+                      fontFamily: 'var(--font-inter)',
+                      letterSpacing: '0.06em',
+                      textTransform: 'uppercase',
+                      whiteSpace: 'nowrap',
+                      flexShrink: 0,
+                    }}>{unlocked ? 'Unlocked' : `Level ${p.level}`}</span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Email verification reminder — only the email/password signup path
             can ever be unverified; a Google sign-in is already verified by

@@ -9,7 +9,8 @@ import Reveal from '../components/Reveal'
 import Skeleton from '../components/Skeleton'
 import { useIsMobile } from '../lib/useIsMobile'
 import { useRedemptionItems, type RedemptionItem } from '../lib/redemptions'
-import { TIERS, TIER_COLORS, LEVEL_TITLES } from '../lib/levelConfig'
+import { useLevelPerks } from '../lib/levelPerks'
+import { TIERS, TIER_COLORS, LEVEL_TITLES, getTierFromLevel } from '../lib/levelConfig'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faGoogle } from '@fortawesome/free-brands-svg-icons'
 import {
@@ -48,16 +49,6 @@ const EARN_CARDS = [
     desc: 'Join a Dungeon & Dragons campaign at any branch. Your Dungeon Master logs your attendance and you earn the biggest reward in the program.',
     xp: 400, coins: 75, unit: 'per session',
   },
-]
-
-const PERKS: { level: number; tier: string; perk: string }[] = [
-  { level: 5,  tier: 'Apprentice', perk: 'Free soft drink on your birthday' },
-  { level: 10, tier: 'Apprentice', perk: '5% off all food orders' },
-  { level: 15, tier: 'Adventurer', perk: 'Reserve a table up to 48h in advance' },
-  { level: 20, tier: 'Adventurer', perk: '10% off all orders + early event access' },
-  { level: 30, tier: 'Champion',   perk: 'Free coffee once a month + name on leaderboard' },
-  { level: 40, tier: 'Legend',     perk: 'Priority D&D campaign registration + 15% off' },
-  { level: 50, tier: 'Mythic',     perk: 'Permanent Onboard Legend badge + free item every month' },
 ]
 
 const SUBMIT_STEPS = [
@@ -115,6 +106,7 @@ function SectionHeading({ eyebrow, title, isMobile, color = 'var(--teal)' }: {
 export default function LoyaltyPage() {
   const isMobile = useIsMobile()
   const { items: redemptionItems, loading: loadingRedemptions } = useRedemptionItems(true)
+  const { perks: PERKS, loading: loadingPerks } = useLevelPerks()
   const [activeTier, setActiveTier] = useState<string>(TIERS[0].label)
   const [hoveredTierBtn, setHoveredTierBtn] = useState<string | null>(null)
   const [signInHovered, setSignInHovered] = useState(false)
@@ -552,12 +544,16 @@ export default function LoyaltyPage() {
             <section style={{ marginBottom: isMobile ? '4rem' : '7rem' }}>
               <SectionHeading eyebrow="The Payoff" title="Perks unlocked by level" isMobile={isMobile} color="var(--purple)" />
 
-              {isMobile ? (
+              {loadingPerks ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.9rem' }}>
+                  {[0, 1, 2].map(i => <Skeleton key={i} height="70px" borderRadius="4px" />)}
+                </div>
+              ) : isMobile ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.9rem' }}>
                   {PERKS.map(p => {
-                    const color = TIER_COLORS[p.tier]
+                    const color = TIER_COLORS[getTierFromLevel(p.level)]
                     return (
-                      <div key={p.level} style={{
+                      <div key={p.id} style={{
                         border: `1px solid ${color}30`,
                         borderLeft: `3px solid ${color}`,
                         borderRadius: '4px',
@@ -566,7 +562,7 @@ export default function LoyaltyPage() {
                       }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
                           <span style={{ fontFamily: 'var(--font-cinzel)', fontSize: '1rem', color }}>Level {p.level}</span>
-                          <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.65rem', letterSpacing: '0.1em', textTransform: 'uppercase', color }}>{p.tier}</span>
+                          <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.65rem', letterSpacing: '0.1em', textTransform: 'uppercase', color }}>{getTierFromLevel(p.level)}</span>
                         </div>
                         <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.85rem', color: 'rgba(245,242,236,0.6)', lineHeight: 1.6 }}>{p.perk}</p>
                       </div>
@@ -576,9 +572,9 @@ export default function LoyaltyPage() {
               ) : (
                 <div style={{ border: '1px solid rgba(255,255,255,0.06)', borderRadius: '4px', overflow: 'hidden' }}>
                   {PERKS.map((p, i) => {
-                    const color = TIER_COLORS[p.tier]
+                    const color = TIER_COLORS[getTierFromLevel(p.level)]
                     return (
-                      <div key={p.level} style={{
+                      <div key={p.id} style={{
                         display: 'grid',
                         gridTemplateColumns: '120px 160px 1fr',
                         alignItems: 'center',
@@ -588,7 +584,7 @@ export default function LoyaltyPage() {
                         background: i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
                       }}>
                         <span style={{ fontFamily: 'var(--font-cinzel)', fontSize: '1.1rem', color }}>Lv {p.level}</span>
-                        <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.72rem', letterSpacing: '0.1em', textTransform: 'uppercase', color }}>{p.tier}</span>
+                        <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.72rem', letterSpacing: '0.1em', textTransform: 'uppercase', color }}>{getTierFromLevel(p.level)}</span>
                         <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.88rem', color: 'rgba(245,242,236,0.7)' }}>{p.perk}</span>
                       </div>
                     )

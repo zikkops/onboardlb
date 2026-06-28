@@ -114,24 +114,18 @@ export function useAdminUser() {
         setIsDungeonMaster(data.isDungeonMaster === true)
         setProvisioned(true)
       } else {
-        // No role record yet. This used to try to self-elect the very first
-        // sign-in as admin (so a fresh project wouldn't lock everyone out),
-        // but Firestore rules can no longer allow that write — rules have
-        // no way to check "is this whole collection empty" (only "does this
-        // one document exist"), so the permissive write that made
-        // self-election possible also let *any* signup grant itself admin,
-        // not just the first. That's now closed (see firestore.rules), so
-        // the first admin account has to be created by hand in the Firebase
-        // Console instead. This just falls through to "not provisioned."
+        // No role record for this uid. The write below always fails under
+        // firestore.rules — isStaff() checks whether an adminUsers/{uid}
+        // doc already exists for the caller, which can never be true for
+        // the very doc this call is trying to create — so this falls
+        // through to "not provisioned" every time. The first admin account
+        // has to be created by hand in the Firebase Console instead.
         let isFirstEverAdmin = false
         try {
           await setDoc(ref, { email: u.email, role: 'admin', createdAt: serverTimestamp() })
           isFirstEverAdmin = true
         } catch {
-          // Expected once a real admin already exists — rules reject this
-          // write for everyone except the (now Console-provisioned) first
-          // admin's own uid, which would already have hit the snap.exists()
-          // branch above instead of reaching here.
+          // Always lands here — see comment above.
         }
         if (isFirstEverAdmin) {
           setRole('admin')
@@ -151,6 +145,25 @@ export function useAdminUser() {
   }, [])
 
   return { user, role, branchIds, isDungeonMaster, loading, provisioned }
+}
+
+// Lightweight, read-only staff check for public/customer-facing components
+// (e.g. swapping a CTA for staff) — unlike useAdminUser(), this never
+// attempts to write anything (no self-elect-first-admin side effect), since
+// it has to run safely on every page load for every anonymous visitor too.
+export function useIsStaff(): boolean {
+  const [isStaff, setIsStaff] = useState(false)
+
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, async (u) => {
+      if (!u) { setIsStaff(false); return }
+      const snap = await getDoc(doc(db, 'adminUsers', u.uid))
+      setIsStaff(snap.exists())
+    })
+    return unsub
+  }, [])
+
+  return isStaff
 }
 
 // A section whose access list includes 'dungeonmaster' is treated as

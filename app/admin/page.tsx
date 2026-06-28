@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { signOut } from 'firebase/auth'
 import { auth } from '../lib/firebase'
 import { useRequireRole, hasSectionAccess, ALL_ROLES, SECTION_ACCESS, ROLE_LABELS, type Role } from '../lib/adminAuth'
@@ -103,16 +104,35 @@ export default function AdminPage() {
       ],
     },
     {
-      title: 'Loyalty Management',
+      title: 'Loyalty Submissions',
       color: 'var(--navy)',
       cards: [
         { label: 'D&D Session Attendance', desc: 'Log session attendees to send them for manager approval', href: '/admin/loyalty/dnd', access: SECTION_ACCESS.loyaltyDnd },
         { label: 'Event Attendance', desc: 'Log event attendees to send them for manager approval', href: '/admin/loyalty/events', access: SECTION_ACCESS.loyaltyEvents },
+      ],
+    },
+    {
+      title: 'Loyalty Approvals',
+      color: 'var(--navy)',
+      cards: [
         { label: 'Loyalty Approvals', desc: 'Approve or reject pending XP and OB Coin submissions', href: '/admin/loyalty/approvals', access: SECTION_ACCESS.loyalty, badge: pendingLoyalty.length },
-        { label: 'Redemption Items', desc: 'Add, edit or deactivate items customers can redeem with OB Coins', href: '/admin/loyalty/redemption-items', access: SECTION_ACCESS.loyalty },
         { label: 'Redemption Requests', desc: 'Confirm or reject pending OB Coin redemption requests', href: '/admin/loyalty/redemptions', access: SECTION_ACCESS.loyalty, badge: pendingRedemptions.length },
-        { label: 'Loyalty Activity', desc: 'Submissions, approvals, rejections, and redemption item changes', href: '/admin/loyalty/activity', access: SECTION_ACCESS.loyalty },
+      ],
+    },
+    {
+      title: 'Loyalty Catalog',
+      color: 'var(--navy)',
+      cards: [
+        { label: 'Redemption Items', desc: 'Add, edit or deactivate items customers can redeem with OB Coins', href: '/admin/loyalty/redemption-items', access: SECTION_ACCESS.loyalty },
+        { label: 'Level Perks', desc: 'Edit the perks customers unlock at each level, shown on the public Loyalty page', href: '/admin/loyalty/perks', access: SECTION_ACCESS.loyalty },
+      ],
+    },
+    {
+      title: 'Customer Accounts',
+      color: 'var(--navy)',
+      cards: [
         { label: 'Manage Customers', desc: 'Edit XP and OB Coins, resend password resets, delete accounts, and set the annual points reset date', href: '/admin/loyalty/customers', access: ['admin'] as Role[] },
+        { label: 'Loyalty Activity', desc: 'Submissions, approvals, rejections, and redemption item changes', href: '/admin/loyalty/activity', access: SECTION_ACCESS.loyalty },
       ],
     },
     {
@@ -185,23 +205,42 @@ export default function AdminPage() {
               Signed in as {user?.email} · {role ? ROLE_LABELS[role] : ''}
             </p>
           </div>
-          <button
-            onClick={handleSignOut}
-            style={{
-              backgroundColor: 'transparent',
-              border: '1px solid rgba(255,255,255,0.1)',
-              color: 'rgba(245,242,236,0.5)',
-              padding: '0.6rem 1.5rem',
-              borderRadius: '2px',
-              fontSize: '0.75rem',
-              letterSpacing: '0.1em',
-              textTransform: 'uppercase',
-              cursor: 'pointer',
-              fontFamily: 'var(--font-inter)',
-            }}
-          >
-            Sign Out
-          </button>
+          <div style={{ display: 'flex', gap: '0.8rem' }}>
+            <Link
+              href="/"
+              style={{
+                backgroundColor: 'transparent',
+                border: '1px solid rgba(255,255,255,0.1)',
+                color: 'rgba(245,242,236,0.5)',
+                padding: '0.6rem 1.5rem',
+                borderRadius: '2px',
+                fontSize: '0.75rem',
+                letterSpacing: '0.1em',
+                textTransform: 'uppercase',
+                fontFamily: 'var(--font-inter)',
+                textDecoration: 'none',
+              }}
+            >
+              View Site
+            </Link>
+            <button
+              onClick={handleSignOut}
+              style={{
+                backgroundColor: 'transparent',
+                border: '1px solid rgba(255,255,255,0.1)',
+                color: 'rgba(245,242,236,0.5)',
+                padding: '0.6rem 1.5rem',
+                borderRadius: '2px',
+                fontSize: '0.75rem',
+                letterSpacing: '0.1em',
+                textTransform: 'uppercase',
+                cursor: 'pointer',
+                fontFamily: 'var(--font-inter)',
+              }}
+            >
+              Sign Out
+            </button>
+          </div>
         </div>
 
         {/* Sections */}

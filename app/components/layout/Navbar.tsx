@@ -7,6 +7,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { doc, onSnapshot } from 'firebase/firestore'
 import { db } from '../../lib/firebase'
 import { useCustomerUser, signOutCustomer } from '../../lib/customerAuth'
+import { useIsStaff } from '../../lib/adminAuth'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faChevronDown } from '@fortawesome/free-solid-svg-icons'
 
@@ -32,6 +33,7 @@ export default function Navbar() {
   const router                        = useRouter()
   const { user: customerUser, loading: customerLoading } = useCustomerUser()
   const [customerName, setCustomerName] = useState<string | null>(null)
+  const isStaff = useIsStaff()
 
   useEffect(() => {
     if (!customerUser) { setCustomerName(null); return }
@@ -258,7 +260,7 @@ export default function Navbar() {
                 )
               )}
 
-              <Link href="/about#contact"
+              <Link href={isStaff ? '/admin' : '/about#branches'}
                 onMouseEnter={() => setBtnHovered(true)}
                 onMouseLeave={() => setBtnHovered(false)}
                 style={{
@@ -290,7 +292,7 @@ export default function Navbar() {
                   transition: 'left 0.5s ease',
                   pointerEvents: 'none',
                 }} />
-                Reserve a Table
+                {isStaff ? 'CMS' : 'Reserve a Table'}
               </Link>
             </div>
           </>
@@ -433,7 +435,7 @@ export default function Navbar() {
             )
           )}
 
-          <Link href="/about#contact"
+          <Link href={isStaff ? '/admin' : '/about#branches'}
             onClick={() => setOpen(false)}
             style={{
               marginTop: '1rem',
@@ -447,7 +449,7 @@ export default function Navbar() {
               textDecoration: 'none',
               fontFamily: 'var(--font-inter)',
             }}>
-            Reserve a Table
+            {isStaff ? 'CMS' : 'Reserve a Table'}
           </Link>
         </div>
       )}
