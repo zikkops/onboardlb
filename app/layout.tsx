@@ -16,6 +16,10 @@ const cinzel = Cinzel({
 export const metadata: Metadata = {
   title: 'Onboard — Games & Tales',
   description: "Lebanon's biggest board game café. Three branches: Beirut, Zouk, and Broummana.",
+  icons: {
+    icon: '/images/logo.png',
+    apple: '/images/logo.png',
+  },
 }
 
 export default function RootLayout({
