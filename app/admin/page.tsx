@@ -95,6 +95,14 @@ export default function AdminPage() {
   // rather than picked individually for each card.
   const sections = [
     {
+      title: 'Game Sales',
+      color: 'var(--teal)',
+      cards: [
+        { label: 'Record a Sale',  desc: 'Process a game purchase, deduct stock, and generate an invoice', href: '/admin/games/purchase', access: SECTION_ACCESS.gamePurchases },
+        { label: 'Sales & Invoices', desc: 'View past sales, download invoices, and process refunds', href: '/admin/games/invoices', access: SECTION_ACCESS.gamePurchases },
+      ],
+    },
+    {
       title: 'Content Management',
       color: 'var(--teal)',
       cards: [

@@ -52,6 +52,7 @@ export const SECTION_ACCESS = {
   dmAvailability: ['dungeonmaster'] as Role[],
   branchTables:      ['admin', 'manager'] as Role[],
   tableReservations: ['admin', 'manager'] as Role[],
+  gamePurchases:     ['admin', 'manager', 'gamer'] as Role[],
 }
 
 // Reads either shape — the new `branchIds` array, or the older singular
@@ -91,6 +92,7 @@ export function useAdminUser() {
   const [role, setRole]             = useState<Role | null>(null)
   const [branchIds, setBranchIds]   = useState<string[]>([])
   const [isDungeonMaster, setIsDungeonMaster] = useState(false)
+  const [superadmin, setSuperadmin] = useState(false)
   const [loading, setLoading]       = useState(true)
   const [provisioned, setProvisioned] = useState(true)
 
@@ -102,6 +104,7 @@ export function useAdminUser() {
         setRole(null)
         setBranchIds([])
         setIsDungeonMaster(false)
+        setSuperadmin(false)
         setProvisioned(true)
         setLoading(false)
         return
@@ -115,6 +118,7 @@ export function useAdminUser() {
         setRole((data.role as Role) ?? null)
         setBranchIds(normalizeBranchIds(data))
         setIsDungeonMaster(data.isDungeonMaster === true)
+        setSuperadmin(data.superadmin === true)
         setProvisioned(true)
       } else {
         // No role record for this uid. The write below always fails under
@@ -134,11 +138,13 @@ export function useAdminUser() {
           setRole('admin')
           setBranchIds([])
           setIsDungeonMaster(false)
+          setSuperadmin(false)
           setProvisioned(true)
         } else {
           setRole(null)
           setBranchIds([])
           setIsDungeonMaster(false)
+          setSuperadmin(false)
           setProvisioned(false)
         }
       }
@@ -147,7 +153,7 @@ export function useAdminUser() {
     return unsub
   }, [])
 
-  return { user, role, branchIds, isDungeonMaster, loading, provisioned }
+  return { user, role, branchIds, isDungeonMaster, superadmin, loading, provisioned }
 }
 
 // Lightweight, read-only staff check for public/customer-facing components
@@ -180,7 +186,7 @@ export function hasSectionAccess(role: Role | null, isDungeonMaster: boolean, al
 
 export function useRequireRole(allowed: Role[]) {
   const router = useRouter()
-  const { user, role, branchIds, isDungeonMaster, loading, provisioned } = useAdminUser()
+  const { user, role, branchIds, isDungeonMaster, superadmin, loading, provisioned } = useAdminUser()
 
   const hasAccess = hasSectionAccess(role, isDungeonMaster, allowed)
 
@@ -200,7 +206,7 @@ export function useRequireRole(allowed: Role[]) {
   }, [loading, user, hasAccess, provisioned, router])
 
   const checking = loading || !user || !provisioned || !hasAccess
-  return { checking, role, branchIds, isDungeonMaster, user }
+  return { checking, role, branchIds, isDungeonMaster, superadmin, user }
 }
 
 // Creating a user with the client SDK signs that user in immediately, which would

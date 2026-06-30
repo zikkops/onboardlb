@@ -34,7 +34,28 @@ service cloud.firestore {
     // person signs in once. See ARCHITECTURE.md for more detail.
     match /adminUsers/{uid} {
       allow read: if request.auth != null;
-      allow write: if isStaff();
+
+      // A `superadmin: true` account is provisioned by hand only — same
+      // bootstrap pattern as the very first admin above, for the same
+      // reason: rules have no way to let an account grant a privilege
+      // tier to itself or anyone else, so that flag is never settable
+      // through the app at all. This is what makes the protection below
+      // actually hold — if creation could set it, any staff member could
+      // just make a new "superadmin" account of their own.
+      allow create: if isStaff() && request.resource.data.superadmin != true;
+
+      // A superadmin's own doc can only ever be updated by the superadmin
+      // themselves — not even another admin can edit, demote, or strip
+      // their access. The superadmin field itself can never change via
+      // update either way (true->false or false->true), so there's no
+      // client-side path to grant or revoke that status once set.
+      allow update: if isStaff() &&
+        (resource.data.superadmin != true || request.auth.uid == uid) &&
+        request.resource.data.superadmin == resource.data.superadmin;
+
+      // No one — including the superadmin themselves — can delete a
+      // superadmin's own doc through the app.
+      allow delete: if isStaff() && resource.data.superadmin != true;
     }
 
     // ---- Customer accounts ----
@@ -393,6 +414,14 @@ service cloud.firestore {
         request.resource.data.bucketStart is timestamp &&
         request.resource.data.requestedBy == request.auth.uid;
       allow delete: if isStaff();
+    }
+
+    // Staff-only purchase orders — customers never touch this collection.
+    // Write covers create (record a sale) and update (attach invoiceUrl after
+    // the upload, or flip status to 'refunded') — both operations go through
+    // gamePurchases.ts helpers and are always staff-initiated.
+    match /gamePurchaseOrders/{id} {
+      allow read, write: if isStaff();
     }
 
     match /appSettings/{id} {

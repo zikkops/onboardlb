@@ -7,6 +7,7 @@ import { useRequireRole, SECTION_ACCESS } from '../../lib/adminAuth'
 import { logActivity, logCreate, logUpdate, logDelete } from '../../lib/activityLog'
 import { BRANCHES, emptyStock, normalizeStock, totalStock } from '../../lib/branches'
 import { recordMediaUpload, uploadImage } from '../../lib/media'
+import { exportGamesCSV } from '../../lib/gamePurchases'
 import MediaPickerModal from '../../components/admin/MediaPickerModal'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faSearch } from '@fortawesome/free-solid-svg-icons'
@@ -20,6 +21,7 @@ interface Game {
   duration: string
   age: string
   price: number
+  wholesalePrice?: number | null
   stock: Record<string, number>
   image: string
 }
@@ -32,6 +34,7 @@ const EMPTY = {
   duration: '',
   age: '',
   price: 0,
+  wholesalePrice: null as number | null,
   image: '',
 }
 
@@ -122,15 +125,16 @@ export default function AdminGamesPage() {
   function openEdit(game: Game) {
     setEditing(game)
     setForm({
-      name:        game.name,
-      category:    game.category,
-      description: game.description,
-      players:     game.players,
-      duration:    game.duration,
-      age:         game.age,
-      price:       game.price,
-      stock:       normalizeStock(game.stock),
-      image:       game.image,
+      name:           game.name,
+      category:       game.category,
+      description:    game.description,
+      players:        game.players,
+      duration:       game.duration,
+      age:            game.age,
+      price:          game.price,
+      wholesalePrice: game.wholesalePrice ?? null,
+      stock:          normalizeStock(game.stock),
+      image:          game.image,
     })
     setOpen(true)
   }
@@ -236,7 +240,31 @@ export default function AdminGamesPage() {
               Game Library
             </h1>
           </div>
-          <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: '0.8rem', width: isMobile ? '100%' : 'auto' }}>
+          <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: '0.8rem', width: isMobile ? '100%' : 'auto', flexWrap: 'wrap' }}>
+            <button onClick={() => exportGamesCSV(games, false)} style={{
+              backgroundColor: 'transparent',
+              border: '1px solid rgba(255,255,255,0.1)',
+              color: 'rgba(245,242,236,0.6)',
+              padding: '0.7rem 1.2rem',
+              borderRadius: '2px',
+              fontSize: '0.72rem',
+              letterSpacing: '0.08em',
+              textTransform: 'uppercase',
+              cursor: 'pointer',
+              fontFamily: 'var(--font-inter)',
+            }}>Export Retail CSV</button>
+            <button onClick={() => exportGamesCSV(games, true)} style={{
+              backgroundColor: 'transparent',
+              border: '1px solid rgba(255,255,255,0.1)',
+              color: 'rgba(245,242,236,0.6)',
+              padding: '0.7rem 1.2rem',
+              borderRadius: '2px',
+              fontSize: '0.72rem',
+              letterSpacing: '0.08em',
+              textTransform: 'uppercase',
+              cursor: 'pointer',
+              fontFamily: 'var(--font-inter)',
+            }}>Export Full CSV</button>
             <a href="/admin/games/import" style={{
               display: 'flex',
               alignItems: 'center',
@@ -522,7 +550,7 @@ export default function AdminGamesPage() {
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                  {['Image', 'Name', 'Category', 'Players', 'Price', 'Stock', 'Actions'].map(h => (
+                  {['Image', 'Name', 'Category', 'Players', 'Retail', 'Wholesale', 'Stock', 'Actions'].map(h => (
                     <th key={h} style={{
                       padding: '1rem 1.2rem',
                       textAlign: 'left',
@@ -552,6 +580,9 @@ export default function AdminGamesPage() {
                     <td style={{ padding: '1rem 1.2rem', fontFamily: 'var(--font-inter)', fontSize: '0.82rem', color: 'rgba(245,242,236,0.5)' }}>{game.players}</td>
                     <td style={{ padding: '1rem 1.2rem', fontFamily: 'var(--font-inter)', fontSize: '0.82rem', color: 'var(--teal)' }}>
                       {game.price > 0 ? `$${game.price}` : '—'}
+                    </td>
+                    <td style={{ padding: '1rem 1.2rem', fontFamily: 'var(--font-inter)', fontSize: '0.82rem', color: 'rgba(245,242,236,0.45)' }}>
+                      {game.wholesalePrice != null ? `$${game.wholesalePrice}` : '—'}
                     </td>
                     <td style={{ padding: '1rem 1.2rem' }}>
                       {(() => {
@@ -713,11 +744,32 @@ export default function AdminGamesPage() {
                     style={inputStyle} />
                 </div>
                 <div>
-                  <label style={labelStyle}>Price ($)</label>
+                  <label style={labelStyle}>Retail Price ($)</label>
                   <input type="number" value={form.price} required min={0}
                     onChange={e => setForm(f => ({ ...f, price: +e.target.value }))}
                     style={inputStyle} />
                 </div>
+              </div>
+
+              <div>
+                <label style={labelStyle}>Wholesale Price ($) — optional</label>
+                <input
+                  type="number"
+                  min={0}
+                  placeholder="Leave blank if no wholesale pricing"
+                  value={form.wholesalePrice ?? ''}
+                  onChange={e => setForm(f => ({
+                    ...f,
+                    wholesalePrice: e.target.value === '' ? null : +e.target.value,
+                  }))}
+                  style={inputStyle}
+                />
+                <p style={{
+                  fontFamily: 'var(--font-inter)', fontSize: '0.72rem',
+                  color: 'rgba(245,242,236,0.3)', marginTop: '0.4rem',
+                }}>
+                  Shown only to staff when recording a sale. Not visible to customers.
+                </p>
               </div>
 
               <div>
