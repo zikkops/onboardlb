@@ -1,0 +1,98 @@
+import { SECTION_ACCESS, ALL_ROLES, type Role } from './adminAuth'
+
+export interface AdminNavItem {
+  label: string
+  href: string
+  access: Role[]
+}
+
+export interface AdminNavSection {
+  title: string
+  color: string
+  items: AdminNavItem[]
+}
+
+// Mirrors the section/card layout on app/admin/page.tsx (kept as a separate,
+// independently-declared list there since that page also carries per-card
+// descriptions and live pending-count badges that the sidebar doesn't need)
+// — if a new admin page is added, add it in both places.
+export const ADMIN_NAV: AdminNavSection[] = [
+  {
+    title: 'Game Sales',
+    color: 'var(--teal)',
+    items: [
+      { label: 'Record a Sale',    href: '/admin/games/purchase', access: SECTION_ACCESS.gamePurchases },
+      { label: 'Sales & Invoices', href: '/admin/games/invoices', access: SECTION_ACCESS.gamePurchases },
+    ],
+  },
+  {
+    title: 'Content Management',
+    color: 'var(--teal)',
+    items: [
+      { label: 'Manage Games',       href: '/admin/games',             access: SECTION_ACCESS.games },
+      { label: 'Manage Menu',        href: '/admin/menu',              access: SECTION_ACCESS.menu },
+      { label: 'Manage Events',      href: '/admin/events',            access: SECTION_ACCESS.events },
+      { label: 'Event Reservations', href: '/admin/events/reservations', access: SECTION_ACCESS.events },
+      { label: 'D&D Campaigns',      href: '/admin/dnd',               access: SECTION_ACCESS.dnd },
+    ],
+  },
+  {
+    title: 'D&D Bookings',
+    color: 'var(--purple)',
+    items: [
+      { label: 'D&D Reservations',  href: '/admin/dnd/reservations', access: SECTION_ACCESS.dndReservations },
+      { label: 'D&D Schedule',      href: '/admin/dnd/schedule',     access: SECTION_ACCESS.dndReservations },
+      { label: 'D&D Groups',        href: '/admin/dnd/groups',       access: SECTION_ACCESS.dndGroups },
+      { label: 'Your Availability', href: '/admin/dnd/availability', access: SECTION_ACCESS.dmAvailability },
+    ],
+  },
+  {
+    title: 'Table Bookings',
+    color: 'var(--navy)',
+    items: [
+      { label: 'Table Reservations', href: '/admin/tables/reservations', access: SECTION_ACCESS.tableReservations },
+      { label: 'Table Map Editor',   href: '/admin/branches/tables',     access: SECTION_ACCESS.branchTables },
+    ],
+  },
+  {
+    title: 'Loyalty Submissions',
+    color: 'var(--navy)',
+    items: [
+      { label: 'D&D Session Attendance', href: '/admin/loyalty/dnd',    access: SECTION_ACCESS.loyaltyDnd },
+      { label: 'Event Attendance',       href: '/admin/loyalty/events', access: SECTION_ACCESS.loyaltyEvents },
+    ],
+  },
+  {
+    title: 'Loyalty Approvals',
+    color: 'var(--navy)',
+    items: [
+      { label: 'Loyalty Approvals',   href: '/admin/loyalty/approvals',   access: SECTION_ACCESS.loyalty },
+      { label: 'Redemption Requests', href: '/admin/loyalty/redemptions', access: SECTION_ACCESS.loyalty },
+    ],
+  },
+  {
+    title: 'Loyalty Catalog',
+    color: 'var(--navy)',
+    items: [
+      { label: 'Redemption Items', href: '/admin/loyalty/redemption-items', access: SECTION_ACCESS.loyalty },
+      { label: 'Level Perks',      href: '/admin/loyalty/perks',            access: SECTION_ACCESS.loyalty },
+    ],
+  },
+  {
+    title: 'Customer Accounts',
+    color: 'var(--navy)',
+    items: [
+      { label: 'Manage Customers', href: '/admin/loyalty/customers', access: ['admin'] as Role[] },
+      { label: 'Loyalty Activity', href: '/admin/loyalty/activity',  access: SECTION_ACCESS.loyalty },
+    ],
+  },
+  {
+    title: 'Administration',
+    color: 'var(--red)',
+    items: [
+      { label: 'Media Library', href: '/admin/media', access: ALL_ROLES },
+      { label: 'Manage Users',  href: '/admin/users',  access: ['admin'] as Role[] },
+      { label: 'Activity Log',  href: '/admin/logs',   access: ['admin'] as Role[] },
+    ],
+  },
+]
