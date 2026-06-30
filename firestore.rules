@@ -72,17 +72,13 @@ service cloud.firestore {
         isStaff() ||
         (request.auth.uid == userId &&
           request.resource.data.xp == 0 &&
-          request.resource.data.obCoins == 0 &&
-          isBoundedString(request.resource.data, 'firstName', 50) &&
-          isBoundedString(request.resource.data, 'lastName', 50))
+          request.resource.data.obCoins == 0)
       );
       allow update: if request.auth != null && (
         isStaff() ||
         (request.auth.uid == userId &&
           request.resource.data.xp == resource.data.xp &&
-          request.resource.data.obCoins == resource.data.obCoins &&
-          isBoundedString(request.resource.data, 'firstName', 50) &&
-          isBoundedString(request.resource.data, 'lastName', 50))
+          request.resource.data.obCoins == resource.data.obCoins)
       );
       allow delete: if isStaff();
 
@@ -95,13 +91,18 @@ service cloud.firestore {
         allow read, write: if request.auth != null && (request.auth.uid == userId || isStaff());
       }
 
-      // contact: phone number, staff-lookup only — write access stays with
-      // the owner (they're the one providing it at signup), but nobody,
-      // including the customer themselves, can read it back through here
-      // except staff.
+      // contact: phone number + real first/last name, staff-lookup only —
+      // the main users/{uid} doc above is broadly readable by any
+      // signed-in customer (friend search, leaderboard), so nothing here
+      // belongs there. Write access stays with the owner (they're the one
+      // providing it at signup), but nobody, including the customer
+      // themselves, can read it back through here except staff.
       match /private/contact {
         allow read: if isStaff();
-        allow write: if request.auth != null && (request.auth.uid == userId || isStaff());
+        allow write: if isStaff() ||
+          (request.auth != null && request.auth.uid == userId &&
+            isBoundedString(request.resource.data, 'firstName', 50) &&
+            isBoundedString(request.resource.data, 'lastName', 50));
       }
     }
     match /usernames/{username} {
@@ -264,6 +265,133 @@ service cloud.firestore {
         lockReservation(request.resource.data.reservationId).dmUid == request.resource.data.dmUid &&
         request.resource.data.bucketStart >= lockReservation(request.resource.data.reservationId).startAt &&
         request.resource.data.bucketStart < lockReservation(request.resource.data.reservationId).blockedUntil;
+      allow delete: if isStaff();
+    }
+
+    // ---- D&D Looking-for-Players matchmaking ----
+    // A customer expresses interest in a campaign (no date/time involved
+    // at all — that's dndReservations, a separate concept), and staff
+    // assemble interested customers into groups. Deterministic doc id
+    // (campaignId_userId) means a customer can only ever have one entry
+    // per campaign, so rules can reject a duplicate signup without a query.
+    match /lfpEntries/{entryId} {
+      // The third branch lets a forming party's own leader read every
+      // entry pointing at their group (maybeFinalizeParty in
+      // app/lib/dndGroups.ts needs every member's entry, not just their
+      // own, to assemble the final roster) — groupId is null for anyone
+      // still solo-waiting, so this only ever applies to grouped entries.
+      allow read: if request.auth != null &&
+        (request.auth.uid == resource.data.userId || isStaff() ||
+          (resource.data.groupId != null &&
+            get(/databases/$(database)/documents/dndGroups/$(resource.data.groupId)).data.formedBy == request.auth.uid));
+      allow create: if request.auth != null &&
+        request.auth.uid == request.resource.data.userId &&
+        entryId == (request.resource.data.campaignId + '_' + request.resource.data.userId) &&
+        (
+          // Solo join — staff sort these into a group later.
+          (request.resource.data.status == 'waiting' && request.resource.data.groupId == null) ||
+          // Joining a real group directly — either starting it as its own
+          // leader (startLfpParty), or accepting a friend's invite
+          // (acceptInvite's 'lfp' branch in app/lib/participantInvites.ts).
+          // Checking the group merely *exists* isn't enough on its own —
+          // group ids are visible to anyone who can read that group (e.g.
+          // a groupmate), so without this, any signed-in customer could
+          // self-write their way into someone else's party. The invite
+          // doc's id is deterministic (groupId_inviteeUid, set by
+          // startLfpParty) specifically so this can look it up directly —
+          // rules can't run a query to find "is there an invite for me".
+          (request.resource.data.status == 'grouped' &&
+            (
+              get(/databases/$(database)/documents/dndGroups/$(request.resource.data.groupId)).data.formedBy == request.auth.uid ||
+              exists(/databases/$(database)/documents/participantInvites/$(request.resource.data.groupId + '_' + request.auth.uid))
+            ))
+        );
+      // Only staff move someone between waiting/grouped or assign a
+      // groupId — see addToGroup/removeFromGroup/transferToGroup in
+      // app/lib/dndGroups.ts, which update this in the same batch as the
+      // matching dndGroups doc.
+      allow update: if isStaff();
+      // A customer may leave the queue themselves while still waiting;
+      // once grouped, only staff remove them (so the group's member list
+      // stays in sync — a customer can't update that doc directly).
+      allow delete: if isStaff() ||
+        (request.auth != null && request.auth.uid == resource.data.userId && resource.data.status == 'waiting');
+    }
+    // memberUids is a plain string array (not the richer {uid,name}
+    // `members` list) specifically so rules can check membership directly
+    // — rules can't map() over a list of maps to pull out just the uid
+    // field for comparison.
+    //
+    // Two ways a group exists: staff assemble one from the waiting pool
+    // (isStaff(), unrestricted), or a customer starts one as its own
+    // leader (formedBy == their uid) — see startLfpParty in
+    // app/lib/dndGroups.ts. A leader-started group begins 'forming' with
+    // only themselves confirmed; their own client flips it to 'confirmed'
+    // once every invite they sent has been accepted or declined — still
+    // just the leader updating a group they own, not a new permission tier.
+    match /dndGroups/{id} {
+      allow read: if request.auth != null &&
+        (isStaff() || request.auth.uid in resource.data.memberUids || request.auth.uid == resource.data.formedBy);
+      allow create: if isStaff() ||
+        (request.auth != null &&
+          request.resource.data.formedBy == request.auth.uid &&
+          request.resource.data.status == 'forming' &&
+          request.resource.data.memberUids == [request.auth.uid]);
+      allow update: if isStaff() ||
+        (request.auth != null &&
+          request.auth.uid == resource.data.formedBy &&
+          request.resource.data.formedBy == resource.data.formedBy &&
+          request.resource.data.campaignId == resource.data.campaignId);
+      allow delete: if isStaff() ||
+        (request.auth != null && request.auth.uid == resource.data.formedBy && resource.data.status == 'forming');
+    }
+
+    // ---- Table reservations (per-branch floor-plan booking) ----
+    // One layout doc per branch, doc id == the branch name itself — public
+    // read (customers need to see the map to book, signed in or not),
+    // staff-only write (the admin table map editor).
+    match /branchTableLayouts/{branch} {
+      allow read: if true;
+      allow write: if isStaff();
+    }
+
+    // Same shape as dndReservations/eventReservations — instant lock,
+    // 'pending' until staff approve/reject. tableIds/partySize are
+    // bounds-checked on create the same way transactions' xpAmount/
+    // coinsAmount are: a generous sanity backstop, not the real capacity
+    // check (that's enforced client-side against the actual table(s)
+    // picked, same posture as eventReservations' min/max).
+    match /tableReservations/{id} {
+      allow read: if request.auth != null && (request.auth.uid == resource.data.userId || isStaff());
+      allow create: if request.auth != null &&
+        request.auth.uid == request.resource.data.requestedBy &&
+        request.resource.data.status == 'pending' &&
+        request.resource.data.tableIds is list && request.resource.data.tableIds.size() >= 1 &&
+        request.resource.data.partySize is int &&
+        request.resource.data.partySize >= 1 && request.resource.data.partySize <= 50;
+      // No customer self-update path — unlike dndReservations/
+      // eventReservations, a table reservation has no separate per-person
+      // participant roster to decline out of (just one party-wide
+      // contactName/contactPhone), so there's nothing for a non-staff
+      // caller to legitimately update once it's submitted.
+      allow update: if isStaff();
+    }
+
+    // Generalizes dndDmLocks' deterministic-doc-per-bucket pattern from one
+    // locked resource (a DM) to every table in a joint booking. Ownership
+    // is validated from the lock doc's own requestedBy field (denormalized
+    // there at write time — see createTableReservationRequest), not via a
+    // get() back to the sibling tableReservations doc created in the same
+    // transaction — rules-triggered get() calls aren't guaranteed to see a
+    // sibling write from earlier in the same commit (unlike the client's
+    // own tx.get() calls, which are), so this avoids depending on that.
+    match /tableLocks/{id} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null &&
+        request.resource.data.tableId is string &&
+        request.resource.data.reservationId is string &&
+        request.resource.data.bucketStart is timestamp &&
+        request.resource.data.requestedBy == request.auth.uid;
       allow delete: if isStaff();
     }
 

@@ -84,7 +84,7 @@ export function useRedemptionItems(activeOnly: boolean) {
     const unsub = onSnapshot(q, snap => {
       setItems(snap.docs.map(d => ({ id: d.id, ...d.data() } as RedemptionItem)))
       setLoading(false)
-    })
+    }, err => console.error('[useRedemptionItems] redemptionItems listener failed:', err))
     return unsub
   }, [activeOnly])
 

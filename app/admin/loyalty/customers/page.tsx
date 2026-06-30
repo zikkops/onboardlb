@@ -295,6 +295,12 @@ export default function ManageCustomersPage() {
                       <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.72rem', color: 'rgba(245,242,236,0.35)', wordBreak: 'break-word' }}>
                         {customer.email || customer.username}
                       </p>
+                      {(customer.firstName || customer.lastName || customer.phoneNumber) && (
+                        <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.7rem', color: 'rgba(245,242,236,0.3)', wordBreak: 'break-word' }}>
+                          {[customer.firstName, customer.lastName].filter(Boolean).join(' ')}
+                          {customer.phoneNumber ? ` · ${customer.phoneNumber}` : ''}
+                        </p>
+                      )}
                     </div>
                   </div>
 

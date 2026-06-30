@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
   doc, onSnapshot, updateDoc, setDoc,
-  collection, query, where, orderBy, limit, type Timestamp,
+  collection, query, where, orderBy, limit, getDocs, type Timestamp,
 } from 'firebase/firestore'
 import { db, auth } from '../../../lib/firebase'
 import { useCustomerUser, signOutCustomer, resendVerificationEmail, refreshEmailVerified } from '../../../lib/customerAuth'
@@ -14,11 +14,16 @@ import { useUserRedemptions, cancelRedemption, type Redemption } from '../../../
 import { cancelTransaction } from '../../../lib/loyalty'
 import { useUserReservations, type Reservation } from '../../../lib/dndReservations'
 import { useUserEventReservations, type EventReservation } from '../../../lib/eventReservations'
-import { usePendingInvites, acceptInvite, declineInvite, type ParticipantInvite } from '../../../lib/participantInvites'
+import { useUserTableReservations, type TableReservation } from '../../../lib/tableReservations'
+import { usePendingInvites, useSentLfpInvites, acceptInvite, declineInvite, type ParticipantInvite } from '../../../lib/participantInvites'
 import { uploadImage } from '../../../lib/media'
 import Skeleton from '../../../components/Skeleton'
 import { getLevelFromXP, getTierFromLevel, TIER_COLORS } from '../../../lib/levelConfig'
 import { useLevelPerks } from '../../../lib/levelPerks'
+import {
+  useUserLfpEntries, useUserGroups, useMyFormingParties, startLfpParty, joinLfp, maybeFinalizeParty, type DndGroup,
+} from '../../../lib/dndGroups'
+import { useFriends, fetchCustomerDirectory, type DirectoryUser } from '../../../lib/friends'
 import { resolveBranchName } from '../../../lib/branches'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
@@ -353,7 +358,7 @@ export default function CustomerProfilePage() {
   const [fullHistory, setFullHistory] = useState<Transaction[]>([])
   const [pending, setPending]         = useState<Transaction[]>([])
   const [loadingPublicFeed, setLoadingPublicFeed] = useState(true)
-  const [privateTab, setPrivateTab]   = useState<'history' | 'pending' | 'redemptions' | 'dnd' | 'events'>('history')
+  const [privateTab, setPrivateTab]   = useState<'history' | 'pending' | 'redemptions' | 'dnd' | 'events' | 'tables'>('history')
   const [viewingImage, setViewingImage] = useState<string | null>(null)
 
   // This page only ever shows the signed-in user's own profile right now —
@@ -367,6 +372,7 @@ export default function CustomerProfilePage() {
   const { redemptions } = useUserRedemptions(isOwnProfile ? profileUid : null)
   const { reservations } = useUserReservations(isOwnProfile ? profileUid : null)
   const { reservations: eventReservations } = useUserEventReservations(isOwnProfile ? profileUid : null)
+  const { reservations: tableReservations } = useUserTableReservations(isOwnProfile ? profileUid : null)
   const { invites } = usePendingInvites(isOwnProfile ? profileUid : null)
   const [busyInviteId, setBusyInviteId] = useState<string | null>(null)
   const [cancellingId, setCancellingId] = useState<string | null>(null)
@@ -537,6 +543,109 @@ export default function CustomerProfilePage() {
   const levelInfo = getLevelFromXP(profile?.xp ?? 0)
   const tierColor = TIER_COLORS[levelInfo.tier] ?? TIER_COLORS.Apprentice
   const { perks } = useLevelPerks()
+  const { entries: lfpEntries } = useUserLfpEntries(isOwnProfile ? profileUid : null)
+  const { groups: lfpGroups } = useUserGroups(isOwnProfile ? profileUid : null)
+  const formingParties = useMyFormingParties(isOwnProfile ? profileUid : null)
+  const sentLfpInvites = useSentLfpInvites(isOwnProfile ? profileUid : null)
+  const friends = useFriends(isOwnProfile ? profileUid : null)
+
+  const [partyOpen, setPartyOpen] = useState(false)
+  const [partyCampaigns, setPartyCampaigns] = useState<{ id: string; title: string; locations: string[] }[]>([])
+  const [partyCampaignId, setPartyCampaignId] = useState('')
+  const [partyLocation, setPartyLocation] = useState('')
+  const [partyFriends, setPartyFriends] = useState<{ uid: string; name: string }[]>([])
+  const [partyDirectory, setPartyDirectory] = useState<DirectoryUser[] | null>(null)
+  const [partySearch, setPartySearch] = useState('')
+  const [startingParty, setStartingParty] = useState(false)
+
+  // Every invite a leader sends gets resolved sooner or later (accept or
+  // decline) purely by the *other* customer's own action elsewhere — this
+  // is the only place that re-checks "is my party complete now" on the
+  // leader's side, so it has to fire reactively rather than once.
+  // maybeFinalizeParty is a no-op unless every invite for that group has
+  // actually been resolved.
+  useEffect(() => {
+    formingParties.forEach(party => { maybeFinalizeParty(party) })
+  }, [formingParties, sentLfpInvites])
+
+  async function openPartyModal() {
+    setPartyOpen(true)
+    setPartyCampaignId('')
+    setPartyLocation('')
+    setPartyFriends([])
+    setPartySearch('')
+    if (partyCampaigns.length === 0) {
+      const snap = await getDocs(collection(db, 'dndCampaigns'))
+      setPartyCampaigns(snap.docs.map(d => ({
+        id: d.id,
+        title: (d.data().title as string) || 'Untitled Campaign',
+        locations: (d.data().locations as string[]) || [],
+      })))
+    }
+  }
+
+  async function loadPartyDirectory() {
+    if (partyDirectory !== null || !profileUid) return
+    setPartyDirectory(await fetchCustomerDirectory(profileUid))
+  }
+
+  function addPartyFriend(friend: { uid: string; name: string }) {
+    if (partyFriends.some(f => f.uid === friend.uid)) return
+    setPartyFriends(prev => [...prev, friend])
+    setPartySearch('')
+  }
+
+  function removePartyFriend(uid: string) {
+    setPartyFriends(prev => prev.filter(f => f.uid !== uid))
+  }
+
+  // Solo (no friends invited) is just joining the same anonymous waiting
+  // pool as the public /dnd page's button — staff sort those into a group
+  // later, same as anyone else waiting alone. A self-only dndGroups doc
+  // only gets created once there's an actual group to form: this person
+  // plus at least one invited friend. That group can later be combined
+  // with another small group by staff (mergeGroups in dndGroups.ts).
+  async function handleStartParty() {
+    if (!user || !profileUid || !partyCampaignId) return
+    const campaign = partyCampaigns.find(c => c.id === partyCampaignId)
+    const location = partyLocation || campaign?.locations[0] || ''
+    if (!campaign || !location) return
+    setStartingParty(true)
+    try {
+      const leaderName = user.displayName || user.email || 'Customer'
+      if (partyFriends.length === 0) {
+        await joinLfp({
+          campaignId: campaign.id,
+          campaignTitle: campaign.title,
+          location,
+          userId: profileUid,
+          userName: leaderName,
+        })
+      } else {
+        await startLfpParty({
+          campaignId: campaign.id,
+          campaignTitle: campaign.title,
+          location,
+          leaderUid: profileUid,
+          leaderName,
+          friends: partyFriends,
+        })
+      }
+      setPartyOpen(false)
+    } finally {
+      setStartingParty(false)
+    }
+  }
+
+  const partySearchResults = partySearch.trim() && partyDirectory
+    ? partyDirectory.filter(u =>
+        !partyFriends.some(f => f.uid === u.uid) &&
+        u.uid !== profileUid &&
+        (u.displayName.toLowerCase().includes(partySearch.toLowerCase()) || u.email.toLowerCase().includes(partySearch.toLowerCase()))
+      ).slice(0, 8)
+    : []
+
+  const quickAddFriends = friends.filter(f => !partyFriends.some(pf => pf.uid === f.uid))
 
   const sectionLabelStyle = {
     fontSize: '0.65rem',
@@ -868,6 +977,59 @@ export default function CustomerProfilePage() {
           </div>
         )}
 
+        {/* Looking for Players — campaigns this account has queued for
+            (no date/time involved, unlike D&D Sessions below, which is the
+            booking flow), either solo (staff sort these into a group) or
+            as a self-started party still waiting on invited friends to
+            respond. Owner-only. */}
+        {isOwnProfile && (
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <p style={{ ...sectionLabelStyle, marginBottom: 0 }}>Looking for Players</p>
+              <button onClick={openPartyModal} style={{
+                background: 'transparent', border: '1px solid rgba(255,255,255,0.15)',
+                color: 'rgba(245,242,236,0.6)', padding: '0.4rem 0.9rem', borderRadius: '2px',
+                fontSize: '0.7rem', letterSpacing: '0.05em', cursor: 'pointer', fontFamily: 'var(--font-inter)',
+              }}>+ Start a Party</button>
+            </div>
+            {lfpEntries.length === 0 ? (
+              <div style={emptyStateStyle}>Not looking for players right now</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                {lfpEntries.map(entry => {
+                  const group = lfpGroups.find(g => g.id === entry.groupId)
+                  const forming = formingParties.find(p => p.id === entry.groupId)
+                  const invitesForThis = sentLfpInvites.filter(i => i.reservationId === entry.groupId)
+                  const responded = invitesForThis.filter(i => i.status !== 'pending').length
+                  return (
+                    <div key={entry.id} style={{
+                      background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)',
+                      borderRadius: '4px', padding: isMobile ? '1rem' : '1.2rem',
+                    }}>
+                      <p style={{ fontFamily: 'var(--font-cinzel)', fontSize: '0.9rem', color: 'var(--offwhite)', marginBottom: '0.3rem' }}>
+                        {entry.campaignTitle}{entry.location ? ` — ${entry.location}` : ''}
+                      </p>
+                      {entry.status === 'waiting' ? (
+                        <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.78rem', color: 'rgba(245,242,236,0.45)' }}>
+                          Waiting for a group
+                        </p>
+                      ) : forming && invitesForThis.length > 0 ? (
+                        <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.78rem', color: 'rgba(245,242,236,0.45)' }}>
+                          Forming &quot;{forming.name}&quot; — {responded} of {invitesForThis.length} friends responded so far
+                        </p>
+                      ) : (
+                        <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.78rem', color: 'rgba(245,242,236,0.45)' }}>
+                          Grouped{group ? ` as "${group.name}"` : ''} with: {group?.members.filter(m => m.uid !== profileUid).map(m => m.name).join(', ') || 'just you so far'}
+                        </p>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Email verification reminder — only the email/password signup path
             can ever be unverified; a Google sign-in is already verified by
             Google itself. Submitting checks and redeeming coins are gated
@@ -1009,7 +1171,7 @@ export default function CustomerProfilePage() {
             <p style={sectionLabelStyle}>Your History</p>
 
             <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
-              {(['history', 'pending', 'redemptions', 'dnd', 'events'] as const).map(tab => {
+              {(['history', 'pending', 'redemptions', 'dnd', 'events', 'tables'] as const).map(tab => {
                 const active = privateTab === tab
                 const hov = hoveredTab === tab
                 return (
@@ -1033,7 +1195,7 @@ export default function CustomerProfilePage() {
                       transition: 'all 0.2s ease',
                     }}
                   >
-                    {tab === 'history' ? 'Full History' : tab === 'pending' ? `Pending${pending.length > 0 ? ` (${pending.length})` : ''}` : tab === 'redemptions' ? 'Redemptions' : tab === 'dnd' ? 'D&D Sessions' : 'Events'}
+                    {tab === 'history' ? 'Full History' : tab === 'pending' ? `Pending${pending.length > 0 ? ` (${pending.length})` : ''}` : tab === 'redemptions' ? 'Redemptions' : tab === 'dnd' ? 'D&D Sessions' : tab === 'events' ? 'Events' : 'Tables'}
                   </button>
                 )
               })}
@@ -1184,7 +1346,7 @@ export default function CustomerProfilePage() {
                   ))}
                 </div>
               )
-            ) : (
+            ) : privateTab === 'events' ? (
               eventReservations.length === 0 ? (
                 <div style={emptyStateStyle}>No event reservations yet</div>
               ) : (
@@ -1217,6 +1379,55 @@ export default function CustomerProfilePage() {
                         </div>
                         <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.78rem', color: 'rgba(245,242,236,0.5)', marginTop: '0.3rem' }}>
                           📍 {r.branch} · {r.eventDate} · {r.eventTimeStart}–{r.eventTimeEnd}
+                        </p>
+                        <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.75rem', color: 'rgba(245,242,236,0.4)', marginTop: '0.3rem' }}>
+                          {r.partySize} {r.partySize === 1 ? 'person' : 'people'}
+                        </p>
+                        {r.status === 'rejected' && r.rejectionReason && (
+                          <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.75rem', color: 'var(--red)', marginTop: '0.4rem' }}>
+                            Reason: {r.rejectionReason}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
+            ) : (
+              tableReservations.length === 0 ? (
+                <div style={emptyStateStyle}>No table reservations yet</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                  {tableReservations.map(r => (
+                    <div key={r.id} style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: isMobile ? '0.8rem' : '1rem',
+                      padding: isMobile ? '1rem' : '1.2rem',
+                      backgroundColor: 'rgba(255,255,255,0.02)',
+                      border: '1px solid rgba(255,255,255,0.06)',
+                      borderRadius: '4px',
+                      width: '100%',
+                    }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem', flexWrap: 'wrap' }}>
+                          <p style={{ fontFamily: 'var(--font-cinzel)', fontSize: '0.9rem', color: 'var(--offwhite)' }}>
+                            Table{r.tableNumbers.length > 1 ? 's' : ''} {r.tableNumbers.join(', ')}
+                          </p>
+                          <span style={{
+                            fontSize: '0.62rem',
+                            padding: '0.2rem 0.6rem',
+                            borderRadius: '2px',
+                            backgroundColor: `${RESERVATION_STATUS_COLORS[r.status]}25`,
+                            color: RESERVATION_STATUS_COLORS[r.status],
+                            fontFamily: 'var(--font-inter)',
+                            letterSpacing: '0.06em',
+                            textTransform: 'uppercase',
+                            whiteSpace: 'nowrap',
+                          }}>{r.status}</span>
+                        </div>
+                        <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.78rem', color: 'rgba(245,242,236,0.5)', marginTop: '0.3rem' }}>
+                          📍 {r.branch} · {formatSessionDateTime(r.startAt)}
                         </p>
                         <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.75rem', color: 'rgba(245,242,236,0.4)', marginTop: '0.3rem' }}>
                           {r.partySize} {r.partySize === 1 ? 'person' : 'people'}
@@ -1453,6 +1664,147 @@ export default function CustomerProfilePage() {
           }}
         >
           <img src={viewingImage} alt="Check" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: '4px' }} />
+        </div>
+      )}
+
+      {/* Start a Party Modal — pick a campaign, add friends, send invites.
+          The party itself exists right away (you're its first confirmed
+          member), but stays 'forming' until every invited friend has
+          responded — see maybeFinalizeParty in app/lib/dndGroups.ts. */}
+      {partyOpen && (
+        <div onClick={() => setPartyOpen(false)} style={{
+          position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.85)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 300, padding: isMobile ? '1rem' : '2rem',
+        }}>
+          <div onClick={e => e.stopPropagation()} style={{
+            backgroundColor: '#111', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px',
+            width: '100%', maxWidth: '480px', maxHeight: '90vh', overflowY: 'auto',
+          }}>
+            <div style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              padding: isMobile ? '1.25rem 1.5rem' : '1.5rem 2rem', borderBottom: '1px solid rgba(255,255,255,0.06)',
+            }}>
+              <h2 style={{ fontFamily: 'var(--font-cinzel)', fontSize: '1.1rem', color: 'var(--offwhite)' }}>Start a Party</h2>
+              <button onClick={() => setPartyOpen(false)} style={{
+                background: 'transparent', border: 'none', color: 'rgba(245,242,236,0.4)', fontSize: '1.2rem', cursor: 'pointer',
+              }}>✕</button>
+            </div>
+
+            <div style={{ padding: isMobile ? '1.5rem' : '2rem', display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+              <div>
+                <label style={{ ...sectionLabelStyle, marginBottom: '0.5rem', display: 'block' }}>Campaign</label>
+                <select
+                  value={partyCampaignId}
+                  onChange={e => { setPartyCampaignId(e.target.value); setPartyLocation('') }}
+                  style={{
+                    width: '100%', backgroundColor: '#1a1a1a', border: '1px solid rgba(255,255,255,0.1)',
+                    color: '#F5F2EC', padding: '0.75rem 1rem', borderRadius: '2px', fontSize: '0.85rem',
+                    outline: 'none', fontFamily: 'var(--font-inter)',
+                  }}
+                >
+                  <option value="">Choose a campaign…</option>
+                  {partyCampaigns.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
+                </select>
+              </div>
+
+              {(() => {
+                const chosenCampaign = partyCampaigns.find(c => c.id === partyCampaignId)
+                if (!chosenCampaign || chosenCampaign.locations.length <= 1) return null
+                return (
+                  <div>
+                    <label style={{ ...sectionLabelStyle, marginBottom: '0.5rem', display: 'block' }}>Branch</label>
+                    <select
+                      value={partyLocation || chosenCampaign.locations[0]}
+                      onChange={e => setPartyLocation(e.target.value)}
+                      style={{
+                        width: '100%', backgroundColor: '#1a1a1a', border: '1px solid rgba(255,255,255,0.1)',
+                        color: '#F5F2EC', padding: '0.75rem 1rem', borderRadius: '2px', fontSize: '0.85rem',
+                        outline: 'none', fontFamily: 'var(--font-inter)',
+                      }}
+                    >
+                      {chosenCampaign.locations.map(loc => <option key={loc} value={loc}>{loc}</option>)}
+                    </select>
+                  </div>
+                )
+              })()}
+
+              <div>
+                <label style={{ ...sectionLabelStyle, marginBottom: '0.5rem', display: 'block' }}>Invite Friends (optional)</label>
+
+                {partyFriends.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.8rem' }}>
+                    {partyFriends.map(f => (
+                      <div key={f.uid} style={{
+                        display: 'flex', alignItems: 'center', gap: '0.4rem',
+                        backgroundColor: 'rgba(106,106,183,0.12)', border: '1px solid rgba(106,106,183,0.25)',
+                        borderRadius: '20px', padding: '0.3rem 0.5rem 0.3rem 0.8rem',
+                      }}>
+                        <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.78rem', color: 'var(--offwhite)' }}>{f.name}</span>
+                        <button type="button" onClick={() => removePartyFriend(f.uid)} style={{
+                          background: 'transparent', border: 'none', color: 'rgba(228,51,41,0.8)',
+                          cursor: 'pointer', fontSize: '0.85rem', padding: '0 0.2rem', lineHeight: 1,
+                        }}>✕</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {quickAddFriends.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.8rem' }}>
+                    {quickAddFriends.map(f => (
+                      <button key={f.uid} type="button"
+                        onClick={() => addPartyFriend({ uid: f.uid, name: f.displayName })}
+                        style={{
+                          backgroundColor: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)',
+                          borderRadius: '20px', padding: '0.3rem 0.8rem', fontSize: '0.78rem',
+                          color: 'var(--offwhite)', cursor: 'pointer', fontFamily: 'var(--font-inter)',
+                        }}>+ {f.displayName}</button>
+                    ))}
+                  </div>
+                )}
+
+                <input
+                  type="text"
+                  placeholder="Search by name or email…"
+                  value={partySearch}
+                  onFocus={loadPartyDirectory}
+                  onChange={e => setPartySearch(e.target.value)}
+                  style={{
+                    width: '100%', backgroundColor: '#1a1a1a', border: '1px solid rgba(255,255,255,0.1)',
+                    color: '#F5F2EC', padding: '0.7rem 1rem', borderRadius: '2px', fontSize: '0.85rem',
+                    outline: 'none', fontFamily: 'var(--font-inter)',
+                  }}
+                />
+                {partySearchResults.length > 0 && (
+                  <div style={{ border: '1px solid rgba(255,255,255,0.08)', borderRadius: '4px', marginTop: '0.5rem', overflow: 'hidden' }}>
+                    {partySearchResults.map(u => (
+                      <button key={u.uid} type="button"
+                        onClick={() => addPartyFriend({ uid: u.uid, name: u.displayName })}
+                        style={{
+                          display: 'block', width: '100%', textAlign: 'left', padding: '0.6rem 1rem',
+                          background: 'transparent', border: 'none', borderBottom: '1px solid rgba(255,255,255,0.04)',
+                          cursor: 'pointer', fontFamily: 'var(--font-inter)', fontSize: '0.8rem', color: 'var(--offwhite)',
+                        }}>{u.displayName}</button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.72rem', color: 'rgba(245,242,236,0.35)', lineHeight: 1.6 }}>
+                {partyFriends.length > 0
+                  ? "Your party starts forming now — it's confirmed once everyone you've invited responds."
+                  : "You'll be in the waiting pool for staff to group you with others, unless you invite friends above."}
+              </p>
+
+              <button onClick={handleStartParty} disabled={startingParty || !partyCampaignId} style={{
+                backgroundColor: 'var(--purple)', border: 'none', color: '#fff', padding: '0.8rem',
+                borderRadius: '2px', fontSize: '0.78rem', letterSpacing: '0.08em', textTransform: 'uppercase',
+                cursor: startingParty || !partyCampaignId ? 'not-allowed' : 'pointer',
+                opacity: startingParty || !partyCampaignId ? 0.6 : 1, fontFamily: 'var(--font-inter)',
+              }}>{startingParty ? 'Starting…' : 'Start Party'}</button>
+            </div>
+          </div>
         </div>
       )}
     </div>

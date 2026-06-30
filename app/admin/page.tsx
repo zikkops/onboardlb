@@ -10,7 +10,8 @@ import { usePendingTransactions } from '../lib/loyalty'
 import { usePendingRedemptions } from '../lib/redemptions'
 import { usePendingReservations } from '../lib/dndReservations'
 import { usePendingEventReservations } from '../lib/eventReservations'
-import { checkAndRunLoyaltyReset, migratePrivateFieldsOnce } from '../lib/customerManagement'
+import { usePendingTableReservations } from '../lib/tableReservations'
+import { checkAndRunLoyaltyReset, migratePrivateFieldsOnce, migrateNameFieldsOnce } from '../lib/customerManagement'
 
 // Events can be set to the literal branch "All Branches" in Manage Events —
 // always include it alongside a manager's real branchIds so those events
@@ -64,6 +65,15 @@ export default function AdminPage() {
   }, [checking, role, branchIds])
   const { reservations: pendingEventReservations } = usePendingEventReservations(eventReservationFilter)
 
+  // Admins see every pending table reservation; managers see their own
+  // branches only (no "All Branches" literal here — unlike events, a table
+  // reservation always belongs to exactly one real branch).
+  const tableReservationFilter = useMemo(() => {
+    if (checking || !role || !SECTION_ACCESS.tableReservations.includes(role)) return null
+    return role === 'admin' ? 'all' : branchIds
+  }, [checking, role, branchIds])
+  const { reservations: pendingTableReservations } = usePendingTableReservations(tableReservationFilter)
+
   // No server/cron job exists in this app — the annual points reset is
   // checked passively here instead, the first time an admin opens the
   // dashboard on or after the configured date. See checkAndRunLoyaltyReset.
@@ -71,6 +81,7 @@ export default function AdminPage() {
     if (!checking && role === 'admin') {
       checkAndRunLoyaltyReset()
       migratePrivateFieldsOnce()
+      migrateNameFieldsOnce()
     }
   }, [checking, role])
 
@@ -100,7 +111,16 @@ export default function AdminPage() {
       cards: [
         { label: 'D&D Reservations', desc: 'Approve or reject pending session booking requests', href: '/admin/dnd/reservations', access: SECTION_ACCESS.dndReservations, badge: pendingDndReservations.length },
         { label: 'D&D Schedule', desc: 'See upcoming sessions and who is coming', href: '/admin/dnd/schedule', access: SECTION_ACCESS.dndReservations },
+        { label: 'D&D Groups', desc: 'Sort customers looking for players into tables for each campaign', href: '/admin/dnd/groups', access: SECTION_ACCESS.dndGroups },
         { label: 'Your Availability', desc: 'Set your opening hours and days off for session bookings', href: '/admin/dnd/availability', access: SECTION_ACCESS.dmAvailability },
+      ],
+    },
+    {
+      title: 'Table Bookings',
+      color: 'var(--navy)',
+      cards: [
+        { label: 'Table Reservations', desc: 'Approve or reject pending table booking requests', href: '/admin/tables/reservations', access: SECTION_ACCESS.tableReservations, badge: pendingTableReservations.length },
+        { label: 'Table Map Editor', desc: 'Upload floor plans and place table markers for each branch', href: '/admin/branches/tables', access: SECTION_ACCESS.branchTables },
       ],
     },
     {

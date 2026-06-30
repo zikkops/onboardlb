@@ -44,11 +44,14 @@ export const SECTION_ACCESS = {
   loyaltyDnd:    ['admin', 'manager', 'dungeonmaster'] as Role[],
   loyaltyEvents: ['admin', 'manager', 'social'] as Role[],
   dndReservations: ['admin', 'manager', 'dungeonmaster'] as Role[],
+  dndGroups:       ['admin', 'manager', 'dungeonmaster'] as Role[],
   // Deliberately DM-only (not admin/manager) — this page edits the signed-in
   // user's own opening hours, not anyone else's, so admin/manager wouldn't
   // see anything meaningful here unless they're also DM-flagged, which the
   // 'dungeonmaster' entry already covers via hasSectionAccess below.
   dmAvailability: ['dungeonmaster'] as Role[],
+  branchTables:      ['admin', 'manager'] as Role[],
+  tableReservations: ['admin', 'manager'] as Role[],
 }
 
 // Reads either shape — the new `branchIds` array, or the older singular

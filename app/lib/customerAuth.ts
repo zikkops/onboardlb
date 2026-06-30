@@ -41,8 +41,6 @@ async function ensureCustomerDoc(
   await setDoc(ref, {
     username: username ?? '',
     displayName: username ?? user.displayName ?? '',
-    firstName: firstName ?? '',
-    lastName: lastName ?? '',
     email: user.email ?? '',
     avatarUrl: user.photoURL ?? '',
     themeId: 'dungeon',
@@ -54,11 +52,14 @@ async function ensureCustomerDoc(
     createdAt: serverTimestamp(),
     role: 'customer',
   })
-  // Phone number lives in a private sub-doc, not the main profile — that
-  // doc is broadly readable by any signed-in customer (friend search,
-  // leaderboard), and a phone number has no business being part of that.
+  // Phone number and real first/last name live in a private sub-doc, not
+  // the main profile — that doc is broadly readable by any signed-in
+  // customer (friend search, leaderboard), and neither has any business
+  // being part of that.
   await setDoc(doc(db, 'users', user.uid, 'private', 'contact'), {
     phoneNumber: phoneNumber ?? '',
+    firstName: firstName ?? '',
+    lastName: lastName ?? '',
   }, { merge: true })
 }
 
@@ -109,7 +110,7 @@ export async function signInWithGoogle(): Promise<{ user: User; needsUsername: b
   return { user: cred.user, needsUsername: await needsUsername(cred.user.uid) }
 }
 
-const PHONE_PATTERN = /^[0-9+\-\s()]{7,20}$/
+export const PHONE_PATTERN = /^[0-9+\-\s()]{7,20}$/
 
 // Lets a Google-only customer (no username yet, e.g. first Google login, or
 // any older account from before usernames existed) claim a username and
@@ -126,8 +127,8 @@ export async function completeAccountSetup(
   if (!first || !last) throw new Error('name-required')
   if (first.length > 50 || last.length > 50) throw new Error('name-too-long')
   await reserveUsername(trimmed, uid, email)
-  await updateDoc(doc(db, 'users', uid), { username: trimmed, firstName: first, lastName: last })
-  await setDoc(doc(db, 'users', uid, 'private', 'contact'), { phoneNumber: phone }, { merge: true })
+  await updateDoc(doc(db, 'users', uid), { username: trimmed })
+  await setDoc(doc(db, 'users', uid, 'private', 'contact'), { phoneNumber: phone, firstName: first, lastName: last }, { merge: true })
 }
 
 export async function signUpWithEmail(

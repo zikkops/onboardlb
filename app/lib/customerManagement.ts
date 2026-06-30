@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
-  collection, collectionGroup, doc, onSnapshot, getDoc, getDocs, setDoc, updateDoc, deleteDoc, deleteField, writeBatch,
+  collection, doc, onSnapshot, getDoc, getDocs, setDoc, updateDoc, deleteDoc, deleteField, writeBatch,
 } from 'firebase/firestore'
 import { sendPasswordResetEmail } from 'firebase/auth'
 import { auth, db } from './firebase'
@@ -16,6 +16,7 @@ export interface CustomerAccount {
   firstName: string
   lastName: string
   email: string
+  phoneNumber: string
   avatarUrl: string
   xp: number
   level: number
@@ -28,15 +29,64 @@ function toCustomer(id: string, data: Record<string, unknown>): CustomerAccount 
     id,
     username: (data.username as string) || '',
     displayName: (data.displayName as string) || (data.username as string) || 'Unnamed',
-    firstName: (data.firstName as string) || '',
-    lastName: (data.lastName as string) || '',
+    firstName: '',
+    lastName: '',
     email: (data.email as string) || '',
+    phoneNumber: '',
     avatarUrl: (data.avatarUrl as string) || '',
     xp: (data.xp as number) ?? 0,
     level: (data.level as number) ?? 1,
     levelTitle: (data.levelTitle as string) || LEVEL_TITLES[0],
     obCoins: (data.obCoins as number) ?? 0,
   }
+}
+
+export interface StaffContactInfo {
+  firstName: string
+  lastName: string
+  phoneNumber: string
+}
+
+// Real first/last name + phone number live in users/{uid}/private/contact,
+// staff-only read (see firestore.rules) — the main users/{uid} doc is
+// broadly readable by any signed-in customer, so neither belongs there.
+// Fetched one getDoc per uid rather than a collectionGroup('private')
+// query — a security rule scoped to specific document ids (here: 'contact')
+// can't be proven safe for an *unfiltered* collection-group read, so
+// Firestore rejects that whole query outright even though every individual
+// doc is readable by staff; targeted per-uid gets sidestep that entirely.
+// Re-fetches only when the actual set of uids changes (not on every
+// render) — `key` is the stable, sorted/joined dependency.
+export function useStaffContactDirectory(uids: string[]): Record<string, StaffContactInfo> {
+  const [contacts, setContacts] = useState<Record<string, StaffContactInfo>>({})
+  const key = useMemo(() => Array.from(new Set(uids)).sort().join(','), [uids])
+
+  useEffect(() => {
+    const list = key ? key.split(',') : []
+    if (list.length === 0) { setContacts({}); return }
+    let cancelled = false
+    Promise.all(list.map(uid =>
+      getDoc(doc(db, 'users', uid, 'private', 'contact')).then(snap => ({ uid, snap }))
+    )).then(results => {
+      if (cancelled) return
+      const next: Record<string, StaffContactInfo> = {}
+      results.forEach(({ uid, snap }) => {
+        if (!snap.exists()) return
+        const data = snap.data() as { firstName?: string; lastName?: string; phoneNumber?: string }
+        next[uid] = {
+          firstName: data.firstName || '',
+          lastName: data.lastName || '',
+          phoneNumber: data.phoneNumber || '',
+        }
+      })
+      console.log(`[useStaffContactDirectory] fetched contact info for ${Object.keys(next).length}/${list.length} uid(s)`)
+      setContacts(next)
+    }).catch(err => console.error('[useStaffContactDirectory] private/contact batch fetch failed:', err))
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key])
+
+  return contacts
 }
 
 // Live list of every customer account. This is an internal admin tool with a
@@ -48,6 +98,8 @@ function toCustomer(id: string, data: Record<string, unknown>): CustomerAccount 
 export function useAllCustomers() {
   const [customers, setCustomers] = useState<CustomerAccount[]>([])
   const [loading, setLoading] = useState(true)
+  const uids = useMemo(() => customers.map(c => c.id), [customers])
+  const contacts = useStaffContactDirectory(uids)
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'users'), snap => {
@@ -59,7 +111,17 @@ export function useAllCustomers() {
     return unsub
   }, [])
 
-  return { customers, loading }
+  // Merged in separately from the contacts map (which arrives on its own
+  // listener) rather than inside toCustomer — real name/phone now live
+  // entirely off the main users/{uid} doc.
+  const enriched = useMemo(() => customers.map(c => ({
+    ...c,
+    firstName: contacts[c.id]?.firstName ?? c.firstName,
+    lastName: contacts[c.id]?.lastName ?? c.lastName,
+    phoneNumber: contacts[c.id]?.phoneNumber ?? c.phoneNumber,
+  })), [customers, contacts])
+
+  return { customers: enriched, loading }
 }
 
 // XP and OB Coins are edited independently. Updating XP also recomputes
@@ -238,20 +300,51 @@ export async function migratePrivateFieldsOnce(): Promise<void> {
   }
 }
 
-// Phone numbers live in users/{uid}/private/contact, staff-readable only
-// (see firestore.rules) — a collection-group query is the only way to pull
-// all of them in one read rather than one getDoc per customer. `exceljs` is
-// dynamically imported so it never lands in the main admin bundle; this
-// runs once, on demand, when staff click "Export."
-export async function exportCustomersToExcel(customers: CustomerAccount[]): Promise<void> {
-  const privateSnap = await getDocs(collectionGroup(db, 'private'))
-  const phoneByUid = new Map<string, string>()
-  privateSnap.docs.forEach(d => {
-    if (d.id !== 'contact') return
-    const uid = d.ref.parent.parent?.id
-    if (uid) phoneByUid.set(uid, (d.data().phoneNumber as string) || '')
-  })
+const nameFieldsMigrationRef = doc(db, 'appSettings', 'nameFieldsMigration')
 
+// Same one-time passive migration as migratePrivateFieldsOnce above, run
+// under its own flag since that one is already marked done on existing
+// deployments — firstName/lastName are real legal names, so they get the
+// same treatment phoneNumber already got: off the broadly-readable main
+// doc and into the staff-only private/contact doc.
+export async function migrateNameFieldsOnce(): Promise<void> {
+  const snap = await getDoc(nameFieldsMigrationRef)
+  if (snap.exists() && snap.data().done) return
+  await setDoc(nameFieldsMigrationRef, { done: true }, { merge: true })
+
+  const usersSnap = await getDocs(collection(db, 'users'))
+  let migrated = 0
+
+  for (const d of usersSnap.docs) {
+    const data = d.data() as { firstName?: string; lastName?: string }
+    const hasFirst = typeof data.firstName === 'string'
+    const hasLast = typeof data.lastName === 'string'
+    if (!hasFirst && !hasLast) continue
+
+    await setDoc(doc(db, 'users', d.id, 'private', 'contact'), {
+      ...(hasFirst ? { firstName: data.firstName } : {}),
+      ...(hasLast ? { lastName: data.lastName } : {}),
+    }, { merge: true })
+    await updateDoc(d.ref, {
+      ...(hasFirst ? { firstName: deleteField() } : {}),
+      ...(hasLast ? { lastName: deleteField() } : {}),
+    })
+    migrated++
+  }
+
+  if (migrated > 0) {
+    await logActivity(
+      'update', 'Customer Account',
+      `Migrated first/last name off the main profile doc for ${migrated} customer${migrated === 1 ? '' : 's'}`
+    )
+  }
+}
+
+// `exceljs` is dynamically imported so it never lands in the main admin
+// bundle; this runs once, on demand, when staff click "Export." Real
+// name/phone are already merged onto `customers` by useAllCustomers, so
+// no separate private/contact read is needed here.
+export async function exportCustomersToExcel(customers: CustomerAccount[]): Promise<void> {
   // The bare 'exceljs' specifier resolves to the package's Node entry point
   // (excel.js), which unconditionally checks process.versions.node at
   // import time — that throws immediately in a browser, where `process`
@@ -282,7 +375,7 @@ export async function exportCustomersToExcel(customers: CustomerAccount[]): Prom
       lastName: c.lastName,
       username: c.username,
       email: c.email,
-      phoneNumber: phoneByUid.get(c.id) || '',
+      phoneNumber: c.phoneNumber,
       level: c.level,
       levelTitle: c.levelTitle,
       xp: c.xp,

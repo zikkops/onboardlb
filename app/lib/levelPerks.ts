@@ -58,7 +58,7 @@ export function useLevelPerks() {
     const unsub = onSnapshot(q, snap => {
       setPerks(snap.docs.map(d => ({ id: d.id, ...d.data() } as LevelPerk)))
       setLoading(false)
-    })
+    }, err => console.error('[useLevelPerks] levelPerks listener failed:', err))
     return unsub
   }, [])
 

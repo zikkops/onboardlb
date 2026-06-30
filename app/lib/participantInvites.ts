@@ -2,18 +2,19 @@
 
 import { useEffect, useState } from 'react'
 import {
-  collection, query, where, orderBy, onSnapshot, doc, addDoc, updateDoc,
+  collection, query, where, orderBy, onSnapshot, doc, addDoc, updateDoc, setDoc,
   arrayRemove, increment, serverTimestamp, type Timestamp,
 } from 'firebase/firestore'
 import { db } from './firebase'
 
 // Adding a registered customer as a participant on a D&D session or event
-// reservation is, functionally, the same kind of "the other party has to
-// confirm" situation as a friend request — they shouldn't just show up on
-// someone else's booking with no say. Phone-number participants have no
-// account to ask, so they never get an invite; only uid-based participants do.
+// reservation, or to a Looking-for-Players party (app/lib/dndGroups.ts), is,
+// functionally, the same kind of "the other party has to confirm" situation
+// as a friend request — they shouldn't just show up on someone else's
+// booking or party with no say. Phone-number participants have no account
+// to ask, so they never get an invite; only uid-based participants do.
 
-export type ReservationType = 'dnd' | 'event'
+export type ReservationType = 'dnd' | 'event' | 'lfp'
 
 export interface ParticipantInvite {
   id: string
@@ -21,6 +22,11 @@ export interface ParticipantInvite {
   reservationId: string
   reservationLabel: string
   reservationDate: string
+  // Only set (and only needed) for reservationType 'lfp' — acceptInvite
+  // needs campaignId to build the accepting customer's own lfpEntries doc
+  // id, and location to carry the party's branch onto that same doc.
+  campaignId?: string
+  location?: string
   inviterUid: string
   inviterName: string
   inviteeUid: string
@@ -41,12 +47,14 @@ export async function createParticipantInvites(input: {
   inviterUid: string
   inviterName: string
   participants: { uid: string; name: string }[]
+  campaignId?: string
 }): Promise<void> {
   await Promise.all(input.participants.map(p => addDoc(collection(db, 'participantInvites'), {
     reservationType: input.reservationType,
     reservationId: input.reservationId,
     reservationLabel: input.reservationLabel,
     reservationDate: input.reservationDate,
+    ...(input.campaignId ? { campaignId: input.campaignId } : {}),
     inviterUid: input.inviterUid,
     inviterName: input.inviterName,
     inviteeUid: p.uid,
@@ -80,18 +88,66 @@ export function usePendingInvites(uid: string | null) {
   return { invites, loading }
 }
 
+// Every 'lfp' invite this customer has sent out as a party leader,
+// regardless of status — used to compute "X of Y responded" for a forming
+// party, since pending/accepted/declined all matter for that count.
+export function useSentLfpInvites(leaderUid: string | null) {
+  const [invites, setInvites] = useState<ParticipantInvite[]>([])
+
+  useEffect(() => {
+    if (!leaderUid) { setInvites([]); return }
+    const q = query(
+      collection(db, 'participantInvites'),
+      where('inviterUid', '==', leaderUid),
+      where('reservationType', '==', 'lfp')
+    )
+    const unsub = onSnapshot(q, snap => {
+      setInvites(snap.docs.map(d => ({ id: d.id, ...d.data() } as ParticipantInvite)))
+    }, err => console.error('[useSentLfpInvites] participantInvites listener failed:', err))
+    return unsub
+  }, [leaderUid])
+
+  return invites
+}
+
+// 'lfp' also creates the accepting customer's own lfpEntries doc, pointing
+// at the leader's group — firestore.rules lets a customer create that doc
+// for themselves as long as the referenced group already exists, which it
+// does (the leader created it when they started the party). Nothing else
+// about the group needs touching here; the leader's own client finalizes
+// it (flips 'forming' -> 'confirmed') once every invite they sent has been
+// resolved — see maybeFinalizeParty in app/lib/dndGroups.ts.
 export async function acceptInvite(invite: ParticipantInvite): Promise<void> {
+  if (invite.reservationType === 'lfp' && invite.campaignId) {
+    await setDoc(doc(db, 'lfpEntries', `${invite.campaignId}_${invite.inviteeUid}`), {
+      campaignId: invite.campaignId,
+      campaignTitle: invite.reservationLabel,
+      location: invite.location ?? '',
+      userId: invite.inviteeUid,
+      userName: invite.inviteeName,
+      status: 'grouped',
+      groupId: invite.reservationId,
+      createdAt: serverTimestamp(),
+    })
+  }
   await updateDoc(doc(db, 'participantInvites', invite.id), { status: 'accepted' })
 }
 
-// Declining drops the invitee from the reservation's participant list (the
-// reservation itself continues for everyone else) — `arrayRemove` needs an
-// exact match, which works here because the invite snapshotted the same
-// {uid, name} pair that was written onto the reservation's `participants`
-// array at booking time. Event reservations also store a separate
-// `partySize` number (D&D ones compute it on the fly), so that needs an
-// explicit decrement to avoid going stale.
+// Declining a 'dnd'/'event' invite drops the invitee from the
+// reservation's participant list (the reservation itself continues for
+// everyone else) — `arrayRemove` needs an exact match, which works here
+// because the invite snapshotted the same {uid, name} pair that was
+// written onto the reservation's `participants` array at booking time.
+// Event reservations also store a separate `partySize` number (D&D ones
+// compute it on the fly), so that needs an explicit decrement to avoid
+// going stale. Declining an 'lfp' invite needs nothing beyond flipping the
+// invite itself — there's no entry to remove, since accepting is the only
+// thing that ever creates one.
 export async function declineInvite(invite: ParticipantInvite): Promise<void> {
+  if (invite.reservationType === 'lfp') {
+    await updateDoc(doc(db, 'participantInvites', invite.id), { status: 'declined' })
+    return
+  }
   const collectionName = invite.reservationType === 'dnd' ? 'dndReservations' : 'eventReservations'
   await updateDoc(doc(db, collectionName, invite.reservationId), {
     participants: arrayRemove({ uid: invite.inviteeUid, name: invite.inviteeName }),

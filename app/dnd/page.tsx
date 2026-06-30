@@ -7,6 +7,9 @@ import Navbar from '../components/layout/Navbar'
 import Footer from '../components/layout/Footer'
 import Skeleton from '../components/Skeleton'
 import ReservationModal from '../components/dnd/ReservationModal'
+import { useCustomerUser } from '../lib/customerAuth'
+import { useUserLfpEntries, joinLfp, leaveLfp, type LfpEntry } from '../lib/dndGroups'
+import Link from 'next/link'
 
 interface Campaign {
   id: string
@@ -119,6 +122,12 @@ export default function DndPage() {
   const [reserving, setReserving]     = useState<{ campaign: Campaign; location: string } | null>(null)
   const [hoveredFaq, setHoveredFaq]   = useState<number | null>(null)
   const isMobile = useIsMobile()
+  const { user } = useCustomerUser()
+  const { entries: lfpEntries } = useUserLfpEntries(user?.uid ?? null)
+  const [lfpBusyId, setLfpBusyId]     = useState<string | null>(null)
+  // Which branch is currently picked in each campaign's LFP join control —
+  // only matters while choosing, before an entry exists.
+  const [lfpLocation, setLfpLocation] = useState<Record<string, string>>({})
 
   useEffect(() => {
     async function load() {
@@ -135,6 +144,31 @@ export default function DndPage() {
   function scrollTo(id: string) {
     const el = document.getElementById(id)
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  async function handleJoinLfp(campaign: Campaign, location: string) {
+    if (!user) return
+    setLfpBusyId(campaign.id)
+    try {
+      await joinLfp({
+        campaignId: campaign.id,
+        campaignTitle: campaign.title,
+        location,
+        userId: user.uid,
+        userName: user.displayName || user.email || 'Customer',
+      })
+    } finally {
+      setLfpBusyId(null)
+    }
+  }
+
+  async function handleLeaveLfp(entry: LfpEntry) {
+    setLfpBusyId(entry.campaignId)
+    try {
+      await leaveLfp(entry)
+    } finally {
+      setLfpBusyId(null)
+    }
   }
 
   const displayCampaigns = campaigns.length > 0 ? campaigns : FALLBACK_CAMPAIGNS
@@ -519,6 +553,79 @@ export default function DndPage() {
                                   ? 'Booking opens once the assigned Dungeon Master has branches set up.'
                                   : 'Booking opens once a Dungeon Master is assigned to this campaign.'}
                               </p>
+                            )}
+                          </div>
+                        )
+                      })()}
+
+                      {/* Looking for Players — joining a campaign's queue
+                          has no date/time at all, unlike the booking flow
+                          above; staff sort interested customers into
+                          groups from the admin side. */}
+                      {(() => {
+                        const entry = lfpEntries.find(e => e.campaignId === campaign.id)
+                        const busy = lfpBusyId === campaign.id
+                        const locations = campaign.locations ?? []
+                        const chosenLocation = lfpLocation[campaign.id] ?? locations[0] ?? ''
+                        return (
+                          <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                            {!user ? (
+                              <Link href="/customer/login" style={{
+                                fontFamily: 'var(--font-inter)', fontSize: '0.75rem',
+                                color: campaign.color, textDecoration: 'none',
+                              }}>Sign in to look for players →</Link>
+                            ) : locations.length === 0 ? null : !entry ? (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+                                {locations.length > 1 && (
+                                  <select
+                                    value={chosenLocation}
+                                    onChange={e => setLfpLocation(prev => ({ ...prev, [campaign.id]: e.target.value }))}
+                                    style={{
+                                      backgroundColor: '#1a1a1a', border: '1px solid rgba(255,255,255,0.15)',
+                                      color: 'var(--offwhite)', padding: '0.5rem 0.7rem', borderRadius: '2px',
+                                      fontSize: '0.75rem', fontFamily: 'var(--font-inter)',
+                                    }}
+                                  >
+                                    {locations.map(loc => <option key={loc} value={loc}>{loc}</option>)}
+                                  </select>
+                                )}
+                                <button
+                                  onClick={() => handleJoinLfp(campaign, chosenLocation)}
+                                  disabled={busy}
+                                  style={{
+                                    background: 'transparent',
+                                    border: `1px solid ${campaign.color}50`,
+                                    color: campaign.color,
+                                    padding: '0.5rem 1rem',
+                                    borderRadius: '2px',
+                                    fontSize: '0.75rem',
+                                    letterSpacing: '0.05em',
+                                    cursor: busy ? 'not-allowed' : 'pointer',
+                                    opacity: busy ? 0.6 : 1,
+                                    fontFamily: 'var(--font-inter)',
+                                  }}
+                                >{busy ? 'Joining…' : `🔍 Looking for Players${locations.length > 1 ? '' : ` at ${chosenLocation}`}`}</button>
+                              </div>
+                            ) : entry.status === 'waiting' ? (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', flexWrap: 'wrap' }}>
+                                <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.75rem', color: 'rgba(245,242,236,0.5)' }}>
+                                  ✓ Waiting for a group{entry.location ? ` at ${entry.location}` : ''}
+                                </span>
+                                <button
+                                  onClick={() => handleLeaveLfp(entry)}
+                                  disabled={busy}
+                                  style={{
+                                    background: 'transparent', border: '1px solid rgba(255,255,255,0.1)',
+                                    color: 'rgba(245,242,236,0.4)', padding: '0.3rem 0.8rem', borderRadius: '2px',
+                                    fontSize: '0.7rem', cursor: busy ? 'not-allowed' : 'pointer',
+                                    opacity: busy ? 0.6 : 1, fontFamily: 'var(--font-inter)',
+                                  }}
+                                >{busy ? 'Leaving…' : 'Leave Queue'}</button>
+                              </div>
+                            ) : (
+                              <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.75rem', color: campaign.color }}>
+                                ✓ You&apos;re grouped{entry.location ? ` at ${entry.location}` : ''}! See your profile for who&apos;s with you.
+                              </span>
                             )}
                           </div>
                         )

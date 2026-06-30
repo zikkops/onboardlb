@@ -8,8 +8,15 @@ import { doc, onSnapshot } from 'firebase/firestore'
 import { db } from '../../lib/firebase'
 import { useCustomerUser, signOutCustomer } from '../../lib/customerAuth'
 import { useIsStaff } from '../../lib/adminAuth'
+import { usePendingInvites, acceptInvite, declineInvite, type ParticipantInvite } from '../../lib/participantInvites'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faChevronDown } from '@fortawesome/free-solid-svg-icons'
+import { faChevronDown, faBell } from '@fortawesome/free-solid-svg-icons'
+
+const INVITE_TYPE_LABELS: Record<ParticipantInvite['reservationType'], string> = {
+  dnd: 'D&D Session',
+  event: 'Event',
+  lfp: 'Looking for Players',
+}
 
 const LINKS = [
   { href: '/about',   label: 'About Us' },
@@ -34,13 +41,26 @@ export default function Navbar() {
   const { user: customerUser, loading: customerLoading } = useCustomerUser()
   const [customerName, setCustomerName] = useState<string | null>(null)
   const isStaff = useIsStaff()
+  const { invites: notifications } = usePendingInvites(customerUser?.uid ?? null)
+  const [notifOpen, setNotifOpen] = useState(false)
+  const [notifBusyId, setNotifBusyId] = useState<string | null>(null)
+
+  async function handleNotifAccept(invite: ParticipantInvite) {
+    setNotifBusyId(invite.id)
+    try { await acceptInvite(invite) } finally { setNotifBusyId(null) }
+  }
+
+  async function handleNotifDecline(invite: ParticipantInvite) {
+    setNotifBusyId(invite.id)
+    try { await declineInvite(invite) } finally { setNotifBusyId(null) }
+  }
 
   useEffect(() => {
     if (!customerUser) { setCustomerName(null); return }
     const unsub = onSnapshot(doc(db, 'users', customerUser.uid), snap => {
       const data = snap.data() as { displayName?: string; username?: string } | undefined
       setCustomerName(data?.username || data?.displayName || customerUser.displayName || 'Adventurer')
-    })
+    }, err => console.error('[Navbar] users/{uid} listener failed:', err))
     return unsub
   }, [customerUser])
 
@@ -170,6 +190,86 @@ export default function Navbar() {
             </ul>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', justifySelf: 'end' }}>
+              {!customerLoading && customerUser && (
+                <div
+                  style={{ position: 'relative' }}
+                  onMouseEnter={() => setNotifOpen(true)}
+                  onMouseLeave={() => setNotifOpen(false)}
+                >
+                  <button aria-label="Notifications" style={{
+                    position: 'relative',
+                    background: 'transparent',
+                    border: '1px solid rgba(245,242,236,0.25)',
+                    color: 'rgba(245,242,236,0.8)',
+                    width: '38px', height: '38px',
+                    borderRadius: '2px',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    cursor: 'pointer', flexShrink: 0,
+                  }}>
+                    <FontAwesomeIcon icon={faBell} style={{ width: '14px' }} />
+                    {notifications.length > 0 && (
+                      <span style={{
+                        position: 'absolute', top: '-4px', right: '-4px',
+                        backgroundColor: 'var(--red)', color: '#fff',
+                        fontSize: '0.6rem', fontFamily: 'var(--font-inter)',
+                        minWidth: '16px', height: '16px', borderRadius: '8px',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 3px',
+                      }}>{notifications.length}</span>
+                    )}
+                  </button>
+
+                  <div style={{
+                    position: 'absolute', top: '100%', right: 0, paddingTop: '0.5rem', zIndex: 60,
+                    opacity: notifOpen ? 1 : 0, visibility: notifOpen ? 'visible' : 'hidden',
+                    transition: 'opacity 0.18s ease',
+                  }}>
+                    <div style={{
+                      width: '300px', maxHeight: '360px', overflowY: 'auto',
+                      backgroundColor: 'rgba(8,8,8,0.98)', border: '1px solid rgba(255,255,255,0.08)',
+                      borderRadius: '2px', boxShadow: '0 12px 30px rgba(0,0,0,0.5)',
+                    }}>
+                      {notifications.length === 0 ? (
+                        <p style={{ padding: '1rem', fontFamily: 'var(--font-inter)', fontSize: '0.78rem', color: 'rgba(245,242,236,0.4)' }}>
+                          No pending invites
+                        </p>
+                      ) : (
+                        notifications.map(invite => {
+                          const busy = notifBusyId === invite.id
+                          return (
+                            <div key={invite.id} style={{
+                              padding: '0.8rem 1rem', borderBottom: '1px solid rgba(255,255,255,0.06)',
+                            }}>
+                              <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.65rem', letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--teal)', marginBottom: '0.2rem' }}>
+                                {INVITE_TYPE_LABELS[invite.reservationType]}
+                              </p>
+                              <p style={{ fontFamily: 'var(--font-cinzel)', fontSize: '0.85rem', color: 'var(--offwhite)' }}>
+                                {invite.reservationLabel}
+                              </p>
+                              <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.72rem', color: 'rgba(245,242,236,0.45)', marginTop: '0.15rem', marginBottom: '0.6rem' }}>
+                                {invite.reservationDate} · invited by {invite.inviterName}
+                              </p>
+                              <div style={{ display: 'flex', gap: '0.4rem' }}>
+                                <button onClick={() => handleNotifAccept(invite)} disabled={busy} style={{
+                                  flex: 1, backgroundColor: 'var(--teal)', color: '#fff', border: 'none',
+                                  padding: '0.4rem', borderRadius: '2px', fontSize: '0.68rem', letterSpacing: '0.04em',
+                                  textTransform: 'uppercase', fontFamily: 'var(--font-inter)',
+                                  cursor: busy ? 'not-allowed' : 'pointer', opacity: busy ? 0.6 : 1,
+                                }}>Accept</button>
+                                <button onClick={() => handleNotifDecline(invite)} disabled={busy} style={{
+                                  flex: 1, background: 'transparent', color: 'var(--red)', border: '1px solid rgba(228,51,41,0.3)',
+                                  padding: '0.4rem', borderRadius: '2px', fontSize: '0.68rem', letterSpacing: '0.04em',
+                                  textTransform: 'uppercase', fontFamily: 'var(--font-inter)',
+                                  cursor: busy ? 'not-allowed' : 'pointer', opacity: busy ? 0.6 : 1,
+                                }}>Decline</button>
+                              </div>
+                            </div>
+                          )
+                        })
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
               {!customerLoading && (
                 customerUser ? (
                   <div
@@ -260,7 +360,7 @@ export default function Navbar() {
                 )
               )}
 
-              <Link href={isStaff ? '/admin' : '/about#branches'}
+              <Link href={isStaff ? '/admin' : '/tables'}
                 onMouseEnter={() => setBtnHovered(true)}
                 onMouseLeave={() => setBtnHovered(false)}
                 style={{
@@ -373,6 +473,17 @@ export default function Navbar() {
           {!customerLoading && (
             customerUser ? (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
+                {notifications.length > 0 && (
+                  <Link href="/customer/profile" onClick={() => setOpen(false)} style={{
+                    display: 'flex', alignItems: 'center', gap: '0.5rem',
+                    backgroundColor: 'rgba(228,51,41,0.12)', border: '1px solid rgba(228,51,41,0.3)',
+                    color: 'var(--red)', padding: '0.5rem 1rem', borderRadius: '20px',
+                    fontSize: '0.78rem', fontFamily: 'var(--font-inter)', textDecoration: 'none',
+                  }}>
+                    <FontAwesomeIcon icon={faBell} style={{ width: '12px' }} />
+                    {notifications.length} pending invite{notifications.length === 1 ? '' : 's'}
+                  </Link>
+                )}
                 <p style={{
                   fontFamily: 'var(--font-cinzel)',
                   fontSize: '1.1rem',
@@ -435,7 +546,7 @@ export default function Navbar() {
             )
           )}
 
-          <Link href={isStaff ? '/admin' : '/about#branches'}
+          <Link href={isStaff ? '/admin' : '/tables'}
             onClick={() => setOpen(false)}
             style={{
               marginTop: '1rem',

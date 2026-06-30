@@ -218,7 +218,7 @@ export default function Hero() {
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem', width: '100%', opacity: 0, transform: 'translateY(20px)' }}>
               <HeroButton label="Events"    color="#E43329" onClick={() => scrollTo('events-section')} />
-              <HeroButton label={isStaff ? 'CMS' : 'Reserve'} color="#32327C" onClick={() => router.push(isStaff ? '/admin' : '/about#branches')} />
+              <HeroButton label={isStaff ? 'CMS' : 'Reserve'} color="#32327C" onClick={() => router.push(isStaff ? '/admin' : '/tables')} />
             </div>
             <div style={{ display: 'flex', justifyContent: 'center', width: '100%', opacity: 0, transform: 'translateY(20px)' }}>
               <HeroButton label="Dungeons & Dragons" color="#6A6AB7" onClick={() => scrollTo('dnd-section')} />
@@ -233,7 +233,7 @@ export default function Hero() {
               <HeroButton label="Events"            color="#E43329" onClick={() => scrollTo('events-section')} />
             </div>
             <div style={{ display: 'flex', gap: '1rem', opacity: 0, transform: 'translateY(20px)' }}>
-              <HeroButton label={isStaff ? 'CMS' : 'Reserve a Spot'} color="#32327C" onClick={() => router.push(isStaff ? '/admin' : '/about#branches')} />
+              <HeroButton label={isStaff ? 'CMS' : 'Reserve a Spot'} color="#32327C" onClick={() => router.push(isStaff ? '/admin' : '/tables')} />
               <HeroButton label="Dungeons & Dragons" color="#6A6AB7" onClick={() => scrollTo('dnd-section')} />
             </div>
           </>

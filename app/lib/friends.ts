@@ -51,13 +51,15 @@ export function useFriends(uid: string | null): FriendSummary[] {
   useEffect(() => {
     if (!uid) return
     const q = query(collection(db, 'friendRequests'), where('fromUid', '==', uid), where('status', '==', 'accepted'))
-    return onSnapshot(q, snap => setAsSender(snap.docs.map(d => ({ id: d.id, ...d.data() } as FriendRequest))))
+    return onSnapshot(q, snap => setAsSender(snap.docs.map(d => ({ id: d.id, ...d.data() } as FriendRequest))),
+      err => console.error('[useFriends] friendRequests (asSender) listener failed:', err))
   }, [uid])
 
   useEffect(() => {
     if (!uid) return
     const q = query(collection(db, 'friendRequests'), where('toUid', '==', uid), where('status', '==', 'accepted'))
-    return onSnapshot(q, snap => setAsRecipient(snap.docs.map(d => ({ id: d.id, ...d.data() } as FriendRequest))))
+    return onSnapshot(q, snap => setAsRecipient(snap.docs.map(d => ({ id: d.id, ...d.data() } as FriendRequest))),
+      err => console.error('[useFriends] friendRequests (asRecipient) listener failed:', err))
   }, [uid])
 
   // Memoized so consumers get a stable reference between renders — without
@@ -77,7 +79,8 @@ export function useIncomingRequests(uid: string | null): FriendRequest[] {
   useEffect(() => {
     if (!uid) return
     const q = query(collection(db, 'friendRequests'), where('toUid', '==', uid), where('status', '==', 'pending'))
-    return onSnapshot(q, snap => setRequests(snap.docs.map(d => ({ id: d.id, ...d.data() } as FriendRequest))))
+    return onSnapshot(q, snap => setRequests(snap.docs.map(d => ({ id: d.id, ...d.data() } as FriendRequest))),
+      err => console.error('[useIncomingRequests] friendRequests listener failed:', err))
   }, [uid])
   return requests
 }
@@ -88,7 +91,8 @@ export function useOutgoingRequests(uid: string | null): FriendRequest[] {
   useEffect(() => {
     if (!uid) return
     const q = query(collection(db, 'friendRequests'), where('fromUid', '==', uid), where('status', '==', 'pending'))
-    return onSnapshot(q, snap => setRequests(snap.docs.map(d => ({ id: d.id, ...d.data() } as FriendRequest))))
+    return onSnapshot(q, snap => setRequests(snap.docs.map(d => ({ id: d.id, ...d.data() } as FriendRequest))),
+      err => console.error('[useOutgoingRequests] friendRequests listener failed:', err))
   }, [uid])
   return requests
 }
