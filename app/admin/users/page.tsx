@@ -16,6 +16,7 @@ interface Account {
   role: Role
   branchIds: string[]
   isDungeonMaster: boolean
+  superadmin: boolean
 }
 
 const ROLES: Role[] = ['admin', 'manager', 'social', 'gamer', 'dungeonmaster']
@@ -59,6 +60,7 @@ export default function AdminUsersPage() {
         id: d.id, email: data.email, role: data.role,
         branchIds: normalizeBranchIds(data),
         isDungeonMaster: data.isDungeonMaster === true,
+        superadmin: data.superadmin === true,
       } as Account
     }))
     setLoading(false)
@@ -132,6 +134,17 @@ export default function AdminUsersPage() {
   function branchSummary(account: Account): string {
     if (!showsBranches(account)) return '—'
     return account.branchIds.length > 0 ? account.branchIds.map(resolveBranchName).join(', ') : '— unassigned —'
+  }
+
+  // Mirrors firestore.rules' adminUsers rule exactly: a superadmin's own
+  // doc can only be edited by the superadmin themselves, and can never be
+  // deleted through the app by anyone at all — these just keep the UI
+  // from offering a button that the rule would reject anyway.
+  function canEdit(account: Account): boolean {
+    return !account.superadmin || account.id === user?.uid
+  }
+  function canRevoke(account: Account): boolean {
+    return !account.superadmin
   }
 
   const inputStyle = {
@@ -209,7 +222,9 @@ export default function AdminUsersPage() {
         }}>
           Admin and Manager can access every section below. Social Media is limited to Events, Gamer is limited to Games,
           and Dungeon Master is limited to D&amp;D Campaigns. Only Admin can create or edit accounts. Managers can be
-          assigned one or more branches — they only see loyalty data for their assigned branches.
+          assigned one or more branches — they only see loyalty data for their assigned branches. A 👑 Superadmin account
+          can only be edited by itself and can never be deleted, by anyone, through this page — that protection is set
+          by hand directly in Firebase, not from here.
         </p>
 
         {/* Table */}
@@ -234,6 +249,18 @@ export default function AdminUsersPage() {
                   )}
                 </p>
                 <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                  {account.superadmin && (
+                    <span style={{
+                      fontSize: '0.7rem',
+                      padding: '0.25rem 0.7rem',
+                      borderRadius: '2px',
+                      backgroundColor: 'rgba(229,163,61,0.18)',
+                      color: '#E5A33D',
+                      fontFamily: 'var(--font-inter)',
+                      letterSpacing: '0.05em',
+                      width: 'fit-content',
+                    }}>👑 Superadmin</span>
+                  )}
                   <span style={{
                     fontSize: '0.7rem',
                     padding: '0.25rem 0.7rem',
@@ -265,29 +292,30 @@ export default function AdminUsersPage() {
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
                   <button
                     onClick={() => openEdit(account)}
+                    disabled={!canEdit(account)}
                     style={{
                       flex: 1,
                       background: 'transparent',
                       border: '1px solid rgba(255,255,255,0.1)',
-                      color: 'rgba(245,242,236,0.6)',
+                      color: canEdit(account) ? 'rgba(245,242,236,0.6)' : 'rgba(245,242,236,0.2)',
                       padding: '0.6rem 0.8rem',
                       borderRadius: '2px',
                       fontSize: '0.72rem',
-                      cursor: 'pointer',
+                      cursor: canEdit(account) ? 'pointer' : 'not-allowed',
                       fontFamily: 'var(--font-inter)',
                     }}>Edit</button>
                   <button
                     onClick={() => handleRevoke(account)}
-                    disabled={account.id === user?.uid}
+                    disabled={account.id === user?.uid || !canRevoke(account)}
                     style={{
                       flex: 1,
                       background: 'transparent',
                       border: '1px solid rgba(228,51,41,0.3)',
-                      color: account.id === user?.uid ? 'rgba(228,51,41,0.25)' : 'var(--red)',
+                      color: account.id === user?.uid || !canRevoke(account) ? 'rgba(228,51,41,0.25)' : 'var(--red)',
                       padding: '0.6rem 0.8rem',
                       borderRadius: '2px',
                       fontSize: '0.72rem',
-                      cursor: account.id === user?.uid ? 'not-allowed' : 'pointer',
+                      cursor: account.id === user?.uid || !canRevoke(account) ? 'not-allowed' : 'pointer',
                       fontFamily: 'var(--font-inter)',
                     }}>Revoke Access</button>
                 </div>
@@ -329,6 +357,17 @@ export default function AdminUsersPage() {
                     </td>
                     <td style={{ padding: '1rem 1.2rem' }}>
                       <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                        {account.superadmin && (
+                          <span style={{
+                            fontSize: '0.7rem',
+                            padding: '0.25rem 0.7rem',
+                            borderRadius: '2px',
+                            backgroundColor: 'rgba(229,163,61,0.18)',
+                            color: '#E5A33D',
+                            fontFamily: 'var(--font-inter)',
+                            letterSpacing: '0.05em',
+                          }}>👑 Superadmin</span>
+                        )}
                         <span style={{
                           fontSize: '0.7rem',
                           padding: '0.25rem 0.7rem',
@@ -358,27 +397,28 @@ export default function AdminUsersPage() {
                       <div style={{ display: 'flex', gap: '0.5rem' }}>
                         <button
                           onClick={() => openEdit(account)}
+                          disabled={!canEdit(account)}
                           style={{
                             background: 'transparent',
                             border: '1px solid rgba(255,255,255,0.1)',
-                            color: 'rgba(245,242,236,0.6)',
+                            color: canEdit(account) ? 'rgba(245,242,236,0.6)' : 'rgba(245,242,236,0.2)',
                             padding: '0.4rem 0.8rem',
                             borderRadius: '2px',
                             fontSize: '0.7rem',
-                            cursor: 'pointer',
+                            cursor: canEdit(account) ? 'pointer' : 'not-allowed',
                             fontFamily: 'var(--font-inter)',
                           }}>Edit</button>
                         <button
                           onClick={() => handleRevoke(account)}
-                          disabled={account.id === user?.uid}
+                          disabled={account.id === user?.uid || !canRevoke(account)}
                           style={{
                             background: 'transparent',
                             border: '1px solid rgba(228,51,41,0.3)',
-                            color: account.id === user?.uid ? 'rgba(228,51,41,0.25)' : 'var(--red)',
+                            color: account.id === user?.uid || !canRevoke(account) ? 'rgba(228,51,41,0.25)' : 'var(--red)',
                             padding: '0.4rem 0.8rem',
                             borderRadius: '2px',
                             fontSize: '0.7rem',
-                            cursor: account.id === user?.uid ? 'not-allowed' : 'pointer',
+                            cursor: account.id === user?.uid || !canRevoke(account) ? 'not-allowed' : 'pointer',
                             fontFamily: 'var(--font-inter)',
                           }}>Revoke Access</button>
                       </div>
