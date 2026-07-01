@@ -8,6 +8,7 @@ import {
 import { db } from './firebase'
 import { logUpdate } from './activityLog'
 import { createParticipantInvites } from './participantInvites'
+import { createStatusNotification } from './notifications'
 
 // Unlike D&D reservations, there's no single-person resource to avoid
 // double-booking here — multiple people can attend the same event together.
@@ -144,6 +145,14 @@ export async function approveEventReservation(reservation: EventReservation, sta
     approvedBy: staffUid,
     approvedAt: serverTimestamp(),
   })
+  createStatusNotification({
+    uid: reservation.userId,
+    type: 'reservation_approved',
+    reservationType: 'event',
+    reservationId: reservation.id,
+    label: reservation.eventTitle,
+    dateLabel: `${reservation.eventDate} · ${reservation.eventTimeStart}`,
+  }).catch(err => console.error('[approveEventReservation] notification write failed:', err))
 
   await logUpdate(
     'Event Reservation',
@@ -160,6 +169,15 @@ export async function rejectEventReservation(reservation: EventReservation, staf
     rejectedAt: serverTimestamp(),
     rejectionReason: reason || null,
   })
+  createStatusNotification({
+    uid: reservation.userId,
+    type: 'reservation_rejected',
+    reservationType: 'event',
+    reservationId: reservation.id,
+    label: reservation.eventTitle,
+    dateLabel: `${reservation.eventDate} · ${reservation.eventTimeStart}`,
+    rejectionReason: reason || null,
+  }).catch(err => console.error('[rejectEventReservation] notification write failed:', err))
 
   await logUpdate(
     'Event Reservation',

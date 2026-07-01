@@ -23,6 +23,17 @@ service cloud.firestore {
 
     // ---- Staff-only ----
     match /activityLog/{id}  { allow read, write: if isStaff(); }
+
+    // Per-user status notifications — reservation approvals/rejections written
+    // by staff, read+dismissed by the recipient only.
+    match /notifications/{id} {
+      allow read: if request.auth != null && request.auth.uid == resource.data.uid;
+      allow create: if isStaff();
+      allow update: if request.auth != null &&
+        request.auth.uid == resource.data.uid &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+      allow delete: if request.auth != null && request.auth.uid == resource.data.uid;
+    }
     match /mediaLibrary/{id} { allow read, write: if isStaff(); }
 
     // Staff directory. Anyone signed in may read (the app needs to look up

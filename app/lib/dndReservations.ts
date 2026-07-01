@@ -8,6 +8,7 @@ import {
 import { db } from './firebase'
 import { logUpdate } from './activityLog'
 import { createParticipantInvites } from './participantInvites'
+import { createStatusNotification } from './notifications'
 
 // Every session is a fixed length — no per-campaign duration field. The
 // buffer is a pure backend conflict-blocking detail (extends how long a
@@ -277,6 +278,14 @@ export async function approveReservation(reservation: Reservation, staffUid: str
     approvedBy: staffUid,
     approvedAt: serverTimestamp(),
   })
+  createStatusNotification({
+    uid: reservation.userId,
+    type: 'reservation_approved',
+    reservationType: 'dnd',
+    reservationId: reservation.id,
+    label: reservation.campaignTitle,
+    dateLabel: reservation.startAt.toDate().toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }),
+  }).catch(err => console.error('[approveReservation] notification write failed:', err))
 
   await logUpdate(
     'D&D Reservation',
@@ -303,6 +312,15 @@ export async function rejectReservation(reservation: Reservation, staffUid: stri
   })
   lockBuckets.forEach(b => batch.delete(doc(db, 'dndDmLocks', lockDocId(reservation.dmUid, b))))
   await batch.commit()
+  createStatusNotification({
+    uid: reservation.userId,
+    type: 'reservation_rejected',
+    reservationType: 'dnd',
+    reservationId: reservation.id,
+    label: reservation.campaignTitle,
+    dateLabel: reservation.startAt.toDate().toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }),
+    rejectionReason: reason || null,
+  }).catch(err => console.error('[rejectReservation] notification write failed:', err))
 
   await logUpdate(
     'D&D Reservation',

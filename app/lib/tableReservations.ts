@@ -7,6 +7,7 @@ import {
 } from 'firebase/firestore'
 import { db } from './firebase'
 import { logUpdate } from './activityLog'
+import { createStatusNotification } from './notifications'
 
 // Mirrors app/lib/dndReservations.ts's conflict-locking pattern exactly,
 // generalized from one locked resource (a DM) to N (every table in a
@@ -269,6 +270,14 @@ export async function approveTableReservation(reservation: TableReservation, sta
     approvedBy: staffUid,
     approvedAt: serverTimestamp(),
   })
+  createStatusNotification({
+    uid: reservation.userId,
+    type: 'reservation_approved',
+    reservationType: 'table',
+    reservationId: reservation.id,
+    label: `Table${reservation.tableNumbers.length > 1 ? 's' : ''} ${reservation.tableNumbers.join(', ')} · ${reservation.branch}`,
+    dateLabel: reservation.startAt.toDate().toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }),
+  }).catch(err => console.error('[approveTableReservation] notification write failed:', err))
 
   await logUpdate(
     'Table Reservation',
@@ -296,6 +305,16 @@ export async function rejectTableReservation(reservation: TableReservation, staf
     lockBuckets.forEach(b => batch.delete(doc(db, 'tableLocks', lockDocId(tableId, b))))
   })
   await batch.commit()
+
+  createStatusNotification({
+    uid: reservation.userId,
+    type: 'reservation_rejected',
+    reservationType: 'table',
+    reservationId: reservation.id,
+    label: `Table${reservation.tableNumbers.length > 1 ? 's' : ''} ${reservation.tableNumbers.join(', ')} · ${reservation.branch}`,
+    dateLabel: reservation.startAt.toDate().toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }),
+    rejectionReason: reason || null,
+  }).catch(err => console.error('[rejectTableReservation] notification write failed:', err))
 
   await logUpdate(
     'Table Reservation',

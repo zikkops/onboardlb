@@ -9,6 +9,8 @@ import { db } from '../../lib/firebase'
 import { useCustomerUser, signOutCustomer } from '../../lib/customerAuth'
 import { useIsStaff } from '../../lib/adminAuth'
 import { usePendingInvites, acceptInvite, declineInvite, type ParticipantInvite } from '../../lib/participantInvites'
+import { useIncomingRequests, acceptFriendRequest, declineFriendRequest, type FriendRequest } from '../../lib/friends'
+import { useMyNotifications, markNotificationRead, type StatusNotification } from '../../lib/notifications'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faChevronDown, faBell } from '@fortawesome/free-solid-svg-icons'
 
@@ -16,6 +18,12 @@ const INVITE_TYPE_LABELS: Record<ParticipantInvite['reservationType'], string> =
   dnd: 'D&D Session',
   event: 'Event',
   lfp: 'Looking for Players',
+}
+
+const RESERVATION_TYPE_LABELS: Record<StatusNotification['reservationType'], string> = {
+  dnd: 'D&D Session',
+  event: 'Event',
+  table: 'Table Reservation',
 }
 
 const LINKS = [
@@ -41,18 +49,36 @@ export default function Navbar() {
   const { user: customerUser, loading: customerLoading } = useCustomerUser()
   const [customerName, setCustomerName] = useState<string | null>(null)
   const isStaff = useIsStaff()
-  const { invites: notifications } = usePendingInvites(customerUser?.uid ?? null)
+  const { invites: pendingInvites } = usePendingInvites(customerUser?.uid ?? null)
+  const friendRequests = useIncomingRequests(customerUser?.uid ?? null)
+  const statusNotifications = useMyNotifications(customerUser?.uid ?? null)
+  const totalNotifCount = pendingInvites.length + friendRequests.length + statusNotifications.length
   const [notifOpen, setNotifOpen] = useState(false)
-  const [notifBusyId, setNotifBusyId] = useState<string | null>(null)
+  const [inviteBusyId, setInviteBusyId] = useState<string | null>(null)
+  const [friendBusyId, setFriendBusyId] = useState<string | null>(null)
 
-  async function handleNotifAccept(invite: ParticipantInvite) {
-    setNotifBusyId(invite.id)
-    try { await acceptInvite(invite) } finally { setNotifBusyId(null) }
+  async function handleInviteAccept(invite: ParticipantInvite) {
+    setInviteBusyId(invite.id)
+    try { await acceptInvite(invite) } finally { setInviteBusyId(null) }
   }
 
-  async function handleNotifDecline(invite: ParticipantInvite) {
-    setNotifBusyId(invite.id)
-    try { await declineInvite(invite) } finally { setNotifBusyId(null) }
+  async function handleInviteDecline(invite: ParticipantInvite) {
+    setInviteBusyId(invite.id)
+    try { await declineInvite(invite) } finally { setInviteBusyId(null) }
+  }
+
+  async function handleFriendAccept(req: FriendRequest) {
+    setFriendBusyId(req.id)
+    try { await acceptFriendRequest(req.id) } finally { setFriendBusyId(null) }
+  }
+
+  async function handleFriendDecline(req: FriendRequest) {
+    setFriendBusyId(req.id)
+    try { await declineFriendRequest(req.id) } finally { setFriendBusyId(null) }
+  }
+
+  async function handleDismissNotif(n: StatusNotification) {
+    await markNotificationRead(n.id)
   }
 
   useEffect(() => {
@@ -207,14 +233,14 @@ export default function Navbar() {
                     cursor: 'pointer', flexShrink: 0,
                   }}>
                     <FontAwesomeIcon icon={faBell} style={{ width: '14px' }} />
-                    {notifications.length > 0 && (
+                    {totalNotifCount > 0 && (
                       <span style={{
                         position: 'absolute', top: '-4px', right: '-4px',
                         backgroundColor: 'var(--red)', color: '#fff',
                         fontSize: '0.6rem', fontFamily: 'var(--font-inter)',
                         minWidth: '16px', height: '16px', borderRadius: '8px',
                         display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 3px',
-                      }}>{notifications.length}</span>
+                      }}>{totalNotifCount}</span>
                     )}
                   </button>
 
@@ -224,47 +250,115 @@ export default function Navbar() {
                     transition: 'opacity 0.18s ease',
                   }}>
                     <div style={{
-                      width: '300px', maxHeight: '360px', overflowY: 'auto',
+                      width: '310px', maxHeight: '420px', overflowY: 'auto',
                       backgroundColor: 'rgba(8,8,8,0.98)', border: '1px solid rgba(255,255,255,0.08)',
                       borderRadius: '2px', boxShadow: '0 12px 30px rgba(0,0,0,0.5)',
                     }}>
-                      {notifications.length === 0 ? (
+                      {totalNotifCount === 0 ? (
                         <p style={{ padding: '1rem', fontFamily: 'var(--font-inter)', fontSize: '0.78rem', color: 'rgba(245,242,236,0.4)' }}>
-                          No pending invites
+                          No notifications
                         </p>
                       ) : (
-                        notifications.map(invite => {
-                          const busy = notifBusyId === invite.id
-                          return (
-                            <div key={invite.id} style={{
-                              padding: '0.8rem 1rem', borderBottom: '1px solid rgba(255,255,255,0.06)',
-                            }}>
-                              <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.65rem', letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--teal)', marginBottom: '0.2rem' }}>
-                                {INVITE_TYPE_LABELS[invite.reservationType]}
-                              </p>
-                              <p style={{ fontFamily: 'var(--font-cinzel)', fontSize: '0.85rem', color: 'var(--offwhite)' }}>
-                                {invite.reservationLabel}
-                              </p>
-                              <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.72rem', color: 'rgba(245,242,236,0.45)', marginTop: '0.15rem', marginBottom: '0.6rem' }}>
-                                {invite.reservationDate} · invited by {invite.inviterName}
-                              </p>
-                              <div style={{ display: 'flex', gap: '0.4rem' }}>
-                                <button onClick={() => handleNotifAccept(invite)} disabled={busy} style={{
-                                  flex: 1, backgroundColor: 'var(--teal)', color: '#fff', border: 'none',
-                                  padding: '0.4rem', borderRadius: '2px', fontSize: '0.68rem', letterSpacing: '0.04em',
-                                  textTransform: 'uppercase', fontFamily: 'var(--font-inter)',
-                                  cursor: busy ? 'not-allowed' : 'pointer', opacity: busy ? 0.6 : 1,
-                                }}>Accept</button>
-                                <button onClick={() => handleNotifDecline(invite)} disabled={busy} style={{
-                                  flex: 1, background: 'transparent', color: 'var(--red)', border: '1px solid rgba(228,51,41,0.3)',
-                                  padding: '0.4rem', borderRadius: '2px', fontSize: '0.68rem', letterSpacing: '0.04em',
-                                  textTransform: 'uppercase', fontFamily: 'var(--font-inter)',
-                                  cursor: busy ? 'not-allowed' : 'pointer', opacity: busy ? 0.6 : 1,
-                                }}>Decline</button>
+                        <>
+                          {/* Friend requests */}
+                          {friendRequests.map(req => {
+                            const busy = friendBusyId === req.id
+                            return (
+                              <div key={req.id} style={{ padding: '0.8rem 1rem', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                                <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.65rem', letterSpacing: '0.06em', textTransform: 'uppercase', color: '#C9962C', marginBottom: '0.3rem' }}>
+                                  Friend Request
+                                </p>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.6rem' }}>
+                                  {req.fromAvatar ? (
+                                    <img src={req.fromAvatar} alt="" style={{ width: '24px', height: '24px', borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
+                                  ) : (
+                                    <span style={{ width: '24px', height: '24px', borderRadius: '50%', backgroundColor: '#1a1a1a', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem', color: 'rgba(245,242,236,0.5)', flexShrink: 0 }}>
+                                      {req.fromName.charAt(0).toUpperCase()}
+                                    </span>
+                                  )}
+                                  <p style={{ fontFamily: 'var(--font-cinzel)', fontSize: '0.83rem', color: 'var(--offwhite)' }}>
+                                    {req.fromName}
+                                  </p>
+                                </div>
+                                <div style={{ display: 'flex', gap: '0.4rem' }}>
+                                  <button onClick={() => handleFriendAccept(req)} disabled={busy} style={{
+                                    flex: 1, backgroundColor: '#C9962C', color: '#fff', border: 'none',
+                                    padding: '0.4rem', borderRadius: '2px', fontSize: '0.68rem', letterSpacing: '0.04em',
+                                    textTransform: 'uppercase', fontFamily: 'var(--font-inter)',
+                                    cursor: busy ? 'not-allowed' : 'pointer', opacity: busy ? 0.6 : 1,
+                                  }}>Accept</button>
+                                  <button onClick={() => handleFriendDecline(req)} disabled={busy} style={{
+                                    flex: 1, background: 'transparent', color: 'var(--red)', border: '1px solid rgba(228,51,41,0.3)',
+                                    padding: '0.4rem', borderRadius: '2px', fontSize: '0.68rem', letterSpacing: '0.04em',
+                                    textTransform: 'uppercase', fontFamily: 'var(--font-inter)',
+                                    cursor: busy ? 'not-allowed' : 'pointer', opacity: busy ? 0.6 : 1,
+                                  }}>Decline</button>
+                                </div>
                               </div>
-                            </div>
-                          )
-                        })
+                            )
+                          })}
+
+                          {/* Participant invites */}
+                          {pendingInvites.map(invite => {
+                            const busy = inviteBusyId === invite.id
+                            return (
+                              <div key={invite.id} style={{ padding: '0.8rem 1rem', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                                <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.65rem', letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--teal)', marginBottom: '0.2rem' }}>
+                                  {INVITE_TYPE_LABELS[invite.reservationType]} Invite
+                                </p>
+                                <p style={{ fontFamily: 'var(--font-cinzel)', fontSize: '0.85rem', color: 'var(--offwhite)' }}>
+                                  {invite.reservationLabel}
+                                </p>
+                                <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.72rem', color: 'rgba(245,242,236,0.45)', marginTop: '0.15rem', marginBottom: '0.6rem' }}>
+                                  {invite.reservationDate} · by {invite.inviterName}
+                                </p>
+                                <div style={{ display: 'flex', gap: '0.4rem' }}>
+                                  <button onClick={() => handleInviteAccept(invite)} disabled={busy} style={{
+                                    flex: 1, backgroundColor: 'var(--teal)', color: '#fff', border: 'none',
+                                    padding: '0.4rem', borderRadius: '2px', fontSize: '0.68rem', letterSpacing: '0.04em',
+                                    textTransform: 'uppercase', fontFamily: 'var(--font-inter)',
+                                    cursor: busy ? 'not-allowed' : 'pointer', opacity: busy ? 0.6 : 1,
+                                  }}>Accept</button>
+                                  <button onClick={() => handleInviteDecline(invite)} disabled={busy} style={{
+                                    flex: 1, background: 'transparent', color: 'var(--red)', border: '1px solid rgba(228,51,41,0.3)',
+                                    padding: '0.4rem', borderRadius: '2px', fontSize: '0.68rem', letterSpacing: '0.04em',
+                                    textTransform: 'uppercase', fontFamily: 'var(--font-inter)',
+                                    cursor: busy ? 'not-allowed' : 'pointer', opacity: busy ? 0.6 : 1,
+                                  }}>Decline</button>
+                                </div>
+                              </div>
+                            )
+                          })}
+
+                          {/* Reservation status updates */}
+                          {statusNotifications.map(n => {
+                            const approved = n.type === 'reservation_approved'
+                            return (
+                              <div key={n.id} style={{ padding: '0.8rem 1rem', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                  <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.65rem', letterSpacing: '0.06em', textTransform: 'uppercase', color: approved ? '#2ECC71' : 'var(--red)', marginBottom: '0.2rem' }}>
+                                    {approved ? '✓ Approved' : '✕ Rejected'} · {RESERVATION_TYPE_LABELS[n.reservationType]}
+                                  </p>
+                                  <button onClick={() => handleDismissNotif(n)} title="Dismiss" style={{
+                                    background: 'transparent', border: 'none', color: 'rgba(245,242,236,0.3)',
+                                    fontSize: '0.8rem', cursor: 'pointer', padding: '0 0 0 0.5rem', lineHeight: 1,
+                                  }}>✕</button>
+                                </div>
+                                <p style={{ fontFamily: 'var(--font-cinzel)', fontSize: '0.85rem', color: 'var(--offwhite)' }}>
+                                  {n.label}
+                                </p>
+                                <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.72rem', color: 'rgba(245,242,236,0.45)', marginTop: '0.15rem' }}>
+                                  {n.dateLabel}
+                                </p>
+                                {!approved && n.rejectionReason && (
+                                  <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.72rem', color: 'rgba(228,51,41,0.7)', marginTop: '0.2rem' }}>
+                                    "{n.rejectionReason}"
+                                  </p>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </>
                       )}
                     </div>
                   </div>
@@ -473,7 +567,7 @@ export default function Navbar() {
           {!customerLoading && (
             customerUser ? (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
-                {notifications.length > 0 && (
+                {totalNotifCount > 0 && (
                   <Link href="/customer/profile" onClick={() => setOpen(false)} style={{
                     display: 'flex', alignItems: 'center', gap: '0.5rem',
                     backgroundColor: 'rgba(228,51,41,0.12)', border: '1px solid rgba(228,51,41,0.3)',
@@ -481,7 +575,7 @@ export default function Navbar() {
                     fontSize: '0.78rem', fontFamily: 'var(--font-inter)', textDecoration: 'none',
                   }}>
                     <FontAwesomeIcon icon={faBell} style={{ width: '12px' }} />
-                    {notifications.length} pending invite{notifications.length === 1 ? '' : 's'}
+                    {totalNotifCount} notification{totalNotifCount === 1 ? '' : 's'}
                   </Link>
                 )}
                 <p style={{
