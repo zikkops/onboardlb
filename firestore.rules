@@ -3,11 +3,12 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // Is the signed-in user a CMS/admin-panel staff member?
+    // Reads the isStaff boolean field from the unified users/{uid} doc.
     // (Role-specific gating — e.g. admin vs manager vs gamer — happens
     // client-side in app/lib/adminAuth.ts; this only checks "is staff at all".)
     function isStaff() {
       return request.auth != null &&
-        exists(/databases/$(database)/documents/adminUsers/$(request.auth.uid));
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('isStaff', false) == true;
     }
 
     // ---- Public storefront content, staff-managed ----
@@ -32,30 +33,14 @@ service cloud.firestore {
     // Firestore → create one `adminUsers/{uid}` document with
     // `role: "admin"`, using the uid from Authentication → Users after that
     // person signs in once. See ARCHITECTURE.md for more detail.
-    match /adminUsers/{uid} {
-      allow read: if request.auth != null;
-
-      // A `superadmin: true` account is provisioned by hand only — same
-      // bootstrap pattern as the very first admin above, for the same
-      // reason: rules have no way to let an account grant a privilege
-      // tier to itself or anyone else, so that flag is never settable
-      // through the app at all. This is what makes the protection below
-      // actually hold — if creation could set it, any staff member could
-      // just make a new "superadmin" account of their own.
-      allow create: if isStaff() && request.resource.data.superadmin != true;
-
-      // A superadmin's own doc can only ever be updated by the superadmin
-      // themselves — not even another admin can edit, demote, or strip
-      // their access. The superadmin field itself can never change via
-      // update either way (true->false or false->true), so there's no
-      // client-side path to grant or revoke that status once set.
-      allow update: if isStaff() &&
-        (resource.data.superadmin != true || request.auth.uid == uid) &&
-        request.resource.data.superadmin == resource.data.superadmin;
-
-      // No one — including the superadmin themselves — can delete a
-      // superadmin's own doc through the app.
-      allow delete: if isStaff() && resource.data.superadmin != true;
+    // Transient gate for staff-account creation. The admin writes an invitation
+    // here (isStaff() reads users, writes adminInvitations — different ✓),
+    // then the new staff member creates their own users/{uid} doc using their
+    // own token, with the invitation as proof of admin intent (reads
+    // adminInvitations, writes users — different ✓). Deleted immediately after.
+    match /adminInvitations/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if isStaff();
     }
 
     // ---- Customer accounts ----
@@ -90,16 +75,23 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if request.auth != null;
       allow create: if request.auth != null && (
-        isStaff() ||
+        // Regular customer self-signup: no staff tag, loyalty balances start at 0.
         (request.auth.uid == userId &&
           request.resource.data.xp == 0 &&
-          request.resource.data.obCoins == 0)
+          request.resource.data.obCoins == 0 &&
+          request.resource.data.get('isStaff', false) != true) ||
+        // Staff account creation — new user creates their own doc using their
+        // own token, gated by an admin-written invitation (different collection).
+        // This avoids calling isStaff() on the same collection being written.
+        (request.auth.uid == userId &&
+          exists(/databases/$(database)/documents/adminInvitations/$(userId)))
       );
       allow update: if request.auth != null && (
         isStaff() ||
         (request.auth.uid == userId &&
           request.resource.data.xp == resource.data.xp &&
-          request.resource.data.obCoins == resource.data.obCoins)
+          request.resource.data.obCoins == resource.data.obCoins &&
+          request.resource.data.get('isStaff', false) == resource.data.get('isStaff', false))
       );
       allow delete: if isStaff();
 

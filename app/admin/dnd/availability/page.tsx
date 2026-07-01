@@ -104,7 +104,7 @@ export default function DmAvailabilityPage() {
 
   useEffect(() => {
     if (!user) return
-    getDoc(doc(db, 'adminUsers', user.uid)).then(snap => {
+    getDoc(doc(db, 'users', user.uid)).then(snap => {
       const data = snap.data()
       const start = (data?.openingStart as string) || DEFAULT_OPENING_START
       const end = (data?.openingEnd as string) || DEFAULT_OPENING_END
@@ -131,7 +131,7 @@ export default function DmAvailabilityPage() {
     }
     setSaving(true)
     try {
-      await updateDoc(doc(db, 'adminUsers', user.uid), { openingStart, openingEnd })
+      await updateDoc(doc(db, 'users', user.uid), { openingStart, openingEnd })
       await logUpdate('Dungeon Master Availability', user.email ?? user.uid, original, { openingStart, openingEnd })
       setOriginal({ openingStart, openingEnd })
       setSaved(true)
@@ -145,7 +145,7 @@ export default function DmAvailabilityPage() {
     if (!user || daysOff.includes(newDayOff)) return
     setBusyDay(newDayOff)
     try {
-      await updateDoc(doc(db, 'adminUsers', user.uid), { daysOff: arrayUnion(newDayOff) })
+      await updateDoc(doc(db, 'users', user.uid), { daysOff: arrayUnion(newDayOff) })
       setDaysOff(prev => [...prev, newDayOff].sort())
       await logUpdate('Dungeon Master Availability', user.email ?? user.uid, { daysOff: [] }, { daysOff: [newDayOff] })
     } finally {
@@ -157,7 +157,7 @@ export default function DmAvailabilityPage() {
     if (!user) return
     setBusyDay(dateStr)
     try {
-      await updateDoc(doc(db, 'adminUsers', user.uid), { daysOff: arrayRemove(dateStr) })
+      await updateDoc(doc(db, 'users', user.uid), { daysOff: arrayRemove(dateStr) })
       setDaysOff(prev => prev.filter(d => d !== dateStr))
     } finally {
       setBusyDay(null)

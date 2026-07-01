@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { collection, getDocs, deleteDoc, doc } from 'firebase/firestore'
+import { collection, getDocs, updateDoc, doc, query, where, deleteField } from 'firebase/firestore'
 import { db } from '../../lib/firebase'
 import {
   useRequireRole, createAccount, updateAccountAccess,
@@ -53,7 +53,7 @@ export default function AdminUsersPage() {
   const [error, setError]       = useState('')
 
   async function loadAccounts() {
-    const snap = await getDocs(collection(db, 'adminUsers'))
+    const snap = await getDocs(query(collection(db, 'users'), where('isStaff', '==', true)))
     setAccounts(snap.docs.map(d => {
       const data = d.data()
       return {
@@ -121,8 +121,13 @@ export default function AdminUsersPage() {
   }
 
   async function handleRevoke(account: Account) {
-    if (!confirm(`Revoke admin panel access for ${account.email}? This does not delete their login — only their access here.`)) return
-    await deleteDoc(doc(db, 'adminUsers', account.id))
+    if (!confirm(`Revoke admin panel access for ${account.email}? This removes their staff tag — any customer data (XP, coins) stays intact.`)) return
+    await updateDoc(doc(db, 'users', account.id), {
+      isStaff: deleteField(),
+      role: deleteField(),
+      branchIds: deleteField(),
+      isDungeonMaster: deleteField(),
+    })
     await logActivity('delete', 'User Account', `${account.email} (${account.role})`)
     loadAccounts()
   }

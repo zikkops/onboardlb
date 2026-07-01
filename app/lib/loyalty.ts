@@ -132,8 +132,6 @@ export async function checkNumberAlreadyUsed(branchId: string, checkNumber: stri
   return !approvedSnap.empty || !ownPendingSnap.empty
 }
 
-// Staff submitters (event/dnd types) live in adminUsers, which has no
-// displayName field — email is the only readable identifier there.
 export async function resolveStaffEmails(uids: string[]): Promise<Map<string, string>> {
   const unique = Array.from(new Set(uids.filter(Boolean)))
   const map = new Map<string, string>()
@@ -141,7 +139,7 @@ export async function resolveStaffEmails(uids: string[]): Promise<Map<string, st
 
   for (let i = 0; i < unique.length; i += 30) {
     const chunk = unique.slice(i, i + 30)
-    const snap = await getDocs(query(collection(db, 'adminUsers'), where(documentId(), 'in', chunk)))
+    const snap = await getDocs(query(collection(db, 'users'), where(documentId(), 'in', chunk)))
     snap.docs.forEach(d => {
       const data = d.data() as { email?: string }
       map.set(d.id, data.email || 'Unknown')

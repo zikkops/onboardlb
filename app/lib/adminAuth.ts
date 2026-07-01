@@ -2,10 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { initializeApp, getApps, deleteApp } from 'firebase/app'
 import {
-  getAuth, onAuthStateChanged, signOut,
-  createUserWithEmailAndPassword, type User,
+  getAuth, onAuthStateChanged, signOut, type User,
 } from 'firebase/auth'
 import {
   doc, getDoc, setDoc, updateDoc, serverTimestamp,
@@ -111,42 +109,24 @@ export function useAdminUser() {
       }
       setAdminSessionCookie()
       setUser(u)
-      const ref  = doc(db, 'adminUsers', u.uid)
-      const snap = await getDoc(ref)
-      if (snap.exists()) {
-        const data = snap.data()
+      const snap = await getDoc(doc(db, 'users', u.uid))
+      const data = snap.exists() ? snap.data() : null
+      if (data?.isStaff === true) {
         setRole((data.role as Role) ?? null)
         setBranchIds(normalizeBranchIds(data))
         setIsDungeonMaster(data.isDungeonMaster === true)
         setSuperadmin(data.superadmin === true)
         setProvisioned(true)
       } else {
-        // No role record for this uid. The write below always fails under
-        // firestore.rules — isStaff() checks whether an adminUsers/{uid}
-        // doc already exists for the caller, which can never be true for
-        // the very doc this call is trying to create — so this falls
-        // through to "not provisioned" every time. The first admin account
-        // has to be created by hand in the Firebase Console instead.
-        let isFirstEverAdmin = false
-        try {
-          await setDoc(ref, { email: u.email, role: 'admin', createdAt: serverTimestamp() })
-          isFirstEverAdmin = true
-        } catch {
-          // Always lands here — see comment above.
-        }
-        if (isFirstEverAdmin) {
-          setRole('admin')
-          setBranchIds([])
-          setIsDungeonMaster(false)
-          setSuperadmin(false)
-          setProvisioned(true)
-        } else {
-          setRole(null)
-          setBranchIds([])
-          setIsDungeonMaster(false)
-          setSuperadmin(false)
-          setProvisioned(false)
-        }
+        // users/{uid} either doesn't exist or has no isStaff: true.
+        // First-time admins must be provisioned by hand in Firebase Console:
+        // create users/{uid} with isStaff: true, role: 'admin', superadmin: true,
+        // xp: 0, obCoins: 0. See ARCHITECTURE.md.
+        setRole(null)
+        setBranchIds([])
+        setIsDungeonMaster(false)
+        setSuperadmin(false)
+        setProvisioned(false)
       }
       setLoading(false)
     })
@@ -166,8 +146,8 @@ export function useIsStaff(): boolean {
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (u) => {
       if (!u) { setIsStaff(false); return }
-      const snap = await getDoc(doc(db, 'adminUsers', u.uid))
-      setIsStaff(snap.exists())
+      const snap = await getDoc(doc(db, 'users', u.uid))
+      setIsStaff(snap.exists() && snap.data()?.isStaff === true)
     })
     return unsub
   }, [])
@@ -209,24 +189,107 @@ export function useRequireRole(allowed: Role[]) {
   return { checking, role, branchIds, isDungeonMaster, superadmin, user }
 }
 
-// Creating a user with the client SDK signs that user in immediately, which would
-// kick the admin out of their own session. We spin up a second, throwaway Firebase
-// app instance just to create the account, so the admin's session is untouched.
+// Staff accounts live in the same `users` collection as customers — they just
+// have isStaff: true plus role/branchIds/isDungeonMaster fields. Creating one
+// has two steps:
+//   1. Admin writes a transient adminInvitations/{uid} doc (isStaff() reads
+//      users, writes adminInvitations — different collections, no conflict).
+//   2. The new user creates their own users/{uid} doc using their own idToken
+//      (the rule checks adminInvitations exists — different collection, no
+//      conflict; isStaff() is not called at all in the users create rule).
 export async function createAccount(email: string, password: string, role: Role, branchIds?: string[], isDungeonMaster?: boolean) {
-  const secondary = getApps().find(a => a.name === 'AccountCreator')
-    ?? initializeApp(firebaseConfig, 'AccountCreator')
-  const secondaryAuth = getAuth(secondary)
-  try {
-    const cred = await createUserWithEmailAndPassword(secondaryAuth, email, password)
-    await setDoc(doc(db, 'adminUsers', cred.user.uid), {
-      email, role, branchIds: branchIds ?? [], isDungeonMaster: isDungeonMaster ?? false, createdAt: serverTimestamp(),
-    })
-    await logActivity('create', 'User Account', `${email} (${role})`)
-    return cred.user.uid
-  } finally {
-    await signOut(secondaryAuth)
-    await deleteApp(secondary)
+  const adminUser = auth.currentUser
+  if (!adminUser) throw new Error('Session expired — please sign in again.')
+  const adminToken = await adminUser.getIdToken(true)
+
+  const apiKey    = process.env.NEXT_PUBLIC_FIREBASE_API_KEY
+  const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID
+
+  // Step 1: create the Firebase Auth account and capture the new user's token.
+  // This token is used in step 3 so the new user creates their own doc
+  // (request.auth.uid == userId in the rule). Never injected into the SDK —
+  // the admin's own session is untouched.
+  const res = await fetch(
+    `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${apiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    }
+  )
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    const code: string = body?.error?.message ?? 'UNKNOWN_ERROR'
+    if (code.startsWith('EMAIL_EXISTS'))        throw new Error('An account with this email already exists.')
+    if (code.startsWith('WEAK_PASSWORD'))       throw new Error('Password must be at least 6 characters.')
+    if (code === 'INVALID_EMAIL')               throw new Error('Invalid email address.')
+    if (code === 'OPERATION_NOT_ALLOWED')       throw new Error('Email/password sign-in is disabled in Firebase. Enable it in the console.')
+    if (code === 'TOO_MANY_ATTEMPTS_TRY_LATER') throw new Error('Too many attempts. Please try again in a few minutes.')
+    throw new Error(`Account creation failed: ${code}`)
   }
+  const { localId: uid, idToken: newUserToken } = await res.json()
+
+  // Step 2: admin writes the invitation (isStaff() reads users, writes
+  // adminInvitations — different collections, no same-collection conflict)
+  const inviteRes = await fetch(
+    `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/adminInvitations/${uid}`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+      body: JSON.stringify({ fields: {
+        createdBy: { stringValue: adminUser.uid },
+        createdAt: { timestampValue: new Date().toISOString() },
+      } }),
+    }
+  )
+  if (!inviteRes.ok) {
+    const body = await inviteRes.json().catch(() => ({}))
+    throw new Error(body?.error?.message ?? 'Failed to write invitation — check that your account still has staff access.')
+  }
+
+  // Step 3: new user creates their own users/{uid} doc using their own token.
+  // Rule: request.auth.uid == userId && exists(adminInvitations/${userId})
+  // — different collection read, no conflict. Retry with backoff in case
+  // the exists() check races against Firestore's replication of the invitation.
+  const userDocBody = JSON.stringify({ fields: {
+    email:           { stringValue: email },
+    isStaff:         { booleanValue: true },
+    role:            { stringValue: role },
+    branchIds:       { arrayValue: { values: (branchIds ?? []).map(b => ({ stringValue: b })) } },
+    isDungeonMaster: { booleanValue: isDungeonMaster ?? false },
+    xp:              { integerValue: '0' },
+    obCoins:         { integerValue: '0' },
+    createdAt:       { timestampValue: new Date().toISOString() },
+  } })
+  let docRes!: Response
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0) await new Promise(r => setTimeout(r, 600 * attempt))
+    docRes = await fetch(
+      `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${uid}`,
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${newUserToken}` },
+        body: userDocBody,
+      }
+    )
+    if (docRes.ok) break
+    const errBody = await docRes.clone().json().catch(() => ({}))
+    if (errBody?.error?.status !== 'PERMISSION_DENIED') break
+  }
+
+  // Step 4: clean up the invitation regardless of outcome
+  fetch(
+    `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/adminInvitations/${uid}`,
+    { method: 'DELETE', headers: { Authorization: `Bearer ${adminToken}` } }
+  )
+
+  if (!docRes.ok) {
+    const body = await docRes.json().catch(() => ({}))
+    throw new Error(body?.error?.message ?? 'Failed to save account record.')
+  }
+
+  await logActivity('create', 'User Account', `${email} (${role})`)
+  return uid as string
 }
 
 // Lets an admin change an existing account's role/branches without
@@ -238,6 +301,6 @@ export async function updateAccountAccess(
   before: { role: Role; branchIds: string[]; isDungeonMaster: boolean },
   after: { role: Role; branchIds: string[]; isDungeonMaster: boolean }
 ) {
-  await updateDoc(doc(db, 'adminUsers', uid), { role: after.role, branchIds: after.branchIds, isDungeonMaster: after.isDungeonMaster })
+  await updateDoc(doc(db, 'users', uid), { role: after.role, branchIds: after.branchIds, isDungeonMaster: after.isDungeonMaster })
   await logUpdate('User Account', email, before, after)
 }

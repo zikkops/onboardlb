@@ -123,8 +123,8 @@ export default function AdminDndPage() {
   // deduped since the two queries can't be combined into one `where`.
   async function loadDms() {
     const [byRole, byFlag] = await Promise.all([
-      getDocs(query(collection(db, 'adminUsers'), where('role', '==', 'dungeonmaster'))),
-      getDocs(query(collection(db, 'adminUsers'), where('isDungeonMaster', '==', true))),
+      getDocs(query(collection(db, 'users'), where('role', '==', 'dungeonmaster'))),
+      getDocs(query(collection(db, 'users'), where('isDungeonMaster', '==', true))),
     ])
     const map = new Map<string, DmAccount>()
     for (const d of [...byRole.docs, ...byFlag.docs]) {

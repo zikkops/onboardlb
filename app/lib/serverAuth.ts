@@ -49,7 +49,10 @@ async function getOwnDocField(idToken: string, path: string, field: string): Pro
 }
 
 export async function isStaffToken(idToken: string, uid: string): Promise<boolean> {
-  return ownDocExists(idToken, `adminUsers/${uid}`)
+  const res = await fetch(docUrl(`users/${uid}`), { headers: { Authorization: `Bearer ${idToken}` } })
+  if (!res.ok) return false
+  const data = await res.json()
+  return data.fields?.isStaff?.booleanValue === true
 }
 
 // Convenience for routes that are *only* ever meant for staff (no legitimate
