@@ -1,7 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import Link from 'next/link'
+import { signInAnonymously } from 'firebase/auth'
+import { auth } from '../../lib/firebase'
 import { useCustomerUser, PHONE_PATTERN } from '../../lib/customerAuth'
 import { useIsMobile } from '../../lib/useIsMobile'
 import { useAvailableStartTimes, createTableReservationRequest, branchOpeningHours } from '../../lib/tableReservations'
@@ -75,13 +76,20 @@ export default function TableReservationModal({ branch, tableIds, tableNumbers, 
   const canSubmit = !!selectedTime && !overCapacity && partySize >= 1 && contactName.trim() !== '' && phoneValid
 
   async function handleConfirm() {
-    if (!user || !selectedTime || !canSubmit) return
+    if (!selectedTime || !canSubmit) return
     setSubmitting(true)
     setError('')
     try {
+      let uid = user?.uid
+      let userName = user?.displayName || user?.email || contactName.trim()
+      if (!uid) {
+        const cred = await signInAnonymously(auth)
+        uid = cred.user.uid
+        userName = contactName.trim()
+      }
       await createTableReservationRequest({
-        userId: user.uid,
-        userName: user.displayName || user.email || 'Customer',
+        userId: uid,
+        userName,
         branch, tableIds, tableNumbers,
         startAt: selectedTime,
         partySize,
@@ -153,7 +161,7 @@ export default function TableReservationModal({ branch, tableIds, tableNumbers, 
                 Request submitted!
               </p>
               <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.85rem', color: 'rgba(245,242,236,0.55)', lineHeight: 1.7, marginBottom: '1.5rem' }}>
-                Your table is held for now — staff will confirm it shortly. You can check the status anytime from your profile.
+                Your table is held — staff will confirm shortly and reach you on the number you provided.
               </p>
               <button onClick={onClose} style={{
                 backgroundColor: 'var(--teal)', color: '#fff', border: 'none',
@@ -161,18 +169,7 @@ export default function TableReservationModal({ branch, tableIds, tableNumbers, 
                 letterSpacing: '0.08em', textTransform: 'uppercase', cursor: 'pointer', fontFamily: 'var(--font-inter)',
               }}>Done</button>
             </div>
-          ) : userLoading ? null : !user ? (
-            <div style={{ textAlign: 'center', padding: '1.5rem 0' }}>
-              <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.85rem', color: 'rgba(245,242,236,0.55)', marginBottom: '1.25rem' }}>
-                Sign in to reserve a table.
-              </p>
-              <Link href="/customer/login" style={{
-                display: 'inline-block', backgroundColor: 'var(--teal)', color: '#fff',
-                padding: '0.8rem 2rem', borderRadius: '2px', fontSize: '0.78rem',
-                letterSpacing: '0.08em', textTransform: 'uppercase', textDecoration: 'none', fontFamily: 'var(--font-inter)',
-              }}>Sign In</Link>
-            </div>
-          ) : (
+          ) : userLoading ? null : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
               <button type="button" onClick={onBack} style={{
                 alignSelf: 'flex-start', background: 'transparent', border: 'none',

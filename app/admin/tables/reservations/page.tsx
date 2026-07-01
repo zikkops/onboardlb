@@ -222,17 +222,23 @@ export default function TableReservationsPage() {
                   <div style={fieldRowStyle}>
                     <span style={fieldLabelStyle}>Booked by</span>
                     <span style={{ ...fieldValueStyle, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <span style={{
-                        width: '20px', height: '20px', borderRadius: '50%', overflow: 'hidden',
-                        backgroundColor: '#1a1a1a', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                      }}>
-                        {p?.avatarUrl ? (
-                          <img src={p.avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                        ) : (
-                          <span style={{ fontSize: '0.6rem', color: 'rgba(245,242,236,0.5)' }}>{(p?.displayName ?? '?').charAt(0).toUpperCase()}</span>
-                        )}
-                      </span>
-                      {p?.displayName ?? '…'}
+                      {p ? (
+                        <>
+                          <span style={{
+                            width: '20px', height: '20px', borderRadius: '50%', overflow: 'hidden',
+                            backgroundColor: '#1a1a1a', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                          }}>
+                            {p.avatarUrl ? (
+                              <img src={p.avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            ) : (
+                              <span style={{ fontSize: '0.6rem', color: 'rgba(245,242,236,0.5)' }}>{p.displayName.charAt(0).toUpperCase()}</span>
+                            )}
+                          </span>
+                          {p.displayName}
+                        </>
+                      ) : (
+                        <span style={{ color: 'rgba(245,242,236,0.35)' }}>{r.contactName} (guest)</span>
+                      )}
                     </span>
                   </div>
 
