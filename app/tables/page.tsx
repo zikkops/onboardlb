@@ -71,9 +71,13 @@ export default function TablesPage() {
             fontSize: '0.7rem', letterSpacing: '0.3em', textTransform: 'uppercase',
             color: 'var(--teal)', marginBottom: '1rem', fontFamily: 'var(--font-inter)',
           }}>Reserve a Table</p>
-          <h1 style={{ fontFamily: 'var(--font-cinzel)', fontSize: isMobile ? '1.9rem' : '2.6rem', color: 'var(--offwhite)', marginBottom: '1.5rem' }}>
+          <h1 style={{ fontFamily: 'var(--font-cinzel)', fontSize: isMobile ? '1.9rem' : '2.6rem', color: 'var(--offwhite)', marginBottom: '0.9rem' }}>
             Pick a Branch &amp; a Table
           </h1>
+          <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.82rem', color: 'rgba(245,242,236,0.4)', marginBottom: '1.5rem', lineHeight: 1.6 }}>
+            Party too big for one table?{' '}
+            <span style={{ color: 'rgba(245,242,236,0.6)' }}>Select a table, then tap any highlighted neighbour to link them together.</span>
+          </p>
 
           <div style={{ display: 'flex', gap: '0.6rem', marginBottom: '2rem', flexWrap: 'wrap' }}>
             {BRANCHES.map(b => (

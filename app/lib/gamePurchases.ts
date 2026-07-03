@@ -7,7 +7,7 @@ import {
 import { db } from './firebase'
 import { logActivity } from './activityLog'
 import { uploadImage } from './media'
-import { BRANCHES } from './branches'
+import { BRANCHES, normalizeStock } from './branches'
 
 export interface PurchaseItem {
   gameId: string
@@ -356,6 +356,38 @@ export async function refundOrder(
   })
 
   await logActivity('update', 'Game Sale Refund', `Order ${orderId} refunded by ${processedByEmail}`)
+}
+
+// Atomically moves copies of one or more games from one branch to another in a
+// single Firestore transaction — all reads happen first, all stock is validated,
+// then all writes are applied together so a failure on any one game rolls back
+// everything. Throws 'insufficient-stock:<gameName>' if any game doesn't have
+// enough stock at fromBranch.
+export async function transferGameStock(
+  items: { gameId: string; gameName: string; quantity: number }[],
+  fromBranch: string,
+  toBranch: string,
+): Promise<void> {
+  const refs = items.map(item => doc(db, 'games', item.gameId))
+  await runTransaction(db, async tx => {
+    const snaps = await Promise.all(refs.map(ref => tx.get(ref)))
+    for (let i = 0; i < items.length; i++) {
+      if (!snaps[i].exists()) throw new Error(`game-not-found:${items[i].gameId}`)
+      const stock = normalizeStock(snaps[i].data()!.stock)
+      if ((stock[fromBranch] ?? 0) < items[i].quantity)
+        throw new Error(`insufficient-stock:${items[i].gameName}`)
+    }
+    for (let i = 0; i < items.length; i++) {
+      const stock = normalizeStock(snaps[i].data()!.stock)
+      stock[fromBranch] = (stock[fromBranch] ?? 0) - items[i].quantity
+      stock[toBranch]   = (stock[toBranch]   ?? 0) + items[i].quantity
+      tx.update(refs[i], { stock, updatedAt: serverTimestamp() })
+    }
+  })
+  await logActivity(
+    'update', 'Stock Transfer',
+    `${fromBranch} → ${toBranch}: ${items.map(i => `${i.gameName} ×${i.quantity}`).join(', ')}`,
+  )
 }
 
 export async function listPurchaseOrders(max = 200): Promise<GamePurchaseOrder[]> {

@@ -335,11 +335,13 @@ service cloud.firestore {
       // app/lib/dndGroups.ts, which update this in the same batch as the
       // matching dndGroups doc.
       allow update: if isStaff();
-      // A customer may leave the queue themselves while still waiting;
-      // once grouped, only staff remove them (so the group's member list
-      // stays in sync — a customer can't update that doc directly).
+      // A customer may delete their own entry at any status — solo-waiting
+      // (cancel the queue), or grouped (leave the group). The companion
+      // dndGroups update (removing them from memberUids/members) is handled
+      // by the dndGroups self-removal rule below; both writes go in one
+      // batch so the two docs can't drift out of sync.
       allow delete: if isStaff() ||
-        (request.auth != null && request.auth.uid == resource.data.userId && resource.data.status == 'waiting');
+        (request.auth != null && request.auth.uid == resource.data.userId);
     }
     // memberUids is a plain string array (not the richer {uid,name}
     // `members` list) specifically so rules can check membership directly
@@ -362,10 +364,20 @@ service cloud.firestore {
           request.resource.data.status == 'forming' &&
           request.resource.data.memberUids == [request.auth.uid]);
       allow update: if isStaff() ||
+        // Group leader updating their own forming party (e.g. maybeFinalizeParty
+        // flipping status to 'confirmed').
         (request.auth != null &&
           request.auth.uid == resource.data.formedBy &&
           request.resource.data.formedBy == resource.data.formedBy &&
-          request.resource.data.campaignId == resource.data.campaignId);
+          request.resource.data.campaignId == resource.data.campaignId) ||
+        // Any member removing only themselves from memberUids/members — the
+        // companion lfpEntries delete goes in the same batch (leaveGroupAsMember
+        // in app/lib/dndGroups.ts). Only memberUids, members, and updatedAt
+        // may change; the caller must go from present to absent in memberUids.
+        (request.auth != null &&
+          resource.data.memberUids.hasAny([request.auth.uid]) &&
+          !request.resource.data.memberUids.hasAny([request.auth.uid]) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['memberUids', 'members', 'updatedAt']));
       allow delete: if isStaff() ||
         (request.auth != null && request.auth.uid == resource.data.formedBy && resource.data.status == 'forming');
     }

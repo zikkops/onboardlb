@@ -44,6 +44,8 @@ export default function Navbar() {
   const [authHovered, setAuthHovered] = useState(false)
   const [profileMenuOpen, setProfileMenuOpen] = useState(false)
   const [hoveredMenuItem, setHoveredMenuItem] = useState<'profile' | 'logout' | null>(null)
+  const [contactMenuOpen, setContactMenuOpen] = useState(false)
+  const [hoveredContactItem, setHoveredContactItem] = useState<'reserve' | 'contact' | null>(null)
   const pathname                      = usePathname()
   const router                        = useRouter()
   const { user: customerUser, loading: customerLoading } = useCustomerUser()
@@ -454,40 +456,68 @@ export default function Navbar() {
                 )
               )}
 
-              <Link href={isStaff ? '/admin' : '/tables'}
-                onMouseEnter={() => setBtnHovered(true)}
-                onMouseLeave={() => setBtnHovered(false)}
-                style={{
-                  position: 'relative',
-                  overflow: 'hidden',
-                  backgroundColor: btnHovered ? 'rgba(0,160,152,0.15)' : 'var(--teal)',
-                  color: '#fff',
-                  padding: '0.6rem 1.5rem',
-                  borderRadius: '2px',
-                  fontSize: '0.75rem',
-                  letterSpacing: '0.12em',
-                  textTransform: 'uppercase',
-                  textDecoration: 'none',
-                  fontFamily: 'var(--font-inter)',
-                  border: '1px solid var(--teal)',
-                  backdropFilter: btnHovered ? 'blur(10px)' : 'none',
-                  transition: 'all 0.3s ease',
-                  display: 'inline-block',
-                  flexShrink: 0,
-                }}>
-                <span style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: btnHovered ? '120%' : '-60%',
-                  width: '40%',
-                  height: '100%',
-                  background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent)',
-                  transform: 'skewX(-20deg)',
-                  transition: 'left 0.5s ease',
-                  pointerEvents: 'none',
-                }} />
-                {isStaff ? 'CMS' : 'Reserve a Table'}
-              </Link>
+              {isStaff ? (
+                <Link href="/admin"
+                  onMouseEnter={() => setBtnHovered(true)}
+                  onMouseLeave={() => setBtnHovered(false)}
+                  style={{
+                    position: 'relative', overflow: 'hidden',
+                    backgroundColor: btnHovered ? 'rgba(0,160,152,0.15)' : 'var(--teal)',
+                    color: '#fff', padding: '0.6rem 1.5rem', borderRadius: '2px',
+                    fontSize: '0.75rem', letterSpacing: '0.12em', textTransform: 'uppercase',
+                    textDecoration: 'none', fontFamily: 'var(--font-inter)',
+                    border: '1px solid var(--teal)', backdropFilter: btnHovered ? 'blur(10px)' : 'none',
+                    transition: 'all 0.3s ease', display: 'inline-block', flexShrink: 0,
+                  }}>
+                  CMS
+                </Link>
+              ) : (
+                <div
+                  style={{ position: 'relative', flexShrink: 0 }}
+                  onMouseEnter={() => setContactMenuOpen(true)}
+                  onMouseLeave={() => { setContactMenuOpen(false); setHoveredContactItem(null) }}
+                >
+                  <button style={{
+                    display: 'flex', alignItems: 'center', gap: '0.4rem',
+                    backgroundColor: 'var(--teal)', color: '#fff',
+                    padding: '0.6rem 1.5rem', borderRadius: '2px',
+                    fontSize: '0.75rem', letterSpacing: '0.12em', textTransform: 'uppercase',
+                    fontFamily: 'var(--font-inter)', border: '1px solid var(--teal)', cursor: 'pointer',
+                  }}>
+                    Contact Us
+                    <FontAwesomeIcon icon={faChevronDown} style={{
+                      width: '9px',
+                      transform: contactMenuOpen ? 'rotate(180deg)' : 'none',
+                      transition: 'transform 0.2s ease',
+                    }} />
+                  </button>
+
+                  <div style={{
+                    position: 'absolute', top: '100%', right: 0, paddingTop: '0.5rem', zIndex: 60,
+                    opacity: contactMenuOpen ? 1 : 0, visibility: contactMenuOpen ? 'visible' : 'hidden',
+                    transition: 'opacity 0.18s ease',
+                  }}>
+                    <div style={{
+                      minWidth: '180px', backgroundColor: 'rgba(8,8,8,0.98)',
+                      border: '1px solid rgba(255,255,255,0.08)', borderRadius: '2px',
+                      overflow: 'hidden', boxShadow: '0 12px 30px rgba(0,0,0,0.5)',
+                    }}>
+                      <Link href="/tables"
+                        onMouseEnter={() => setHoveredContactItem('reserve')}
+                        onMouseLeave={() => setHoveredContactItem(null)}
+                        style={{ ...menuItemStyle(hoveredContactItem === 'reserve'), borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                        Reserve a Table
+                      </Link>
+                      <Link href="/#branches-section"
+                        onMouseEnter={() => setHoveredContactItem('contact')}
+                        onMouseLeave={() => setHoveredContactItem(null)}
+                        style={menuItemStyle(hoveredContactItem === 'contact')}>
+                        Contact Us
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </>
         )}
@@ -640,22 +670,26 @@ export default function Navbar() {
             )
           )}
 
-          <Link href={isStaff ? '/admin' : '/tables'}
-            onClick={() => setOpen(false)}
-            style={{
-              marginTop: '1rem',
-              backgroundColor: 'var(--teal)',
-              color: '#fff',
-              padding: '0.9rem 3rem',
-              borderRadius: '2px',
-              fontSize: '0.85rem',
-              letterSpacing: '0.15em',
-              textTransform: 'uppercase',
-              textDecoration: 'none',
-              fontFamily: 'var(--font-inter)',
-            }}>
-            {isStaff ? 'CMS' : 'Reserve a Table'}
-          </Link>
+          {isStaff ? (
+            <Link href="/admin" onClick={() => setOpen(false)} style={{
+              marginTop: '1rem', backgroundColor: 'var(--teal)', color: '#fff',
+              padding: '0.9rem 3rem', borderRadius: '2px', fontSize: '0.85rem',
+              letterSpacing: '0.15em', textTransform: 'uppercase', textDecoration: 'none', fontFamily: 'var(--font-inter)',
+            }}>CMS</Link>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.7rem', alignItems: 'center', marginTop: '1rem' }}>
+              <Link href="/tables" onClick={() => setOpen(false)} style={{
+                backgroundColor: 'var(--teal)', color: '#fff',
+                padding: '0.9rem 3rem', borderRadius: '2px', fontSize: '0.85rem',
+                letterSpacing: '0.15em', textTransform: 'uppercase', textDecoration: 'none', fontFamily: 'var(--font-inter)',
+              }}>Reserve a Table</Link>
+              <Link href="/#branches-section" onClick={() => setOpen(false)} style={{
+                background: 'transparent', border: '1px solid rgba(0,160,152,0.4)', color: 'var(--teal)',
+                padding: '0.9rem 3rem', borderRadius: '2px', fontSize: '0.85rem',
+                letterSpacing: '0.15em', textTransform: 'uppercase', textDecoration: 'none', fontFamily: 'var(--font-inter)',
+              }}>Contact Us</Link>
+            </div>
+          )}
         </div>
       )}
     </>

@@ -8,7 +8,8 @@ import Footer from '../components/layout/Footer'
 import Skeleton from '../components/Skeleton'
 import ReservationModal from '../components/dnd/ReservationModal'
 import { useCustomerUser } from '../lib/customerAuth'
-import { useUserLfpEntries, joinLfp, leaveLfp, type LfpEntry } from '../lib/dndGroups'
+import { useUserLfpEntries, joinLfp, leaveLfp, startLfpParty, type LfpEntry } from '../lib/dndGroups'
+import { fetchCustomerDirectory, type DirectoryUser } from '../lib/friends'
 import Link from 'next/link'
 
 interface Campaign {
@@ -129,6 +130,12 @@ export default function DndPage() {
   // only matters while choosing, before an entry exists.
   const [lfpLocation, setLfpLocation] = useState<Record<string, string>>({})
 
+  // Inline "alone vs. with friends" panel state (up to 2 friends)
+  interface LfpPanel { campaignId: string; withFriend: boolean; friendQuery: string; selectedFriends: DirectoryUser[] }
+  const [lfpPanel, setLfpPanel]           = useState<LfpPanel | null>(null)
+  const [lfpDirectory, setLfpDirectory]   = useState<DirectoryUser[]>([])
+  const [lfpDirLoading, setLfpDirLoading] = useState(false)
+
   useEffect(() => {
     async function load() {
       const snap = await getDocs(collection(db, 'dndCampaigns'))
@@ -157,6 +164,35 @@ export default function DndPage() {
         userId: user.uid,
         userName: user.displayName || user.email || 'Customer',
       })
+    } finally {
+      setLfpBusyId(null)
+    }
+  }
+
+  async function ensureDirectoryLoaded() {
+    if (!user || lfpDirLoading || lfpDirectory.length > 0) return
+    setLfpDirLoading(true)
+    try {
+      const dir = await fetchCustomerDirectory(user.uid)
+      setLfpDirectory(dir)
+    } finally {
+      setLfpDirLoading(false)
+    }
+  }
+
+  async function handleStartParty(campaign: Campaign, location: string, friends: DirectoryUser[]) {
+    if (!user) return
+    setLfpBusyId(campaign.id)
+    try {
+      await startLfpParty({
+        campaignId: campaign.id,
+        campaignTitle: campaign.title,
+        location,
+        leaderUid: user.uid,
+        leaderName: user.displayName || user.email || 'Customer',
+        friends: friends.map(f => ({ uid: f.uid, name: f.displayName })),
+      })
+      setLfpPanel(null)
     } finally {
       setLfpBusyId(null)
     }
@@ -567,6 +603,13 @@ export default function DndPage() {
                         const busy = lfpBusyId === campaign.id
                         const locations = campaign.locations ?? []
                         const chosenLocation = lfpLocation[campaign.id] ?? locations[0] ?? ''
+                        const panel = lfpPanel?.campaignId === campaign.id ? lfpPanel : null
+                        const selectedFriends = panel?.selectedFriends ?? []
+                        const selectedIds = new Set(selectedFriends.map(f => f.uid))
+                        const filteredDir = (panel?.friendQuery
+                          ? lfpDirectory.filter(u => u.displayName.toLowerCase().includes(panel.friendQuery.toLowerCase()) || u.email.toLowerCase().includes(panel.friendQuery.toLowerCase()))
+                          : lfpDirectory.slice(0, 6)
+                        ).filter(u => !selectedIds.has(u.uid))
                         return (
                           <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
                             {!user ? (
@@ -575,37 +618,186 @@ export default function DndPage() {
                                 color: campaign.color, textDecoration: 'none',
                               }}>Sign in to look for players →</Link>
                             ) : locations.length === 0 ? null : !entry ? (
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+                              <>
+                                {/* Location picker (always visible when multi-branch) */}
                                 {locations.length > 1 && (
-                                  <select
-                                    value={chosenLocation}
-                                    onChange={e => setLfpLocation(prev => ({ ...prev, [campaign.id]: e.target.value }))}
-                                    style={{
-                                      backgroundColor: '#1a1a1a', border: '1px solid rgba(255,255,255,0.15)',
-                                      color: 'var(--offwhite)', padding: '0.5rem 0.7rem', borderRadius: '2px',
-                                      fontSize: '0.75rem', fontFamily: 'var(--font-inter)',
-                                    }}
-                                  >
-                                    {locations.map(loc => <option key={loc} value={loc}>{loc}</option>)}
-                                  </select>
+                                  <div style={{ marginBottom: '0.7rem' }}>
+                                    <select
+                                      value={chosenLocation}
+                                      onChange={e => setLfpLocation(prev => ({ ...prev, [campaign.id]: e.target.value }))}
+                                      style={{
+                                        backgroundColor: '#1a1a1a', border: '1px solid rgba(255,255,255,0.15)',
+                                        color: 'var(--offwhite)', padding: '0.5rem 0.7rem', borderRadius: '2px',
+                                        fontSize: '0.75rem', fontFamily: 'var(--font-inter)',
+                                      }}
+                                    >
+                                      {locations.map(loc => <option key={loc} value={loc}>{loc}</option>)}
+                                    </select>
+                                  </div>
                                 )}
-                                <button
-                                  onClick={() => handleJoinLfp(campaign, chosenLocation)}
-                                  disabled={busy}
-                                  style={{
-                                    background: 'transparent',
-                                    border: `1px solid ${campaign.color}50`,
-                                    color: campaign.color,
-                                    padding: '0.5rem 1rem',
-                                    borderRadius: '2px',
-                                    fontSize: '0.75rem',
-                                    letterSpacing: '0.05em',
-                                    cursor: busy ? 'not-allowed' : 'pointer',
-                                    opacity: busy ? 0.6 : 1,
-                                    fontFamily: 'var(--font-inter)',
-                                  }}
-                                >{busy ? 'Joining…' : `🔍 Looking for Players${locations.length > 1 ? '' : ` at ${chosenLocation}`}`}</button>
-                              </div>
+
+                                {!panel ? (
+                                  /* Step 1 — entry button */
+                                  <button
+                                    onClick={() => setLfpPanel({ campaignId: campaign.id, withFriend: false, friendQuery: '', selectedFriends: [] })}
+                                    disabled={busy}
+                                    style={{
+                                      background: 'transparent',
+                                      border: `1px solid ${campaign.color}50`,
+                                      color: campaign.color,
+                                      padding: '0.5rem 1rem',
+                                      borderRadius: '2px',
+                                      fontSize: '0.75rem',
+                                      letterSpacing: '0.05em',
+                                      cursor: busy ? 'not-allowed' : 'pointer',
+                                      opacity: busy ? 0.6 : 1,
+                                      fontFamily: 'var(--font-inter)',
+                                    }}
+                                  >{busy ? 'Joining…' : `🔍 Looking for Players${locations.length > 1 ? '' : ` at ${chosenLocation}`}`}</button>
+                                ) : !panel.withFriend ? (
+                                  /* Step 2 — alone or with a friend */
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                                    <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.72rem', color: 'rgba(245,242,236,0.35)', marginBottom: '0.2rem' }}>
+                                      How do you want to join?
+                                    </p>
+                                    <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                                      <button
+                                        onClick={() => { handleJoinLfp(campaign, chosenLocation); setLfpPanel(null) }}
+                                        disabled={busy}
+                                        style={{
+                                          background: 'transparent', border: `1px solid ${campaign.color}50`,
+                                          color: campaign.color, padding: '0.5rem 1rem', borderRadius: '2px',
+                                          fontSize: '0.75rem', cursor: busy ? 'not-allowed' : 'pointer',
+                                          opacity: busy ? 0.6 : 1, fontFamily: 'var(--font-inter)',
+                                        }}
+                                      >{busy ? 'Joining…' : 'Join alone'}</button>
+                                      <button
+                                        onClick={() => {
+                                          setLfpPanel(p => p ? { ...p, withFriend: true } : null)
+                                          ensureDirectoryLoaded()
+                                        }}
+                                        style={{
+                                          background: `${campaign.color}15`, border: `1px solid ${campaign.color}60`,
+                                          color: campaign.color, padding: '0.5rem 1rem', borderRadius: '2px',
+                                          fontSize: '0.75rem', cursor: 'pointer', fontFamily: 'var(--font-inter)',
+                                        }}
+                                      >👥 Bring a friend</button>
+                                      <button
+                                        onClick={() => setLfpPanel(null)}
+                                        style={{
+                                          background: 'transparent', border: 'none',
+                                          color: 'rgba(245,242,236,0.3)', fontSize: '0.72rem',
+                                          cursor: 'pointer', fontFamily: 'var(--font-inter)', padding: '0.5rem',
+                                        }}
+                                      >Cancel</button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  /* Step 3 — friend picker (up to 2) */
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.7rem' }}>
+                                    <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.72rem', color: 'rgba(245,242,236,0.35)' }}>
+                                      {selectedFriends.length === 0
+                                        ? 'Add up to 2 friends'
+                                        : selectedFriends.length === 1
+                                          ? 'Add one more friend, or confirm'
+                                          : 'Party full — confirm when ready'}
+                                    </p>
+
+                                    {/* Selected friend chips */}
+                                    {selectedFriends.length > 0 && (
+                                      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                                        {selectedFriends.map(f => (
+                                          <div key={f.uid} style={{
+                                            display: 'flex', alignItems: 'center', gap: '0.4rem',
+                                            backgroundColor: `${campaign.color}15`, border: `1px solid ${campaign.color}40`,
+                                            borderRadius: '2px', padding: '0.35rem 0.7rem',
+                                          }}>
+                                            <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.78rem', color: 'var(--offwhite)' }}>
+                                              👤 {f.displayName}
+                                            </span>
+                                            <button
+                                              onClick={() => setLfpPanel(p => p ? { ...p, selectedFriends: p.selectedFriends.filter(x => x.uid !== f.uid) } : null)}
+                                              style={{ background: 'none', border: 'none', color: 'rgba(245,242,236,0.4)', cursor: 'pointer', fontSize: '0.8rem', padding: '0 0 0 0.2rem', lineHeight: 1 }}
+                                            >✕</button>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+
+                                    {/* Search input + results — hidden once 2 friends selected */}
+                                    {selectedFriends.length < 2 && (
+                                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                                        <input
+                                          autoFocus={selectedFriends.length === 0}
+                                          type="text"
+                                          placeholder="Search by name…"
+                                          value={panel.friendQuery}
+                                          onChange={e => setLfpPanel(p => p ? { ...p, friendQuery: e.target.value } : null)}
+                                          style={{
+                                            backgroundColor: '#1a1a1a', border: '1px solid rgba(255,255,255,0.15)',
+                                            color: 'var(--offwhite)', padding: '0.55rem 0.8rem', borderRadius: '2px',
+                                            fontSize: '0.78rem', fontFamily: 'var(--font-inter)', outline: 'none',
+                                            width: '220px',
+                                          }}
+                                        />
+                                        {lfpDirLoading ? (
+                                          <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.72rem', color: 'rgba(245,242,236,0.3)' }}>Loading…</p>
+                                        ) : filteredDir.length === 0 ? (
+                                          <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.72rem', color: 'rgba(245,242,236,0.3)' }}>No users found.</p>
+                                        ) : (
+                                          <div style={{
+                                            border: '1px solid rgba(255,255,255,0.08)', borderRadius: '2px',
+                                            backgroundColor: '#111', maxHeight: '160px', overflowY: 'auto',
+                                          }}>
+                                            {filteredDir.map(u => (
+                                              <button
+                                                key={u.uid}
+                                                onClick={() => setLfpPanel(p => p ? { ...p, selectedFriends: [...p.selectedFriends, u], friendQuery: '' } : null)}
+                                                style={{
+                                                  display: 'block', width: '100%', textAlign: 'left',
+                                                  background: 'transparent', border: 'none', borderBottom: '1px solid rgba(255,255,255,0.05)',
+                                                  color: 'var(--offwhite)', padding: '0.55rem 0.8rem',
+                                                  fontSize: '0.78rem', fontFamily: 'var(--font-inter)', cursor: 'pointer',
+                                                }}
+                                                onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)')}
+                                                onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
+                                              >
+                                                {u.displayName}
+                                                {u.email && <span style={{ color: 'rgba(245,242,236,0.3)', fontSize: '0.7rem', marginLeft: '0.5rem' }}>{u.email}</span>}
+                                              </button>
+                                            ))}
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+
+                                    {/* Confirm / Cancel row */}
+                                    <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center' }}>
+                                      {selectedFriends.length > 0 && (
+                                        <button
+                                          onClick={() => handleStartParty(campaign, chosenLocation, selectedFriends)}
+                                          disabled={busy}
+                                          style={{
+                                            backgroundColor: campaign.color, color: '#fff', border: 'none',
+                                            padding: '0.5rem 1.2rem', borderRadius: '2px',
+                                            fontSize: '0.75rem', letterSpacing: '0.05em',
+                                            cursor: busy ? 'not-allowed' : 'pointer', opacity: busy ? 0.6 : 1,
+                                            fontFamily: 'var(--font-inter)',
+                                          }}
+                                        >{busy ? 'Joining…' : 'Confirm'}</button>
+                                      )}
+                                      <button
+                                        onClick={() => setLfpPanel(null)}
+                                        style={{
+                                          background: 'transparent', border: 'none',
+                                          color: 'rgba(245,242,236,0.3)', fontSize: '0.72rem',
+                                          cursor: 'pointer', fontFamily: 'var(--font-inter)', padding: '0.5rem 0',
+                                        }}
+                                      >Cancel</button>
+                                    </div>
+                                  </div>
+                                )}
+                              </>
                             ) : entry.status === 'waiting' ? (
                               <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem', flexWrap: 'wrap' }}>
                                 <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.75rem', color: 'rgba(245,242,236,0.5)' }}>

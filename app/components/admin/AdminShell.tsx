@@ -67,8 +67,14 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
     router.replace('/admin/login')
   }
 
+  const allNavHrefs = ADMIN_NAV.flatMap(s => s.items.map(i => i.href))
+
   function isActive(href: string) {
-    return pathname === href || pathname.startsWith(href + '/')
+    if (pathname === href) return true
+    // Prefix-match only when no nav item exactly matches the current path,
+    // so /admin/events doesn't steal the highlight from /admin/events/reservations.
+    const hasExactMatch = allNavHrefs.includes(pathname)
+    return !hasExactMatch && pathname.startsWith(href + '/')
   }
 
   // Resolve once role/loading is known — before then, render no nav items

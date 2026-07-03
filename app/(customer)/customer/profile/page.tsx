@@ -21,7 +21,7 @@ import Skeleton from '../../../components/Skeleton'
 import { getLevelFromXP, getTierFromLevel, TIER_COLORS } from '../../../lib/levelConfig'
 import { useLevelPerks } from '../../../lib/levelPerks'
 import {
-  useUserLfpEntries, useUserGroups, useMyFormingParties, startLfpParty, joinLfp, leaveLfp, maybeFinalizeParty, type DndGroup,
+  useUserLfpEntries, useUserGroups, useMyFormingParties, startLfpParty, joinLfp, leaveLfp, leaveGroupAsMember, maybeFinalizeParty, type DndGroup,
 } from '../../../lib/dndGroups'
 import { useFriends, fetchCustomerDirectory, type DirectoryUser } from '../../../lib/friends'
 import { resolveBranchName } from '../../../lib/branches'
@@ -376,6 +376,7 @@ export default function CustomerProfilePage() {
   const { invites } = usePendingInvites(isOwnProfile ? profileUid : null)
   const [busyInviteId, setBusyInviteId] = useState<string | null>(null)
   const [cancellingLfpId, setCancellingLfpId] = useState<string | null>(null)
+  const [leavingGroupId, setLeavingGroupId]   = useState<string | null>(null)
   const [cancellingId, setCancellingId] = useState<string | null>(null)
   const [hoveredCancelId, setHoveredCancelId] = useState<string | null>(null)
   const [hoveredAcceptId, setHoveredAcceptId] = useState<string | null>(null)
@@ -1011,7 +1012,7 @@ export default function CustomerProfilePage() {
                         <p style={{ fontFamily: 'var(--font-cinzel)', fontSize: '0.9rem', color: 'var(--offwhite)', marginBottom: '0.3rem' }}>
                           {entry.campaignTitle}{entry.location ? ` — ${entry.location}` : ''}
                         </p>
-                        {entry.status === 'waiting' && (
+                        {entry.status === 'waiting' ? (
                           <button
                             disabled={cancellingLfpId === entry.id}
                             onClick={async () => {
@@ -1026,7 +1027,24 @@ export default function CustomerProfilePage() {
                           >
                             {cancellingLfpId === entry.id ? 'Cancelling…' : 'Cancel'}
                           </button>
-                        )}
+                        ) : entry.status === 'grouped' && (group || forming) ? (
+                          <button
+                            disabled={leavingGroupId === entry.id}
+                            onClick={async () => {
+                              setLeavingGroupId(entry.id)
+                              try {
+                                await leaveGroupAsMember(entry, (group ?? forming) as DndGroup)
+                              } finally { setLeavingGroupId(null) }
+                            }}
+                            style={{
+                              background: 'transparent', border: 'none', color: 'rgba(228,51,41,0.6)',
+                              fontSize: '0.72rem', fontFamily: 'var(--font-inter)', cursor: leavingGroupId === entry.id ? 'not-allowed' : 'pointer',
+                              opacity: leavingGroupId === entry.id ? 0.5 : 1, padding: '0.1rem 0', flexShrink: 0,
+                            }}
+                          >
+                            {leavingGroupId === entry.id ? 'Leaving…' : 'Leave Group'}
+                          </button>
+                        ) : null}
                       </div>
                       {entry.status === 'waiting' ? (
                         <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.78rem', color: 'rgba(245,242,236,0.45)' }}>

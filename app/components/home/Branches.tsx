@@ -7,24 +7,27 @@ export default function Branches() {
       city: 'Beirut',
       label: 'Flagship Branch',
       address: 'Hamra Street, Beirut',
-      hours: 'Mon–Thu 12pm–1am · Fri–Sun 12pm–2am',
-      phone: '+961 1 XXX XXX',
+      hours: '9:00 AM – 1:30 AM · Every day',
+      phone: '+961 81 950 042',
+      whatsapp: '96181950042',
       color: 'var(--teal)',
     },
     {
       city: 'Zouk',
       label: 'Zouk Mikael',
       address: 'Zouk Mikael Main Road, Keserwan',
-      hours: 'Mon–Thu 12pm–1am · Fri–Sun 12pm–2am',
-      phone: '+961 9 XXX XXX',
+      hours: '4:30 PM – 1:30 AM · Every day',
+      phone: '+961 70 973 242',
+      whatsapp: '96170973242',
       color: 'var(--red)',
     },
     {
       city: 'Broummana',
       label: 'Mountain Branch',
       address: 'Broummana Main Street, Metn',
-      hours: 'Mon–Thu 2pm–1am · Fri–Sun 12pm–2am',
-      phone: '+961 4 XXX XXX',
+      hours: '4:30 PM – 1:30 AM · Every day',
+      phone: '+961 76 648 054',
+      whatsapp: '96176648054',
       color: 'var(--purple)',
     },
   ]
@@ -69,7 +72,7 @@ export default function Branches() {
         gridTemplateColumns: 'repeat(3, 1fr)',
         gap: '1.5rem',
       }}>
-        {branches.map(({ city, label, address, hours, phone, color }) => (
+        {branches.map(({ city, label, address, hours, phone, whatsapp, color }) => (
           <div key={city} style={{
             border: '1px solid rgba(255,255,255,0.06)',
             borderRadius: '4px',
@@ -135,19 +138,23 @@ export default function Branches() {
                 }}>
                   Directions
                 </button>
-                <a href="#reserve" style={{
-                  flex: 1,
-                  backgroundColor: color,
-                  color: '#fff',
-                  padding: '0.6rem',
-                  borderRadius: '2px',
-                  fontSize: '0.72rem',
-                  letterSpacing: '0.08em',
-                  textTransform: 'uppercase',
-                  textDecoration: 'none',
-                  textAlign: 'center',
-                  fontFamily: 'var(--font-inter)',
-                }}>
+                <a
+                  href={`https://wa.me/${whatsapp}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    flex: 1,
+                    backgroundColor: color,
+                    color: '#fff',
+                    padding: '0.6rem',
+                    borderRadius: '2px',
+                    fontSize: '0.72rem',
+                    letterSpacing: '0.08em',
+                    textTransform: 'uppercase',
+                    textDecoration: 'none',
+                    textAlign: 'center',
+                    fontFamily: 'var(--font-inter)',
+                  }}>
                   Reserve
                 </a>
               </div>

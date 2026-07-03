@@ -87,11 +87,25 @@ export async function joinLfp(input: {
   })
 }
 
-// Only succeeds while still 'waiting' — firestore.rules rejects this once
-// staff have placed the entry into a group, so the group's member list
-// can't go out of sync with a customer leaving on their own.
+// Cancel a solo-waiting queue entry (status must be 'waiting').
 export async function leaveLfp(entry: LfpEntry): Promise<void> {
   await deleteDoc(doc(db, 'lfpEntries', entry.id))
+}
+
+// Leave a confirmed or forming group — removes the member from both the
+// lfpEntries doc and the dndGroups member list in one batch so they can't
+// drift out of sync. Firestore rules allow a member to delete their own
+// lfpEntries doc regardless of status, and to remove only themselves from
+// the group's memberUids/members arrays.
+export async function leaveGroupAsMember(entry: LfpEntry, group: DndGroup): Promise<void> {
+  const batch = writeBatch(db)
+  batch.delete(doc(db, 'lfpEntries', entry.id))
+  batch.update(doc(db, 'dndGroups', group.id), {
+    memberUids: arrayRemove(entry.userId),
+    members: arrayRemove({ uid: entry.userId, name: entry.userName }),
+    updatedAt: serverTimestamp(),
+  })
+  await batch.commit()
 }
 
 // A customer's own entries across every campaign they've queued for —

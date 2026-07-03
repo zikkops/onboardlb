@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import {
   collection, getDocs, addDoc, deleteDoc,
   doc, updateDoc, serverTimestamp
@@ -83,6 +83,18 @@ export default function AdminEventsPage() {
   const [addingType, setAddingType]           = useState(false)
   const [showTypeManager, setShowTypeManager] = useState(false)
   const [showPicker, setShowPicker]           = useState(false)
+  const [filterBranch, setFilterBranch]       = useState<string>('all')
+  const [filterStatus, setFilterStatus]       = useState<'upcoming' | 'done'>('upcoming')
+
+  const filteredEvents = useMemo(() => {
+    const today = new Date().toISOString().split('T')[0]
+    return events
+      .filter(ev => filterBranch === 'all' || ev.branch === filterBranch)
+      .filter(ev => filterStatus === 'upcoming' ? ev.date >= today : ev.date < today)
+      .sort((a, b) => filterStatus === 'upcoming'
+        ? new Date(a.date).getTime() - new Date(b.date).getTime()
+        : new Date(b.date).getTime() - new Date(a.date).getTime())
+  }, [events, filterBranch, filterStatus])
 
   async function loadData() {
     const [evSnap, typeSnap] = await Promise.all([
@@ -334,10 +346,63 @@ export default function AdminEventsPage() {
           </div>
         )}
 
+        {/* Filters */}
+        <div style={{ marginBottom: '2rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          {/* Upcoming / Done tabs */}
+          <div style={{ display: 'flex', gap: '0.25rem', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '0' }}>
+            {(['upcoming', 'done'] as const).map(s => (
+              <button
+                key={s}
+                onClick={() => setFilterStatus(s)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  borderBottom: filterStatus === s ? '2px solid var(--red)' : '2px solid transparent',
+                  color: filterStatus === s ? 'var(--offwhite)' : 'rgba(245,242,236,0.35)',
+                  padding: '0.6rem 1.2rem',
+                  marginBottom: '-1px',
+                  fontSize: '0.75rem',
+                  letterSpacing: '0.12em',
+                  textTransform: 'uppercase',
+                  cursor: 'pointer',
+                  fontFamily: 'var(--font-inter)',
+                  transition: 'color 0.15s',
+                }}
+              >
+                {s === 'upcoming' ? 'Upcoming' : 'Done'}
+              </button>
+            ))}
+          </div>
+
+          {/* Branch pills */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+            {[['all', 'All'], ['Beirut', 'Beirut'], ['Zouk', 'Zouk'], ['Broummana', 'Broummana'], ['All Branches', 'All Branches']].map(([val, label]) => (
+              <button
+                key={val}
+                onClick={() => setFilterBranch(val)}
+                style={{
+                  background: filterBranch === val ? 'rgba(0,160,152,0.15)' : 'transparent',
+                  border: `1px solid ${filterBranch === val ? 'var(--teal)' : 'rgba(255,255,255,0.1)'}`,
+                  color: filterBranch === val ? 'var(--teal)' : 'rgba(245,242,236,0.4)',
+                  padding: '0.35rem 0.9rem',
+                  borderRadius: '2px',
+                  fontSize: '0.72rem',
+                  letterSpacing: '0.08em',
+                  textTransform: 'uppercase',
+                  cursor: 'pointer',
+                  fontFamily: 'var(--font-inter)',
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Events Grid */}
         {loading ? (
           <p style={{ color: 'rgba(245,242,236,0.3)', fontFamily: 'var(--font-inter)' }}>Loading…</p>
-        ) : events.length === 0 ? (
+        ) : filteredEvents.length === 0 ? (
           <div style={{
             border: '1px dashed rgba(255,255,255,0.08)',
             borderRadius: '4px',
@@ -345,14 +410,18 @@ export default function AdminEventsPage() {
             textAlign: 'center',
             color: 'rgba(245,242,236,0.2)',
             fontFamily: 'var(--font-inter)',
-          }}>No events yet — click + Add Event to get started</div>
+          }}>
+            {events.length === 0
+              ? 'No events yet — click + Add Event to get started'
+              : `No ${filterStatus} events${filterBranch !== 'all' ? ` for ${filterBranch}` : ''}`}
+          </div>
         ) : (
           <div style={{
             display: 'grid',
             gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)',
             gap: '1.5rem',
           }}>
-            {events.map(ev => {
+            {filteredEvents.map(ev => {
               const d = new Date(ev.date)
               return (
                 <div key={ev.id} style={{

@@ -5,6 +5,7 @@ import EventsPreview from './components/home/EventsPreview'
 import ShopPreview from './components/home/ShopPreview'
 import MenuPreview from './components/home/MenuPreview'
 import DndPreview from './components/home/DndPreview'
+import Branches from './components/home/Branches'
 import Footer from './components/layout/Footer'
 import Reveal from './components/Reveal'
 
@@ -18,6 +19,7 @@ export default function HomePage() {
       <div id="shop-section"><Reveal><ShopPreview /></Reveal></div>
       <div id="menu-section"><Reveal><MenuPreview /></Reveal></div>
       <div id="dnd-section"><Reveal><DndPreview /></Reveal></div>
+      <div id="branches-section"><Reveal><Branches /></Reveal></div>
       <Footer />
     </main>
   )

@@ -21,8 +21,9 @@ export const ADMIN_NAV: AdminNavSection[] = [
     title: 'Game Sales',
     color: 'var(--teal)',
     items: [
-      { label: 'Record a Sale',    href: '/admin/games/purchase', access: SECTION_ACCESS.gamePurchases },
-      { label: 'Sales & Invoices', href: '/admin/games/invoices', access: SECTION_ACCESS.gamePurchases },
+      { label: 'Record a Sale',    href: '/admin/games/purchase',  access: SECTION_ACCESS.gamePurchases },
+      { label: 'Sales & Invoices', href: '/admin/games/invoices',  access: SECTION_ACCESS.gamePurchases },
+      { label: 'Transfer Stock',   href: '/admin/games/transfer',  access: SECTION_ACCESS.gameTransfers },
     ],
   },
   {

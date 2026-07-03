@@ -33,7 +33,7 @@ const EARN_CARDS = [
     title: 'Order at any branch',
     desc: 'Every dollar you spend earns you XP and OB Coins. Submit your check through your profile after your visit.',
     xp: 10, coins: 1, unit: 'per $1 spent',
-    note: 'Tip — split the check with friends and everyone earns',
+    note: 'Tip — split the bill and share the reward',
   },
   {
     icon: faCalendarDay,

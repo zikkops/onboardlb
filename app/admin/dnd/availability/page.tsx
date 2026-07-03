@@ -88,16 +88,18 @@ export default function DmAvailabilityPage() {
   const { checking, user } = useRequireRole(SECTION_ACCESS.dmAvailability)
   const isMobile = useIsMobile()
 
-  const [openingStart, setOpeningStart] = useState(DEFAULT_OPENING_START)
-  const [openingEnd, setOpeningEnd]     = useState(DEFAULT_OPENING_END)
+  const [openingStart, setOpeningStart]   = useState(DEFAULT_OPENING_START)
+  const [openingEnd, setOpeningEnd]       = useState(DEFAULT_OPENING_END)
   const [original, setOriginal] = useState({ openingStart: DEFAULT_OPENING_START, openingEnd: DEFAULT_OPENING_END })
-  const [daysOff, setDaysOff]   = useState<string[]>([])
-  const [newDayOff, setNewDayOff] = useState(todayStr())
-  const [loading, setLoading]   = useState(true)
-  const [saving, setSaving]     = useState(false)
-  const [busyDay, setBusyDay]   = useState<string | null>(null)
-  const [error, setError]       = useState('')
-  const [saved, setSaved]       = useState(false)
+  const [weeklyDayOff, setWeeklyDayOff]   = useState<number | null>(null)
+  const [savingWeekly, setSavingWeekly]   = useState(false)
+  const [daysOff, setDaysOff]             = useState<string[]>([])
+  const [newDayOff, setNewDayOff]         = useState(todayStr())
+  const [loading, setLoading]             = useState(true)
+  const [saving, setSaving]               = useState(false)
+  const [busyDay, setBusyDay]             = useState<string | null>(null)
+  const [error, setError]                 = useState('')
+  const [saved, setSaved]                 = useState(false)
 
   const { reservations: upcoming, loading: loadingUpcoming } = useUpcomingReservations(user?.uid ?? null)
   const [profiles, setProfiles] = useState<Map<string, ResolvedProfile>>(new Map())
@@ -111,6 +113,7 @@ export default function DmAvailabilityPage() {
       setOpeningStart(start)
       setOpeningEnd(end)
       setOriginal({ openingStart: start, openingEnd: end })
+      setWeeklyDayOff(typeof data?.weeklyDayOff === 'number' ? data.weeklyDayOff : null)
       setDaysOff(Array.isArray(data?.daysOff) ? [...data.daysOff].sort() : [])
       setLoading(false)
     })
@@ -138,6 +141,17 @@ export default function DmAvailabilityPage() {
       setTimeout(() => setSaved(false), 2500)
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function handleSetWeeklyDayOff(day: number | null) {
+    if (!user) return
+    setSavingWeekly(true)
+    try {
+      await updateDoc(doc(db, 'users', user.uid), { weeklyDayOff: day ?? null })
+      setWeeklyDayOff(day)
+    } finally {
+      setSavingWeekly(false)
     }
   }
 
@@ -235,9 +249,43 @@ export default function DmAvailabilityPage() {
               </form>
             </section>
 
-            {/* Days off */}
+            {/* Weekly day off */}
             <section>
-              <p style={sectionLabelStyle}>Days Off</p>
+              <p style={sectionLabelStyle}>Weekly Day Off</p>
+              <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.82rem', color: 'rgba(245,242,236,0.4)', marginBottom: '1.25rem', lineHeight: 1.6 }}>
+                One recurring day each week when you're never available. Click the active day again to clear it.
+              </p>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', opacity: savingWeekly ? 0.5 : 1 }}>
+                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((label, idx) => {
+                  const active = weeklyDayOff === idx
+                  return (
+                    <button
+                      key={label}
+                      type="button"
+                      disabled={savingWeekly}
+                      onClick={() => handleSetWeeklyDayOff(active ? null : idx)}
+                      style={{
+                        background: active ? 'rgba(149,102,210,0.2)' : 'transparent',
+                        border: `1px solid ${active ? 'var(--purple)' : 'rgba(255,255,255,0.1)'}`,
+                        color: active ? 'var(--purple)' : 'rgba(245,242,236,0.45)',
+                        padding: '0.45rem 1rem',
+                        borderRadius: '4px',
+                        fontSize: '0.78rem',
+                        letterSpacing: '0.06em',
+                        fontFamily: 'var(--font-inter)',
+                        cursor: savingWeekly ? 'not-allowed' : 'pointer',
+                      }}
+                    >
+                      {label}
+                    </button>
+                  )
+                })}
+              </div>
+            </section>
+
+            {/* Specific days off */}
+            <section>
+              <p style={sectionLabelStyle}>Unavailable Dates</p>
               <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.82rem', color: 'rgba(245,242,236,0.4)', marginBottom: '1.25rem', lineHeight: 1.6 }}>
                 Block out specific dates you're not available — no sessions can be booked with you on these days,
                 even within your normal opening hours.

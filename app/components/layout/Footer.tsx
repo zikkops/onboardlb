@@ -110,10 +110,41 @@ export default function Footer() {
               marginBottom: '1.2rem',
               fontFamily: 'var(--font-inter)',
             }}>Branches</p>
-            <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '0.7rem' }}>
-              {['Beirut', 'Zouk', 'Broummana'].map(branch => (
-                <li key={branch}>
-                  <FooterLink label={branch} href="#branches" />
+            <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+              {[
+                { city: 'Beirut',    hours: '9:00 AM – 1:30 AM', whatsapp: '96181950042', phone: '+961 81 950 042' },
+                { city: 'Zouk',      hours: '4:30 PM – 1:30 AM', whatsapp: '96170973242', phone: '+961 70 973 242' },
+                { city: 'Broummana', hours: '4:30 PM – 1:30 AM', whatsapp: '96176648054', phone: '+961 76 648 054' },
+              ].map(({ city, hours, whatsapp, phone }) => (
+                <li key={city}>
+                  <a href="/#branches-section" style={{ textDecoration: 'none', display: 'block' }}>
+                    <span style={{
+                      display: 'block',
+                      fontSize: '0.82rem',
+                      color: 'rgba(245,242,236,0.5)',
+                      fontFamily: 'var(--font-inter)',
+                      marginBottom: '0.15rem',
+                    }}>{city}</span>
+                    <span style={{
+                      display: 'block',
+                      fontSize: '0.7rem',
+                      color: 'rgba(245,242,236,0.25)',
+                      fontFamily: 'var(--font-inter)',
+                    }}>{hours}</span>
+                  </a>
+                  <a
+                    href={`https://wa.me/${whatsapp}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      display: 'inline-block',
+                      marginTop: '0.3rem',
+                      fontSize: '0.68rem',
+                      color: 'rgba(245,242,236,0.2)',
+                      fontFamily: 'var(--font-inter)',
+                      textDecoration: 'none',
+                    }}
+                  >{phone}</a>
                 </li>
               ))}
             </ul>
@@ -131,8 +162,8 @@ export default function Footer() {
             }}>Connect</p>
             <div style={{ display: 'flex', gap: '1rem' }}>
               {[
-                { icon: faInstagram, href: '#' },
-                { icon: faFacebook,  href: '#' },
+                { icon: faInstagram, href: 'https://instagram.com/onboardlb' },
+                { icon: faFacebook,  href: 'https://www.facebook.com/onboard.lb/' },
                 { icon: faWhatsapp,  href: 'https://wa.me/96181950042' },
               ].map(({ icon, href }, i) => {
                 const hovered = hoveredSocial === i
