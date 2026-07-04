@@ -1,5 +1,6 @@
 import {
-  collection, addDoc, getDocs, deleteDoc, doc, query, orderBy, limit, serverTimestamp, Timestamp,
+  collection, addDoc, getDocs, deleteDoc, doc, query, orderBy, limit,
+  startAfter, serverTimestamp, Timestamp, type QueryDocumentSnapshot,
 } from 'firebase/firestore'
 import { db, auth } from './firebase'
 
@@ -87,6 +88,26 @@ export async function listMedia(max = 200): Promise<MediaItem[]> {
     query(collection(db, 'mediaLibrary'), orderBy('uploadedAt', 'desc'), limit(max))
   )
   return snap.docs.map(d => ({ id: d.id, ...d.data() } as MediaItem))
+}
+
+const MEDIA_PAGE_SIZE = 50
+
+export async function listMediaPage(cursor?: QueryDocumentSnapshot | null): Promise<{
+  items: MediaItem[]
+  cursor: QueryDocumentSnapshot | null
+  hasMore: boolean
+}> {
+  const q = cursor
+    ? query(collection(db, 'mediaLibrary'), orderBy('uploadedAt', 'desc'), startAfter(cursor), limit(MEDIA_PAGE_SIZE + 1))
+    : query(collection(db, 'mediaLibrary'), orderBy('uploadedAt', 'desc'), limit(MEDIA_PAGE_SIZE + 1))
+  const snap = await getDocs(q)
+  const hasMore = snap.docs.length > MEDIA_PAGE_SIZE
+  const docs = hasMore ? snap.docs.slice(0, MEDIA_PAGE_SIZE) : snap.docs
+  return {
+    items: docs.map(d => ({ id: d.id, ...d.data() } as MediaItem)),
+    cursor: docs.length > 0 ? (docs[docs.length - 1] as QueryDocumentSnapshot) : null,
+    hasMore,
+  }
 }
 
 export async function deleteMediaItem(item: MediaItem): Promise<void> {

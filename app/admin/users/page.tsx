@@ -5,7 +5,7 @@ import { collection, getDocs, updateDoc, doc, query, where, deleteField } from '
 import { db } from '../../lib/firebase'
 import {
   useRequireRole, createAccount, updateAccountAccess,
-  ROLE_LABELS, ROLE_COLORS, type Role,
+  ROLE_LABELS, ROLE_COLORS, SECTION_ACCESS, SECTION_LABELS, type Role,
 } from '../../lib/adminAuth'
 import { logActivity } from '../../lib/activityLog'
 import { BRANCHES, resolveBranchName } from '../../lib/branches'
@@ -17,11 +17,12 @@ interface Account {
   branchIds: string[]
   isDungeonMaster: boolean
   superadmin: boolean
+  sectionGrants: string[]
 }
 
 const ROLES: Role[] = ['admin', 'manager', 'social', 'gamer', 'dungeonmaster']
 
-const EMPTY = { email: '', password: '', role: 'manager' as Role, branchIds: [] as string[], isDungeonMaster: false }
+const EMPTY = { email: '', password: '', role: 'manager' as Role, branchIds: [] as string[], isDungeonMaster: false, sectionGrants: [] as string[] }
 
 // Reads either the new `branchIds` array or the older singular `branchId`
 // from accounts created before multi-branch support existed.
@@ -61,6 +62,7 @@ export default function AdminUsersPage() {
         branchIds: normalizeBranchIds(data),
         isDungeonMaster: data.isDungeonMaster === true,
         superadmin: data.superadmin === true,
+        sectionGrants: Array.isArray(data.sectionGrants) ? data.sectionGrants as string[] : [],
       } as Account
     }))
     setLoading(false)
@@ -77,7 +79,7 @@ export default function AdminUsersPage() {
 
   function openEdit(account: Account) {
     setEditing(account)
-    setForm({ email: account.email, password: '', role: account.role, branchIds: account.branchIds, isDungeonMaster: account.isDungeonMaster })
+    setForm({ email: account.email, password: '', role: account.role, branchIds: account.branchIds, isDungeonMaster: account.isDungeonMaster, sectionGrants: account.sectionGrants })
     setError('')
     setOpen(true)
   }
@@ -108,6 +110,8 @@ export default function AdminUsersPage() {
           { role: editing.role, branchIds: editing.branchIds, isDungeonMaster: editing.isDungeonMaster },
           { role: form.role, branchIds, isDungeonMaster }
         )
+        // Save section grants separately — only meaningful fields that differ from role defaults
+        await updateDoc(doc(db, 'users', editing.id), { sectionGrants: form.sectionGrants })
       } else {
         await createAccount(form.email.trim(), form.password, form.role, branchIds, isDungeonMaster)
       }
@@ -393,6 +397,17 @@ export default function AdminUsersPage() {
                             letterSpacing: '0.05em',
                           }}>🎲 DM</span>
                         )}
+                        {account.sectionGrants.length > 0 && (
+                          <span style={{
+                            fontSize: '0.7rem',
+                            padding: '0.25rem 0.7rem',
+                            borderRadius: '2px',
+                            backgroundColor: 'rgba(149,102,210,0.15)',
+                            color: 'var(--purple)',
+                            fontFamily: 'var(--font-inter)',
+                            letterSpacing: '0.05em',
+                          }}>+{account.sectionGrants.length} extra</span>
+                        )}
                       </div>
                     </td>
                     <td style={{ padding: '1rem 1.2rem', fontFamily: 'var(--font-inter)', fontSize: '0.82rem', color: 'rgba(245,242,236,0.5)' }}>
@@ -607,6 +622,58 @@ export default function AdminUsersPage() {
                   </p>
                 </div>
               )}
+
+              {/* Per-user section grants — only shown when editing, not on create */}
+              {editing && (() => {
+                const formIsDm = form.role === 'dungeonmaster' || form.isDungeonMaster
+                const sectionKeys = Object.keys(SECTION_ACCESS) as (keyof typeof SECTION_ACCESS)[]
+                return (
+                  <div>
+                    <label style={{ ...labelStyle, marginBottom: '0.4rem' }}>Extra Section Access</label>
+                    <p style={{ fontSize: '0.72rem', color: 'rgba(245,242,236,0.3)', fontFamily: 'var(--font-inter)', marginBottom: '0.8rem', lineHeight: 1.5 }}>
+                      Grant access to specific sections beyond what this user&apos;s role normally covers. Sections already unlocked by their role are shown greyed out.
+                    </p>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                      {sectionKeys.map(key => {
+                        const viaRole = SECTION_ACCESS[key].includes(form.role) ||
+                          (formIsDm && SECTION_ACCESS[key].includes('dungeonmaster'))
+                        const granted = form.sectionGrants.includes(key)
+                        return (
+                          <button key={key} type="button"
+                            disabled={viaRole}
+                            onClick={() => {
+                              if (viaRole) return
+                              setForm(f => ({
+                                ...f,
+                                sectionGrants: f.sectionGrants.includes(key)
+                                  ? f.sectionGrants.filter(g => g !== key)
+                                  : [...f.sectionGrants, key],
+                              }))
+                            }}
+                            style={{
+                              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                              backgroundColor: viaRole ? 'rgba(255,255,255,0.02)' : granted ? 'rgba(149,102,210,0.12)' : 'transparent',
+                              border: `1px solid ${viaRole ? 'rgba(255,255,255,0.05)' : granted ? 'var(--purple)' : 'rgba(255,255,255,0.08)'}`,
+                              color: viaRole ? 'rgba(245,242,236,0.2)' : granted ? 'var(--purple)' : 'rgba(245,242,236,0.5)',
+                              padding: '0.45rem 0.8rem',
+                              borderRadius: '2px',
+                              fontSize: '0.78rem',
+                              cursor: viaRole ? 'default' : 'pointer',
+                              fontFamily: 'var(--font-inter)',
+                              textAlign: 'left',
+                              width: '100%',
+                            }}>
+                            <span>{SECTION_LABELS[key] ?? key}</span>
+                            <span style={{ fontSize: '0.6rem', letterSpacing: '0.08em', textTransform: 'uppercase', opacity: 0.6, flexShrink: 0, marginLeft: '0.5rem' }}>
+                              {viaRole ? 'via role' : granted ? '✓ granted' : ''}
+                            </span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })()}
 
               {error && (
                 <p style={{ color: 'var(--red)', fontSize: '0.78rem', fontFamily: 'var(--font-inter)' }}>{error}</p>

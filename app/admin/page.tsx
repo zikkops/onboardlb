@@ -31,7 +31,7 @@ function useIsMobile(breakpoint = 768) {
 
 export default function AdminPage() {
   const router  = useRouter()
-  const { checking, role, branchIds, isDungeonMaster, user } = useRequireRole(ALL_ROLES)
+  const { checking, role, branchIds, sectionGrants, isDungeonMaster, user } = useRequireRole(ALL_ROLES)
   const isMobile = useIsMobile()
 
   // Memoized — usePendingTransactions/usePendingRedemptions re-subscribe
@@ -50,7 +50,7 @@ export default function AdminPage() {
 
   // Admins/managers see every pending reservation; anyone who's a DM (by
   // role or by the separate isDungeonMaster flag) sees only their own.
-  const canSeeDndReservations = hasSectionAccess(role, isDungeonMaster, SECTION_ACCESS.dndReservations)
+  const canSeeDndReservations = hasSectionAccess(role, isDungeonMaster, SECTION_ACCESS.dndReservations, sectionGrants, 'dndReservations')
   const dndReservationScope = checking || !canSeeDndReservations
     ? null
     : (role === 'admin' || role === 'manager') ? 'all' : (user?.uid ?? null)
@@ -175,7 +175,10 @@ export default function AdminPage() {
   ]
     .map(section => ({
       ...section,
-      cards: section.cards.filter(({ access }) => hasSectionAccess(role, isDungeonMaster, access)),
+      cards: section.cards.filter(({ access }) => {
+        const key = Object.entries(SECTION_ACCESS).find(([, v]) => v === access)?.[0]
+        return hasSectionAccess(role, isDungeonMaster, access, sectionGrants, key)
+      }),
     }))
     .filter(section => section.cards.length > 0)
 

@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { useRequireRole, ALL_ROLES } from '../../lib/adminAuth'
-import { listMedia, deleteMediaItem, backfillMediaLibrary, type MediaItem } from '../../lib/media'
+import { listMediaPage, deleteMediaItem, backfillMediaLibrary, type MediaItem } from '../../lib/media'
+import type { QueryDocumentSnapshot } from 'firebase/firestore'
 import MediaLibraryGrid from '../../components/admin/MediaLibraryGrid'
 
 function useIsMobile(breakpoint = 768) {
@@ -19,15 +20,31 @@ function useIsMobile(breakpoint = 768) {
 export default function MediaLibraryPage() {
   const { checking } = useRequireRole(ALL_ROLES)
   const isMobile = useIsMobile()
-  const [items, setItems]     = useState<MediaItem[]>([])
-  const [loading, setLoading] = useState(true)
-  const [syncing, setSyncing] = useState(false)
-  const [syncMsg, setSyncMsg] = useState('')
+  const [items, setItems]         = useState<MediaItem[]>([])
+  const [cursor, setCursor]       = useState<QueryDocumentSnapshot | null>(null)
+  const [hasMore, setHasMore]     = useState(false)
+  const [loading, setLoading]     = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [syncing, setSyncing]     = useState(false)
+  const [syncMsg, setSyncMsg]     = useState('')
 
   async function load() {
     setLoading(true)
-    setItems(await listMedia())
+    const result = await listMediaPage(null)
+    setItems(result.items)
+    setCursor(result.cursor)
+    setHasMore(result.hasMore)
     setLoading(false)
+  }
+
+  async function loadMore() {
+    if (!hasMore || loadingMore) return
+    setLoadingMore(true)
+    const result = await listMediaPage(cursor)
+    setItems(prev => [...prev, ...result.items])
+    setCursor(result.cursor)
+    setHasMore(result.hasMore)
+    setLoadingMore(false)
   }
 
   useEffect(() => { load() }, [])
@@ -76,7 +93,7 @@ export default function MediaLibraryPage() {
               color: 'rgba(245,242,236,0.3)',
               marginTop: '0.5rem',
             }}>
-              {items.length} image{items.length === 1 ? '' : 's'} hosted
+              {items.length} image{items.length === 1 ? '' : 's'} loaded{hasMore ? ' — more available' : ''}
             </p>
           </div>
           <button onClick={handleSync} disabled={syncing} style={{
@@ -115,14 +132,38 @@ export default function MediaLibraryPage() {
         {loading ? (
           <p style={{ color: 'rgba(245,242,236,0.3)', fontFamily: 'var(--font-inter)' }}>Loading…</p>
         ) : (
-          <MediaLibraryGrid
-            items={items}
-            isMobile={isMobile}
-            onDelete={async item => {
-              await deleteMediaItem(item)
-              setItems(prev => prev.filter(i => i.id !== item.id))
-            }}
-          />
+          <>
+            <MediaLibraryGrid
+              items={items}
+              isMobile={isMobile}
+              onDelete={async item => {
+                await deleteMediaItem(item)
+                setItems(prev => prev.filter(i => i.id !== item.id))
+              }}
+            />
+            {hasMore && (
+              <div style={{ textAlign: 'center', marginTop: '2.5rem' }}>
+                <button
+                  onClick={loadMore}
+                  disabled={loadingMore}
+                  style={{
+                    backgroundColor: 'transparent',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    color: loadingMore ? 'rgba(245,242,236,0.3)' : 'rgba(245,242,236,0.6)',
+                    padding: '0.8rem 2.5rem',
+                    borderRadius: '2px',
+                    fontSize: '0.75rem',
+                    letterSpacing: '0.1em',
+                    textTransform: 'uppercase',
+                    cursor: loadingMore ? 'not-allowed' : 'pointer',
+                    fontFamily: 'var(--font-inter)',
+                  }}
+                >
+                  {loadingMore ? 'Loading…' : 'Load More'}
+                </button>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

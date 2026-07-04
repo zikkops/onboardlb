@@ -1,5 +1,6 @@
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faLocationDot, faClock, faPhone } from '@fortawesome/free-solid-svg-icons'
+import { faWhatsapp } from '@fortawesome/free-brands-svg-icons'
 
 export default function Branches() {
   const branches = [
@@ -10,6 +11,7 @@ export default function Branches() {
       hours: '9:00 AM – 1:30 AM · Every day',
       phone: '+961 81 950 042',
       whatsapp: '96181950042',
+      mapsUrl: 'https://maps.app.goo.gl/dAhjuLPEK5BpKomKA',
       color: 'var(--teal)',
     },
     {
@@ -19,6 +21,7 @@ export default function Branches() {
       hours: '4:30 PM – 1:30 AM · Every day',
       phone: '+961 70 973 242',
       whatsapp: '96170973242',
+      mapsUrl: 'https://maps.app.goo.gl/zgqqSykesoEQpwARA',
       color: 'var(--red)',
     },
     {
@@ -28,6 +31,7 @@ export default function Branches() {
       hours: '4:30 PM – 1:30 AM · Every day',
       phone: '+961 76 648 054',
       whatsapp: '96176648054',
+      mapsUrl: 'https://maps.app.goo.gl/FQVs4nwsPLpVsbN17',
       color: 'var(--purple)',
     },
   ]
@@ -72,7 +76,7 @@ export default function Branches() {
         gridTemplateColumns: 'repeat(3, 1fr)',
         gap: '1.5rem',
       }}>
-        {branches.map(({ city, label, address, hours, phone, whatsapp, color }) => (
+        {branches.map(({ city, label, address, hours, phone, whatsapp, mapsUrl, color }) => (
           <div key={city} style={{
             border: '1px solid rgba(255,255,255,0.06)',
             borderRadius: '4px',
@@ -123,21 +127,28 @@ export default function Branches() {
 
               {/* Buttons */}
               <div style={{ display: 'flex', gap: '0.8rem', marginTop: '2rem' }}>
-                <button style={{
-                  flex: 1,
-                  background: 'transparent',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  color: 'rgba(245,242,236,0.6)',
-                  padding: '0.6rem',
-                  borderRadius: '2px',
-                  fontSize: '0.72rem',
-                  letterSpacing: '0.08em',
-                  textTransform: 'uppercase',
-                  cursor: 'pointer',
-                  fontFamily: 'var(--font-inter)',
-                }}>
+                <a
+                  href={mapsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    flex: 1,
+                    background: 'transparent',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    color: 'rgba(245,242,236,0.6)',
+                    padding: '0.6rem',
+                    borderRadius: '2px',
+                    fontSize: '0.72rem',
+                    letterSpacing: '0.08em',
+                    textTransform: 'uppercase',
+                    cursor: 'pointer',
+                    fontFamily: 'var(--font-inter)',
+                    textDecoration: 'none',
+                    textAlign: 'center',
+                  }}
+                >
                   Directions
-                </button>
+                </a>
                 <a
                   href={`https://wa.me/${whatsapp}`}
                   target="_blank"
@@ -155,6 +166,7 @@ export default function Branches() {
                     textAlign: 'center',
                     fontFamily: 'var(--font-inter)',
                   }}>
+                  <FontAwesomeIcon icon={faWhatsapp} style={{ width: '14px', marginRight: '0.4rem' }} />
                   Reserve
                 </a>
               </div>

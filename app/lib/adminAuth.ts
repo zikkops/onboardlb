@@ -31,6 +31,25 @@ export const ROLE_COLORS: Record<Role, string> = {
   dungeonmaster: '#C9962C',
 }
 
+// Human-readable labels for every section key — used in Manage Users to let
+// admins grant per-user access beyond what the user's role normally covers.
+export const SECTION_LABELS: Record<string, string> = {
+  games:             'Manage Games',
+  menu:              'Manage Menu',
+  events:            'Manage Events',
+  dnd:               'D&D Campaigns',
+  loyalty:           'Loyalty Approvals & Catalog',
+  loyaltyDnd:        'D&D Session Attendance',
+  loyaltyEvents:     'Event Attendance',
+  dndReservations:   'D&D Reservations & Schedule',
+  dndGroups:         'D&D Groups',
+  dmAvailability:    'DM Availability',
+  branchTables:      'Table Map Editor',
+  tableReservations: 'Table Reservations',
+  gamePurchases:     'Record Game Sales',
+  gameTransfers:     'Transfer Stock',
+}
+
 export const SECTION_ACCESS = {
   games:         ['admin', 'manager', 'gamer'] as Role[],
   menu:          ['admin', 'manager'] as Role[],
@@ -90,6 +109,7 @@ export function useAdminUser() {
   const [user, setUser]             = useState<User | null>(null)
   const [role, setRole]             = useState<Role | null>(null)
   const [branchIds, setBranchIds]   = useState<string[]>([])
+  const [sectionGrants, setSectionGrants] = useState<string[]>([])
   const [isDungeonMaster, setIsDungeonMaster] = useState(false)
   const [superadmin, setSuperadmin] = useState(false)
   const [loading, setLoading]       = useState(true)
@@ -102,6 +122,7 @@ export function useAdminUser() {
         setUser(null)
         setRole(null)
         setBranchIds([])
+        setSectionGrants([])
         setIsDungeonMaster(false)
         setSuperadmin(false)
         setProvisioned(true)
@@ -115,6 +136,7 @@ export function useAdminUser() {
       if (data?.isStaff === true) {
         setRole((data.role as Role) ?? null)
         setBranchIds(normalizeBranchIds(data))
+        setSectionGrants(Array.isArray(data.sectionGrants) ? data.sectionGrants as string[] : [])
         setIsDungeonMaster(data.isDungeonMaster === true)
         setSuperadmin(data.superadmin === true)
         setProvisioned(true)
@@ -125,6 +147,7 @@ export function useAdminUser() {
         // xp: 0, obCoins: 0. See ARCHITECTURE.md.
         setRole(null)
         setBranchIds([])
+        setSectionGrants([])
         setIsDungeonMaster(false)
         setSuperadmin(false)
         setProvisioned(false)
@@ -134,7 +157,7 @@ export function useAdminUser() {
     return unsub
   }, [])
 
-  return { user, role, branchIds, isDungeonMaster, superadmin, loading, provisioned }
+  return { user, role, branchIds, sectionGrants, isDungeonMaster, superadmin, loading, provisioned }
 }
 
 // Lightweight, read-only staff check for public/customer-facing components
@@ -161,15 +184,29 @@ export function useIsStaff(): boolean {
 // of their primary role (e.g. an admin or a gamer who also runs sessions).
 // Shared by useRequireRole below and by dashboard card visibility filters,
 // so the two never drift out of sync.
-export function hasSectionAccess(role: Role | null, isDungeonMaster: boolean, allowed: Role[]): boolean {
-  return !!role && (allowed.includes(role) || (isDungeonMaster && allowed.includes('dungeonmaster')))
+export function hasSectionAccess(
+  role: Role | null,
+  isDungeonMaster: boolean,
+  allowed: Role[],
+  sectionGrants?: string[],
+  sectionKey?: string,
+): boolean {
+  if (!role) return false
+  if (allowed.includes(role)) return true
+  if (isDungeonMaster && allowed.includes('dungeonmaster')) return true
+  // Per-user explicit grant: checked last so role-based access always wins
+  if (sectionKey && sectionGrants?.includes(sectionKey)) return true
+  return false
 }
 
 export function useRequireRole(allowed: Role[]) {
   const router = useRouter()
-  const { user, role, branchIds, isDungeonMaster, superadmin, loading, provisioned } = useAdminUser()
+  const { user, role, branchIds, sectionGrants, isDungeonMaster, superadmin, loading, provisioned } = useAdminUser()
 
-  const hasAccess = hasSectionAccess(role, isDungeonMaster, allowed)
+  // Detect which section key this call is gating by reference equality —
+  // all callers pass SECTION_ACCESS.xxx directly, so the array object is the same.
+  const sectionKey = Object.entries(SECTION_ACCESS).find(([, v]) => v === allowed)?.[0]
+  const hasAccess = hasSectionAccess(role, isDungeonMaster, allowed, sectionGrants, sectionKey)
 
   useEffect(() => {
     if (loading) return
@@ -187,7 +224,7 @@ export function useRequireRole(allowed: Role[]) {
   }, [loading, user, hasAccess, provisioned, router])
 
   const checking = loading || !user || !provisioned || !hasAccess
-  return { checking, role, branchIds, isDungeonMaster, superadmin, user }
+  return { checking, role, branchIds, sectionGrants, isDungeonMaster, superadmin, user }
 }
 
 // Staff accounts live in the same `users` collection as customers — they just
