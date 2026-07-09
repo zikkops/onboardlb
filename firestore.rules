@@ -472,6 +472,11 @@ service cloud.firestore {
       allow read: if isStaff();
       allow write: if isStaff();
     }
+    // Category provider meta — one doc per category (doc id = category name).
+    match /orderCategoryMeta/{id} {
+      allow read: if isStaff();
+      allow write: if isStaff();
+    }
     // Reports are created by any staff member and readable by all staff.
     match /weeklyOrderReports/{id} {
       allow read: if isStaff();

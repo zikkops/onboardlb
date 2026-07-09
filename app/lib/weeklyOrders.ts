@@ -1,6 +1,6 @@
 import {
   collection, addDoc, getDocs, query, orderBy,
-  doc, updateDoc, deleteDoc, serverTimestamp,
+  doc, updateDoc, deleteDoc, serverTimestamp, setDoc,
 } from 'firebase/firestore'
 import { db } from './firebase'
 import { logActivity, logUpdate, logDelete } from './activityLog'
@@ -16,10 +16,16 @@ export const UNIT_LABELS: Record<OrderUnit, string> = {
 export interface OrderTemplateItem {
   id: string
   name: string
+  nameAr?: string      // Arabic translation, set in template editor
   category: string
   unit: OrderUnit
   sortOrder: number
   createdAt: { seconds: number } | null
+}
+
+export interface OrderCategoryMeta {
+  providerName: string
+  providerPhone: string
 }
 
 export interface WeeklyOrderReportItem {
@@ -76,6 +82,20 @@ export async function deleteTemplateItem(id: string, name: string): Promise<void
   await logDelete('Weekly Order Template', name)
 }
 
+// ---- Category provider meta ----
+// One doc per category, doc id = category name, e.g. orderCategoryMeta/Beverages
+
+export async function listCategoryMeta(): Promise<Record<string, OrderCategoryMeta>> {
+  const snap = await getDocs(collection(db, 'orderCategoryMeta'))
+  return Object.fromEntries(
+    snap.docs.map(d => [d.id, d.data() as OrderCategoryMeta])
+  )
+}
+
+export async function setCategoryMeta(category: string, meta: OrderCategoryMeta): Promise<void> {
+  await setDoc(doc(db, 'orderCategoryMeta', category), meta)
+}
+
 // ---- Reports ----
 
 export async function submitWeeklyReport(
@@ -94,6 +114,64 @@ export async function listWeeklyReports(): Promise<WeeklyOrderReport[]> {
     query(collection(db, 'weeklyOrderReports'), orderBy('submittedAt', 'desc'))
   )
   return snap.docs.map(d => ({ id: d.id, ...d.data() } as WeeklyOrderReport))
+}
+
+// ---- Translation helper ----
+
+export async function translateToArabic(text: string): Promise<string> {
+  const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|ar`
+  const res = await fetch(url)
+  if (!res.ok) throw new Error('Translation request failed')
+  const data = await res.json()
+  if (data.responseStatus !== 200) throw new Error('Translation failed')
+  return data.responseData.translatedText as string
+}
+
+// ---- Order text generation ----
+
+export function generateOrderText(
+  report: WeeklyOrderReport,
+  categoryMeta: Record<string, OrderCategoryMeta>,
+  nameArMap: Record<string, string>,  // templateId -> nameAr
+  showArabic: boolean,
+  categoryFilter?: string,            // if set, only include this category
+): string {
+  const lines: string[] = []
+
+  if (!categoryFilter) {
+    lines.push(`*طلب أسبوعي — ${report.branch}*`)
+    lines.push(`الأسبوع: ${report.weekLabel}`)
+    lines.push('')
+  }
+
+  const groups = groupByCategory(report.items)
+  const filtered = categoryFilter ? groups.filter(g => g.category === categoryFilter) : groups
+
+  for (const { category, items } of filtered) {
+    const meta = categoryMeta[category]
+    lines.push(`*${category.toUpperCase()}*`)
+    if (meta?.providerName) {
+      lines.push(`المورد: ${meta.providerName}${meta.providerPhone ? ` — ${meta.providerPhone}` : ''}`)
+    }
+    for (const item of items) {
+      const ar = nameArMap[item.templateId]
+      const nameDisplay = showArabic && ar ? `${item.name} (${ar})` : item.name
+      lines.push(`• ${nameDisplay}: ${item.quantity} ${UNIT_LABELS[item.unit]}`)
+    }
+    lines.push('')
+  }
+
+  if (!categoryFilter && report.notes) {
+    lines.push(`ملاحظات: ${report.notes}`)
+  }
+
+  return lines.join('\n').trimEnd()
+}
+
+export function whatsappUrl(phone: string, text: string): string {
+  // Normalize phone: strip spaces and leading zeros, ensure it starts with country code
+  const clean = phone.replace(/\s+/g, '').replace(/^0+/, '')
+  return `https://wa.me/${clean}?text=${encodeURIComponent(text)}`
 }
 
 // ---- Date helpers ----
