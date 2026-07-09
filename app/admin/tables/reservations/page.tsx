@@ -3,12 +3,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useRequireRole, SECTION_ACCESS } from '../../../lib/adminAuth'
 import {
-  usePendingTableReservations, approveTableReservation, rejectTableReservation, type TableReservation,
+  usePendingTableReservations, useApprovedTableReservations,
+  approveTableReservation, rejectTableReservation, type TableReservation,
 } from '../../../lib/tableReservations'
-import { resolveUserProfiles, type ResolvedProfile } from '../../../lib/loyalty'
+import { resolveUserProfiles, awardTableCheckin, type ResolvedProfile } from '../../../lib/loyalty'
 import { BRANCHES } from '../../../lib/branches'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faChair, faInbox } from '@fortawesome/free-solid-svg-icons'
+import { faChair, faInbox, faCircleCheck } from '@fortawesome/free-solid-svg-icons'
 
 function formatDateTime(ts: TableReservation['startAt']): string {
   return ts.toDate().toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })
@@ -42,7 +43,13 @@ export default function TableReservationsPage() {
     return [managerBranchFilter]
   }, [checking, role, adminBranchFilter, managerBranchFilter, branchIds])
 
-  const { reservations, loading } = usePendingTableReservations(effectiveFilter)
+  const [tab, setTab] = useState<'pending' | 'approved'>('pending')
+
+  const { reservations: pendingReservations, loading: pendingLoading } = usePendingTableReservations(effectiveFilter)
+  const { reservations: approvedReservations, loading: approvedLoading } = useApprovedTableReservations(effectiveFilter)
+
+  const reservations = tab === 'pending' ? pendingReservations : approvedReservations
+  const loading = tab === 'pending' ? pendingLoading : approvedLoading
   const [processedIds, setProcessedIds] = useState<Set<string>>(new Set())
 
   const [profiles, setProfiles]       = useState<Map<string, ResolvedProfile>>(new Map())
@@ -55,6 +62,23 @@ export default function TableReservationsPage() {
     reservations.forEach(r => uids.add(r.userId))
     if (uids.size > 0) resolveUserProfiles([...uids]).then(setProfiles)
   }, [reservations])
+
+  async function handleCheckIn(r: TableReservation) {
+    if (!user) return
+    setBusyId(r.id)
+    try {
+      await awardTableCheckin({
+        userId: r.userId,
+        reservationId: r.id,
+        branch: r.branch,
+        tableNumbers: r.tableNumbers,
+        staffUid: user.uid,
+      })
+      setProcessedIds(prev => new Set(prev).add(r.id))
+    } finally {
+      setBusyId(null)
+    }
+  }
 
   async function handleApprove(r: TableReservation) {
     if (!user) return
@@ -168,6 +192,26 @@ export default function TableReservationsPage() {
               {branchIds.map(b => <option key={b} value={b}>{b}</option>)}
             </select>
           )}
+        </div>
+
+        {/* Pending / Approved tabs */}
+        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem' }}>
+          {(['pending', 'approved'] as const).map(t => (
+            <button key={t} onClick={() => { setTab(t); setProcessedIds(new Set()) }} style={{
+              background: tab === t ? 'var(--teal)' : 'transparent',
+              border: `1px solid ${tab === t ? 'var(--teal)' : 'rgba(255,255,255,0.1)'}`,
+              color: tab === t ? '#fff' : 'rgba(245,242,236,0.5)',
+              padding: '0.55rem 1.2rem',
+              borderRadius: '2px',
+              fontSize: '0.75rem',
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
+              cursor: 'pointer',
+              fontFamily: 'var(--font-inter)',
+            }}>
+              {t === 'pending' ? `Pending (${pendingReservations.length})` : `Approved (${approvedReservations.length})`}
+            </button>
+          ))}
         </div>
 
         {isManagerBranchScoped && branchIds.length === 0 ? (
@@ -291,26 +335,45 @@ export default function TableReservationsPage() {
 
                   {rejectingId !== r.id && (
                     <div style={{ display: 'flex', gap: '0.6rem', paddingTop: '0.4rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-                      <button
-                        onClick={() => handleApprove(r)}
-                        disabled={isBusy}
-                        style={{
-                          flex: isMobile ? 1 : 'initial', backgroundColor: 'var(--teal)', color: '#fff', border: 'none',
-                          padding: '0.8rem 1.5rem', borderRadius: '2px', fontSize: '0.75rem', letterSpacing: '0.08em',
-                          textTransform: 'uppercase', fontFamily: 'var(--font-inter)',
-                          cursor: isBusy ? 'not-allowed' : 'pointer', opacity: isBusy ? 0.6 : 1,
-                        }}
-                      >{isBusy ? 'Working…' : 'Approve'}</button>
-                      <button
-                        onClick={() => { setRejectingId(r.id); setRejectReason('') }}
-                        disabled={isBusy}
-                        style={{
-                          flex: isMobile ? 1 : 'initial', background: 'transparent', border: '1px solid rgba(228,51,41,0.3)',
-                          color: 'var(--red)', padding: '0.8rem 1.5rem', borderRadius: '2px', fontSize: '0.75rem',
-                          letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: 'var(--font-inter)',
-                          cursor: isBusy ? 'not-allowed' : 'pointer', opacity: isBusy ? 0.6 : 1,
-                        }}
-                      >Reject</button>
+                      {tab === 'approved' ? (
+                        <button
+                          onClick={() => handleCheckIn(r)}
+                          disabled={isBusy}
+                          style={{
+                            flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
+                            backgroundColor: 'var(--teal)', color: '#fff', border: 'none',
+                            padding: '0.8rem 1.5rem', borderRadius: '2px', fontSize: '0.75rem', letterSpacing: '0.08em',
+                            textTransform: 'uppercase', fontFamily: 'var(--font-inter)',
+                            cursor: isBusy ? 'not-allowed' : 'pointer', opacity: isBusy ? 0.6 : 1,
+                          }}
+                        >
+                          <FontAwesomeIcon icon={faCircleCheck} style={{ width: '13px' }} />
+                          {isBusy ? 'Checking in…' : `Check In (+150 XP)`}
+                        </button>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => handleApprove(r)}
+                            disabled={isBusy}
+                            style={{
+                              flex: isMobile ? 1 : 'initial', backgroundColor: 'var(--teal)', color: '#fff', border: 'none',
+                              padding: '0.8rem 1.5rem', borderRadius: '2px', fontSize: '0.75rem', letterSpacing: '0.08em',
+                              textTransform: 'uppercase', fontFamily: 'var(--font-inter)',
+                              cursor: isBusy ? 'not-allowed' : 'pointer', opacity: isBusy ? 0.6 : 1,
+                            }}
+                          >{isBusy ? 'Working…' : 'Approve'}</button>
+                          <button
+                            onClick={() => { setRejectingId(r.id); setRejectReason('') }}
+                            disabled={isBusy}
+                            style={{
+                              flex: isMobile ? 1 : 'initial', background: 'transparent', border: '1px solid rgba(228,51,41,0.3)',
+                              color: 'var(--red)', padding: '0.8rem 1.5rem', borderRadius: '2px', fontSize: '0.75rem',
+                              letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: 'var(--font-inter)',
+                              cursor: isBusy ? 'not-allowed' : 'pointer', opacity: isBusy ? 0.6 : 1,
+                            }}
+                          >Reject</button>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>

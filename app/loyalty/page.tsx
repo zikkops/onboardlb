@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import Navbar from '../components/layout/Navbar'
+import { useCustomerUser } from '../lib/customerAuth'
 import Footer from '../components/layout/Footer'
 import Reveal from '../components/Reveal'
 import Skeleton from '../components/Skeleton'
@@ -105,6 +106,7 @@ function SectionHeading({ eyebrow, title, isMobile, color = 'var(--teal)' }: {
 
 export default function LoyaltyPage() {
   const isMobile = useIsMobile()
+  const { user } = useCustomerUser()
   const { items: redemptionItems, loading: loadingRedemptions } = useRedemptionItems(true)
   const { perks: PERKS, loading: loadingPerks } = useLevelPerks()
   const [activeTier, setActiveTier] = useState<string>(TIERS[0].label)
@@ -211,65 +213,105 @@ export default function LoyaltyPage() {
               justifyContent: 'center',
               alignItems: 'center',
             }}>
-              <Link href="/customer/login"
-                onMouseEnter={() => setSignInHovered(true)}
-                onMouseLeave={() => setSignInHovered(false)}
-                style={{
-                  position: 'relative',
-                  overflow: 'hidden',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '0.5rem',
-                  backgroundColor: signInHovered ? 'rgba(0,160,152,0.15)' : 'var(--teal)',
-                  color: '#fff',
-                  padding: '0.65rem 1.4rem',
-                  borderRadius: '2px',
-                  fontSize: '0.72rem',
-                  letterSpacing: '0.08em',
-                  textTransform: 'uppercase',
-                  textDecoration: 'none',
-                  fontFamily: 'var(--font-inter)',
-                  width: isMobile ? '100%' : 'auto',
-                  border: '1px solid var(--teal)',
-                  backdropFilter: signInHovered ? 'blur(10px)' : 'none',
-                  transition: 'all 0.3s ease',
-                }}>
-                <span style={{
-                  position: 'absolute', top: 0,
-                  left: signInHovered ? '120%' : '-60%',
-                  width: '40%', height: '100%',
-                  background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent)',
-                  transform: 'skewX(-20deg)',
-                  transition: 'left 0.5s ease',
-                  pointerEvents: 'none',
-                }} />
-                <FontAwesomeIcon icon={faGoogle} style={{ width: '12px' }} />
-                Sign In
-              </Link>
+              {user ? (
+                <Link href="/customer/profile"
+                  onMouseEnter={() => setSignInHovered(true)}
+                  onMouseLeave={() => setSignInHovered(false)}
+                  style={{
+                    position: 'relative',
+                    overflow: 'hidden',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.5rem',
+                    backgroundColor: signInHovered ? 'rgba(0,160,152,0.15)' : 'var(--teal)',
+                    color: '#fff',
+                    padding: '0.65rem 1.4rem',
+                    borderRadius: '2px',
+                    fontSize: '0.72rem',
+                    letterSpacing: '0.08em',
+                    textTransform: 'uppercase',
+                    textDecoration: 'none',
+                    fontFamily: 'var(--font-inter)',
+                    width: isMobile ? '100%' : 'auto',
+                    border: '1px solid var(--teal)',
+                    backdropFilter: signInHovered ? 'blur(10px)' : 'none',
+                    transition: 'all 0.3s ease',
+                  }}>
+                  <span style={{
+                    position: 'absolute', top: 0,
+                    left: signInHovered ? '120%' : '-60%',
+                    width: '40%', height: '100%',
+                    background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent)',
+                    transform: 'skewX(-20deg)',
+                    transition: 'left 0.5s ease',
+                    pointerEvents: 'none',
+                  }} />
+                  Go to Profile
+                </Link>
+              ) : (
+                <>
+                  <Link href="/customer/login"
+                    onMouseEnter={() => setSignInHovered(true)}
+                    onMouseLeave={() => setSignInHovered(false)}
+                    style={{
+                      position: 'relative',
+                      overflow: 'hidden',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '0.5rem',
+                      backgroundColor: signInHovered ? 'rgba(0,160,152,0.15)' : 'var(--teal)',
+                      color: '#fff',
+                      padding: '0.65rem 1.4rem',
+                      borderRadius: '2px',
+                      fontSize: '0.72rem',
+                      letterSpacing: '0.08em',
+                      textTransform: 'uppercase',
+                      textDecoration: 'none',
+                      fontFamily: 'var(--font-inter)',
+                      width: isMobile ? '100%' : 'auto',
+                      border: '1px solid var(--teal)',
+                      backdropFilter: signInHovered ? 'blur(10px)' : 'none',
+                      transition: 'all 0.3s ease',
+                    }}>
+                    <span style={{
+                      position: 'absolute', top: 0,
+                      left: signInHovered ? '120%' : '-60%',
+                      width: '40%', height: '100%',
+                      background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent)',
+                      transform: 'skewX(-20deg)',
+                      transition: 'left 0.5s ease',
+                      pointerEvents: 'none',
+                    }} />
+                    <FontAwesomeIcon icon={faGoogle} style={{ width: '12px' }} />
+                    Sign In
+                  </Link>
 
-              <Link href="/customer/profile"
-                onMouseEnter={() => setProfileLinkHovered(true)}
-                onMouseLeave={() => setProfileLinkHovered(false)}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: profileLinkHovered ? 'rgba(245,242,236,0.08)' : 'transparent',
-                  border: `1px solid ${profileLinkHovered ? 'rgba(245,242,236,0.5)' : 'rgba(245,242,236,0.25)'}`,
-                  color: profileLinkHovered ? 'var(--offwhite)' : 'rgba(245,242,236,0.8)',
-                  padding: '0.65rem 1.4rem',
-                  borderRadius: '2px',
-                  fontSize: '0.72rem',
-                  letterSpacing: '0.08em',
-                  textTransform: 'uppercase',
-                  textDecoration: 'none',
-                  fontFamily: 'var(--font-inter)',
-                  width: isMobile ? '100%' : 'auto',
-                  transition: 'all 0.2s ease',
-                }}>
-                My Profile
-              </Link>
+                  <Link href="/customer/profile"
+                    onMouseEnter={() => setProfileLinkHovered(true)}
+                    onMouseLeave={() => setProfileLinkHovered(false)}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: profileLinkHovered ? 'rgba(245,242,236,0.08)' : 'transparent',
+                      border: `1px solid ${profileLinkHovered ? 'rgba(245,242,236,0.5)' : 'rgba(245,242,236,0.25)'}`,
+                      color: profileLinkHovered ? 'var(--offwhite)' : 'rgba(245,242,236,0.8)',
+                      padding: '0.65rem 1.4rem',
+                      borderRadius: '2px',
+                      fontSize: '0.72rem',
+                      letterSpacing: '0.08em',
+                      textTransform: 'uppercase',
+                      textDecoration: 'none',
+                      fontFamily: 'var(--font-inter)',
+                      width: isMobile ? '100%' : 'auto',
+                      transition: 'all 0.2s ease',
+                    }}>
+                    My Profile
+                  </Link>
+                </>
+              )}
             </div>
           </div>
         </section>
@@ -742,7 +784,7 @@ export default function LoyaltyPage() {
                 Sign in with your Google account — it takes 10 seconds.
               </p>
 
-              <Link href="/customer/login"
+              <Link href={user ? '/customer/profile' : '/customer/login'}
                 onMouseEnter={() => setJoinHovered(true)}
                 onMouseLeave={() => setJoinHovered(false)}
                 style={{
@@ -775,8 +817,8 @@ export default function LoyaltyPage() {
                   transition: 'left 0.5s ease',
                   pointerEvents: 'none',
                 }} />
-                <FontAwesomeIcon icon={faGoogle} style={{ width: '15px' }} />
-                Join the loyalty program
+                {!user && <FontAwesomeIcon icon={faGoogle} style={{ width: '15px' }} />}
+                {user ? 'Go to your profile' : 'Join the loyalty program'}
               </Link>
 
               <div>

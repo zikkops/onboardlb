@@ -187,6 +187,13 @@ service cloud.firestore {
       );
     }
 
+    // Mobile-app loyalty rewards catalog — admin creates rewards,
+    // customers browse to see what coins can be redeemed for.
+    match /rewards/{id} {
+      allow read: if true;
+      allow write: if isStaff();
+    }
+
     // Public, like games/menuItems/events above — the Loyalty page shows
     // what's redeemable to everyone, signed in or not, as part of the
     // pitch for why someone should join the program in the first place.
@@ -254,7 +261,13 @@ service cloud.firestore {
       allow update: if isStaff() ||
         (request.auth != null &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['participants']) &&
-          request.resource.data.participants.size() == resource.data.participants.size() - 1);
+          request.resource.data.participants.size() == resource.data.participants.size() - 1) ||
+        // Customer cancellation: pending or approved → cancelled only.
+        (request.auth != null &&
+          request.auth.uid == resource.data.userId &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'cancelledAt']) &&
+          request.resource.data.status == 'cancelled' &&
+          resource.data.status in ['pending', 'approved']);
     }
     // Same as dndReservations above, except declining also decrements the
     // separate `partySize` counter (D&D has no such field — its party size
@@ -268,7 +281,13 @@ service cloud.firestore {
         (request.auth != null &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['participants', 'partySize']) &&
           request.resource.data.participants.size() == resource.data.participants.size() - 1 &&
-          request.resource.data.partySize == resource.data.partySize - 1);
+          request.resource.data.partySize == resource.data.partySize - 1) ||
+        // Customer cancellation: pending or approved → cancelled only.
+        (request.auth != null &&
+          request.auth.uid == resource.data.userId &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'cancelledAt']) &&
+          request.resource.data.status == 'cancelled' &&
+          resource.data.status in ['pending', 'approved']);
     }
     // A lock only blocks a DM's calendar if it's backed by a real,
     // already-created reservation owned by the same person creating the
@@ -402,15 +421,18 @@ service cloud.firestore {
       allow create: if request.auth != null &&
         request.auth.uid == request.resource.data.requestedBy &&
         request.resource.data.status == 'pending' &&
-        request.resource.data.tableIds is list && request.resource.data.tableIds.size() >= 1 &&
+        request.resource.data.tableIds is list &&
         request.resource.data.partySize is int &&
         request.resource.data.partySize >= 1 && request.resource.data.partySize <= 50;
-      // No customer self-update path — unlike dndReservations/
-      // eventReservations, a table reservation has no separate per-person
-      // participant roster to decline out of (just one party-wide
-      // contactName/contactPhone), so there's nothing for a non-staff
-      // caller to legitimately update once it's submitted.
-      allow update: if isStaff();
+      // Staff may update any field. The customer who submitted may cancel
+      // their own reservation (pending or approved → cancelled only),
+      // changing only status and cancelledAt.
+      allow update: if isStaff() ||
+        (request.auth != null &&
+          request.auth.uid == resource.data.userId &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'cancelledAt']) &&
+          request.resource.data.status == 'cancelled' &&
+          resource.data.status in ['pending', 'approved']);
     }
 
     // Generalizes dndDmLocks' deterministic-doc-per-bucket pattern from one

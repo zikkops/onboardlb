@@ -127,6 +127,7 @@ export default function AdminPage() {
       title: 'Table Bookings',
       color: 'var(--navy)',
       cards: [
+        { label: 'Today\'s Schedule', desc: 'All approved reservations for today — tables, events, and D&D', href: '/admin/schedule', access: SECTION_ACCESS.tableReservations },
         { label: 'Table Reservations', desc: 'Approve or reject pending table booking requests', href: '/admin/tables/reservations', access: SECTION_ACCESS.tableReservations, badge: pendingTableReservations.length },
         { label: 'Table Map Editor', desc: 'Upload floor plans and place table markers for each branch', href: '/admin/branches/tables', access: SECTION_ACCESS.branchTables },
       ],

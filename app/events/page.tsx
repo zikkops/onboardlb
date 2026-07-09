@@ -234,25 +234,27 @@ function EventCard({ ev, dimmed = false, isMobile, hoveredEventId, onHover, onSe
           </span>
         </div>
 
-        <button onClick={() => onSelect(ev)} style={{
-          display: 'block',
-          width: '100%',
-          textAlign: 'center',
-          background: 'transparent',
-          border: `1px solid ${hovered ? 'var(--purple)' : 'rgba(106,106,183,0.3)'}`,
-          color: hovered ? 'var(--purple)' : 'var(--offwhite)',
-          padding: '0.6rem',
-          borderRadius: '2px',
-          fontSize: '0.72rem',
-          letterSpacing: '0.1em',
-          textTransform: 'uppercase',
-          cursor: 'pointer',
-          fontFamily: 'var(--font-inter)',
-          marginTop: '0.8rem',
-          transition: 'border-color 0.45s cubic-bezier(0.16, 1, 0.3, 1), color 0.45s cubic-bezier(0.16, 1, 0.3, 1)',
-        }}>
-          {dimmed ? 'View Details' : 'Learn More'}
-        </button>
+        {!dimmed && (
+          <button onClick={() => onSelect(ev)} style={{
+            display: 'block',
+            width: '100%',
+            textAlign: 'center',
+            background: 'transparent',
+            border: `1px solid ${hovered ? 'var(--purple)' : 'rgba(106,106,183,0.3)'}`,
+            color: hovered ? 'var(--purple)' : 'var(--offwhite)',
+            padding: '0.6rem',
+            borderRadius: '2px',
+            fontSize: '0.72rem',
+            letterSpacing: '0.1em',
+            textTransform: 'uppercase',
+            cursor: 'pointer',
+            fontFamily: 'var(--font-inter)',
+            marginTop: '0.8rem',
+            transition: 'border-color 0.45s cubic-bezier(0.16, 1, 0.3, 1), color 0.45s cubic-bezier(0.16, 1, 0.3, 1)',
+          }}>
+            Learn More
+          </button>
+        )}
       </div>
     </div>
     </div>
@@ -636,6 +638,9 @@ export default function EventsPage() {
               </div>
 
               {/* CTAs */}
+              {(() => {
+                const isCompleted = new Date(selected.date) < new Date(new Date().setHours(0, 0, 0, 0))
+                return isCompleted ? null : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
                 <button
                   onClick={() => setReserving(selected)}
@@ -694,6 +699,8 @@ export default function EventsPage() {
                     }}>Register Externally</a>
                 )}
               </div>
+                )
+              })()}
             </div>
           </div>
         </div>

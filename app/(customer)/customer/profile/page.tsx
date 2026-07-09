@@ -1,13 +1,13 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
-  doc, onSnapshot, updateDoc, setDoc,
+  doc, onSnapshot, updateDoc,
   collection, query, where, orderBy, limit, getDocs, type Timestamp,
 } from 'firebase/firestore'
-import { db, auth } from '../../../lib/firebase'
+import { db } from '../../../lib/firebase'
 import { useCustomerUser, signOutCustomer, resendVerificationEmail, refreshEmailVerified } from '../../../lib/customerAuth'
 import { useIsMobile } from '../../../lib/useIsMobile'
 import { useUserRedemptions, cancelRedemption, type Redemption } from '../../../lib/redemptions'
@@ -16,7 +16,6 @@ import { useUserReservations, type Reservation } from '../../../lib/dndReservati
 import { useUserEventReservations, type EventReservation } from '../../../lib/eventReservations'
 import { useUserTableReservations, type TableReservation } from '../../../lib/tableReservations'
 import { usePendingInvites, useSentLfpInvites, acceptInvite, declineInvite, type ParticipantInvite } from '../../../lib/participantInvites'
-import { uploadImage } from '../../../lib/media'
 import Skeleton from '../../../components/Skeleton'
 import { getLevelFromXP, getTierFromLevel, TIER_COLORS } from '../../../lib/levelConfig'
 import { useLevelPerks } from '../../../lib/levelPerks'
@@ -123,6 +122,8 @@ const PREMADE_AVATARS = [
   'https://api.dicebear.com/9.x/adventurer/svg?seed=Nova',
   'https://api.dicebear.com/9.x/adventurer/svg?seed=Orion',
   'https://api.dicebear.com/9.x/adventurer/svg?seed=Willow',
+  'https://api.dicebear.com/9.x/adventurer/svg?seed=Rex',
+  'https://api.dicebear.com/9.x/adventurer/svg?seed=Ember',
 ]
 
 function TransactionCard({
@@ -314,12 +315,8 @@ export default function CustomerProfilePage() {
   // number and the imgbb delete-hash aren't safe to expose to the broad
   // "any signed-in customer can read another user's doc" rule that friend
   // search and the leaderboard rely on (see firestore.rules).
-  const [avatarDeleteUrl, setAvatarDeleteUrl] = useState<string | null>(null)
-  const [uploadingAvatar, setUploadingAvatar] = useState(false)
-  const [avatarError, setAvatarError] = useState('')
   const [avatarHovered, setAvatarHovered] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
-  const fileRef = useRef<HTMLInputElement>(null)
 
   // Local copy rather than reading `user.emailVerified` directly — the
   // cached Auth object only refreshes on a real sign-in event, not when the
@@ -385,7 +382,6 @@ export default function CustomerProfilePage() {
   const [signOutHovered, setSignOutHovered] = useState(false)
   const [modalCloseHovered, setModalCloseHovered] = useState(false)
   const [hoveredAvatarOption, setHoveredAvatarOption] = useState<string | null>(null)
-  const [uploadBtnHovered, setUploadBtnHovered] = useState(false)
   const [hoveredThemeId, setHoveredThemeId] = useState<string | null>(null)
 
   async function handleAcceptInvite(invite: ParticipantInvite) {
@@ -429,14 +425,6 @@ export default function CustomerProfilePage() {
     return unsub
   }, [user])
 
-  useEffect(() => {
-    if (!user) { setAvatarDeleteUrl(null); return }
-    const ref = doc(db, 'users', user.uid, 'private', 'avatar')
-    const unsub = onSnapshot(ref, snap => {
-      setAvatarDeleteUrl((snap.data()?.avatarDeleteUrl as string | undefined) ?? null)
-    })
-    return unsub
-  }, [user])
 
   // Public feed — last 5 approved transactions. Visible regardless of whose
   // profile this is.
@@ -490,48 +478,9 @@ export default function CustomerProfilePage() {
     router.replace('/customer/login')
   }
 
-  // Best-effort cleanup of whatever avatar they're replacing — only does
-  // anything if the old one was a custom upload we host (premade avatars
-  // and Google photos have no delete URL, so this is a no-op for those).
-  async function deleteOldAvatarIfAny() {
-    const deleteUrl = avatarDeleteUrl
-    if (!deleteUrl) return
-    try {
-      const idToken = await auth.currentUser?.getIdToken()
-      await fetch('/api/media/delete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${idToken}` },
-        body: JSON.stringify({ deleteUrl }),
-      })
-    } catch {
-      // Not fatal — the new avatar still gets set either way.
-    }
-  }
-
-  async function handleSelectPremadeAvatar(url: string) {
+  async function handleSelectAvatar(url: string) {
     if (!user) return
-    await deleteOldAvatarIfAny()
     await updateDoc(doc(db, 'users', user.uid), { avatarUrl: url })
-    await setDoc(doc(db, 'users', user.uid, 'private', 'avatar'), { avatarDeleteUrl: null }, { merge: true })
-  }
-
-  async function handleAvatarUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file || !user) return
-    setAvatarError('')
-    setUploadingAvatar(true)
-    try {
-      const { url, deleteUrl } = await uploadImage(file)
-      await deleteOldAvatarIfAny()
-      await updateDoc(doc(db, 'users', user.uid), { avatarUrl: url })
-      await setDoc(doc(db, 'users', user.uid, 'private', 'avatar'), { avatarDeleteUrl: deleteUrl }, { merge: true })
-    } catch (err) {
-      setAvatarError(err instanceof Error ? err.message : 'Upload failed.')
-      if (fileRef.current) fileRef.current.value = ''
-    } finally {
-      setUploadingAvatar(false)
-      if (fileRef.current) fileRef.current.value = ''
-    }
   }
 
   async function handleSelectTheme(themeId: string) {
@@ -1564,9 +1513,9 @@ export default function CustomerProfilePage() {
 
                 <div style={{
                   display: 'grid',
-                  gridTemplateColumns: 'repeat(3, 1fr)',
+                  gridTemplateColumns: 'repeat(4, 1fr)',
                   gap: '0.8rem',
-                  marginBottom: '1.2rem',
+                  marginBottom: '1rem',
                 }}>
                   {PREMADE_AVATARS.map(url => {
                     const selected = profile.avatarUrl === url
@@ -1574,8 +1523,7 @@ export default function CustomerProfilePage() {
                     return (
                       <button
                         key={url}
-                        onClick={() => handleSelectPremadeAvatar(url)}
-                        disabled={uploadingAvatar}
+                        onClick={() => handleSelectAvatar(url)}
                         onMouseEnter={() => setHoveredAvatarOption(url)}
                         onMouseLeave={() => setHoveredAvatarOption(null)}
                         style={{
@@ -1585,7 +1533,7 @@ export default function CustomerProfilePage() {
                           padding: 0,
                           backgroundColor: '#1a1a1a',
                           border: selected ? `3px solid ${theme.accent}` : `2px solid ${hov ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.1)'}`,
-                          cursor: uploadingAvatar ? 'not-allowed' : 'pointer',
+                          cursor: 'pointer',
                           transform: hov && !selected ? 'scale(1.06)' : 'scale(1)',
                           transition: 'all 0.2s ease',
                         }}
@@ -1595,43 +1543,6 @@ export default function CustomerProfilePage() {
                     )
                   })}
                 </div>
-
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleAvatarUpload}
-                  style={{ display: 'none' }}
-                />
-                <button
-                  onClick={() => fileRef.current?.click()}
-                  disabled={uploadingAvatar}
-                  onMouseEnter={() => setUploadBtnHovered(true)}
-                  onMouseLeave={() => setUploadBtnHovered(false)}
-                  style={{
-                    width: '100%',
-                    backgroundColor: !uploadingAvatar && uploadBtnHovered ? `${theme.accent}cc` : theme.accent,
-                    color: '#fff',
-                    border: 'none',
-                    padding: '0.8rem',
-                    borderRadius: '2px',
-                    fontSize: '0.75rem',
-                    letterSpacing: '0.08em',
-                    textTransform: 'uppercase',
-                    fontFamily: 'var(--font-inter)',
-                    cursor: uploadingAvatar ? 'not-allowed' : 'pointer',
-                    opacity: uploadingAvatar ? 0.6 : 1,
-                    boxShadow: !uploadingAvatar && uploadBtnHovered ? `0 6px 16px ${theme.accent}50` : 'none',
-                    transition: 'all 0.2s ease',
-                  }}
-                >
-                  {uploadingAvatar ? 'Uploading…' : 'Upload Your Own Image'}
-                </button>
-                {avatarError && (
-                  <p style={{ color: 'var(--red)', fontSize: '0.78rem', fontFamily: 'var(--font-inter)', marginTop: '0.6rem' }}>
-                    {avatarError}
-                  </p>
-                )}
               </div>
 
               {/* Theme picker */}

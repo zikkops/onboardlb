@@ -237,6 +237,32 @@ export function useUserTableReservations(uid: string | null) {
   return { reservations, loading }
 }
 
+// Approved reservations that haven't been checked in yet — shown in the
+// admin "Approved" tab so staff can check customers in when they arrive.
+export function useApprovedTableReservations(branchFilter: 'all' | string[] | null) {
+  const [reservations, setReservations] = useState<TableReservation[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (!branchFilter || (Array.isArray(branchFilter) && branchFilter.length === 0)) {
+      setReservations([]); setLoading(false); return
+    }
+    setLoading(true)
+    const base = collection(db, 'tableReservations')
+    const q = branchFilter === 'all'
+      ? query(base, where('status', '==', 'approved'), where('checkedIn', '!=', true), orderBy('startAt', 'asc'))
+      : query(base, where('branch', 'in', branchFilter.slice(0, 30)), where('status', '==', 'approved'), where('checkedIn', '!=', true), orderBy('startAt', 'asc'))
+    const unsub = onSnapshot(q, snap => {
+      setReservations(snap.docs.map(d => ({ id: d.id, ...d.data() } as TableReservation)))
+      setLoading(false)
+    }, err => console.error('[useApprovedTableReservations] listener failed:', err))
+    return unsub
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [branchFilter === 'all' ? 'all' : branchFilter?.join(',')])
+
+  return { reservations, loading }
+}
+
 // Admin/manager queue — 'all' sees every pending reservation, or a branch
 // array scopes it to a manager's own branches (same pattern as
 // usePendingEventReservations).

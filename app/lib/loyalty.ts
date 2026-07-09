@@ -44,6 +44,8 @@ export const DND_XP_PER_PERSON = 400
 export const DND_COINS_PER_PERSON = 75
 export const EVENT_XP_PER_PERSON = 250
 export const EVENT_COINS_PER_PERSON = 50
+export const TABLE_XP = 150
+export const TABLE_COINS = 30
 
 export interface ResolvedProfile {
   displayName: string
@@ -283,4 +285,40 @@ export async function createEventAttendanceTransaction(input: {
     xpAmount: EVENT_XP_PER_PERSON,
     coinsAmount: EVENT_COINS_PER_PERSON,
   })
+}
+
+// Instant check-in award for a table reservation — no pending/approve cycle
+// needed since the staff member doing the check-in is already authorized.
+// Mirrors approveTransaction's read-then-batch pattern: reads the user doc
+// first (to compute new level) then commits the user update + the reservation
+// status flip + the log entry as one batch.
+export async function awardTableCheckin(input: {
+  userId: string
+  reservationId: string
+  branch: string
+  tableNumbers: number[]
+  staffUid: string
+}): Promise<void> {
+  const userSnap = await getDoc(doc(db, 'users', input.userId))
+  if (!userSnap.exists()) throw new Error('user-not-found')
+  const data = userSnap.data() as { xp?: number; obCoins?: number }
+  const newXp    = (data.xp    ?? 0) + TABLE_XP
+  const newCoins = (data.obCoins ?? 0) + TABLE_COINS
+  const { level, levelTitle } = getLevelFromXP(newXp)
+
+  const batch = writeBatch(db)
+  batch.update(doc(db, 'users', input.userId), { xp: newXp, obCoins: newCoins, level, levelTitle })
+  batch.update(doc(db, 'tableReservations', input.reservationId), {
+    checkedIn: true,
+    checkedInAt: serverTimestamp(),
+    checkedInBy: input.staffUid,
+  })
+  await batch.commit()
+
+  await logUpdate(
+    'Table Reservation',
+    `${input.branch} — Table${input.tableNumbers.length > 1 ? 's' : ''} ${input.tableNumbers.join(', ')}`,
+    { checkedIn: false },
+    { checkedIn: true, xpAwarded: TABLE_XP, coinsAwarded: TABLE_COINS }
+  )
 }

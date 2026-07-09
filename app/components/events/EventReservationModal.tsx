@@ -290,7 +290,7 @@ export default function EventReservationModal({ event, onClose }: {
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
                   <input
                     type="tel"
-                    placeholder="Phone number (no account needed)"
+                    placeholder="Phone number"
                     value={phoneInput}
                     onChange={e => setPhoneInput(e.target.value)}
                     style={{ ...inputStyle, flex: 1 }}

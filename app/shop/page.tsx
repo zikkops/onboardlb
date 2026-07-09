@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo, useRef } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { collection, getDocs } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import Navbar from '../components/layout/Navbar'
@@ -180,37 +180,22 @@ export default function ShopPage() {
     })
   }, [games, filter, search, maxPrice, minPlayers, maxPlayers])
 
-  // Render 20 at a time rather than the whole filtered list in one shot —
-  // with a big enough catalog, mounting every card's <img> at once is the
-  // actual source of a slow-feeling page load, not just missing
-  // placeholders. The sentinel below reveals the next batch automatically
-  // as it scrolls into view, so this just keeps going on its own.
-  const BATCH_SIZE = 20
-  const [visibleCount, setVisibleCount] = useState(BATCH_SIZE)
-  const loadMoreRef = useRef<HTMLDivElement>(null)
+  const PAGE_SIZE = 20
+  const [page, setPage] = useState(1)
 
-  // A new filter/search/price/players result set starts back at the first
-  // batch — otherwise switching categories could leave visibleCount stuck
-  // at a number that doesn't mean anything for the new, different list.
-  useEffect(() => {
-    setVisibleCount(BATCH_SIZE)
-  }, [filter, search, maxPrice, minPlayers, maxPlayers])
+  // Reset to page 1 whenever filters change.
+  useEffect(() => { setPage(1) }, [filter, search, maxPrice, minPlayers, maxPlayers])
 
-  const visibleGames = filtered.slice(0, visibleCount)
-  const hasMore = visibleCount < filtered.length
+  const totalPages  = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  const visibleGames = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
-  useEffect(() => {
-    if (!hasMore) return
-    const sentinel = loadMoreRef.current
-    if (!sentinel) return
-    const observer = new IntersectionObserver(entries => {
-      if (entries[0].isIntersecting) {
-        setVisibleCount(prev => Math.min(prev + BATCH_SIZE, filtered.length))
-      }
-    }, { rootMargin: '600px' })
-    observer.observe(sentinel)
-    return () => observer.disconnect()
-  }, [hasMore, filtered.length])
+  function scrollToTop() {
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+  function goToPage(p: number) {
+    setPage(p)
+    scrollToTop()
+  }
 
   function reset() {
     setSearch('')
@@ -901,25 +886,65 @@ export default function ShopPage() {
               </div>
             )}
 
-            {/* Sentinel — scrolling this into view loads the next batch.
-                Shows a row of skeleton cards while there's more to come,
-                so the page never dumps every image on the DOM at once. */}
-            {hasMore && (
-              <div ref={loadMoreRef} style={{
-                display: 'grid',
-                gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(3, 1fr)',
-                gap: isMobile ? '0.75rem' : '1.5rem',
-                marginTop: isMobile ? '0.75rem' : '1.5rem',
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.5rem',
+                marginTop: '2.5rem',
+                flexWrap: 'wrap',
               }}>
-                {Array.from({ length: isMobile ? 2 : 3 }).map((_, i) => (
-                  <div key={i} style={{ border: '1px solid rgba(255,255,255,0.06)', borderRadius: '4px', overflow: 'hidden' }}>
-                    <Skeleton height={isMobile ? '120px' : '200px'} borderRadius="0" />
-                    <div style={{ padding: isMobile ? '0.8rem' : '1.2rem', display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-                      <Skeleton width="70%" height="1rem" />
-                      <Skeleton width="45%" height="0.8rem" />
-                    </div>
-                  </div>
-                ))}
+                <button
+                  onClick={() => goToPage(page - 1)}
+                  disabled={page === 1}
+                  style={{
+                    background: 'transparent',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    color: page === 1 ? 'rgba(245,242,236,0.2)' : 'rgba(245,242,236,0.6)',
+                    padding: '0.5rem 1rem',
+                    borderRadius: '2px',
+                    fontSize: '0.78rem',
+                    cursor: page === 1 ? 'default' : 'pointer',
+                    fontFamily: 'var(--font-inter)',
+                  }}
+                >← Prev</button>
+
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => {
+                  const active = p === page
+                  if (totalPages > 7 && Math.abs(p - page) > 2 && p !== 1 && p !== totalPages) {
+                    if (p === 2 || p === totalPages - 1) return <span key={p} style={{ color: 'rgba(245,242,236,0.2)', fontFamily: 'var(--font-inter)', fontSize: '0.78rem' }}>…</span>
+                    return null
+                  }
+                  return (
+                    <button key={p} onClick={() => goToPage(p)} style={{
+                      background: active ? 'var(--purple)' : 'transparent',
+                      border: `1px solid ${active ? 'var(--purple)' : 'rgba(255,255,255,0.1)'}`,
+                      color: active ? '#fff' : 'rgba(245,242,236,0.5)',
+                      width: '36px', height: '36px',
+                      borderRadius: '2px',
+                      fontSize: '0.78rem',
+                      cursor: active ? 'default' : 'pointer',
+                      fontFamily: 'var(--font-inter)',
+                    }}>{p}</button>
+                  )
+                })}
+
+                <button
+                  onClick={() => goToPage(page + 1)}
+                  disabled={page === totalPages}
+                  style={{
+                    background: 'transparent',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    color: page === totalPages ? 'rgba(245,242,236,0.2)' : 'rgba(245,242,236,0.6)',
+                    padding: '0.5rem 1rem',
+                    borderRadius: '2px',
+                    fontSize: '0.78rem',
+                    cursor: page === totalPages ? 'default' : 'pointer',
+                    fontFamily: 'var(--font-inter)',
+                  }}
+                >Next →</button>
               </div>
             )}
           </div>

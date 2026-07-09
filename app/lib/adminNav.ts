@@ -51,6 +51,7 @@ export const ADMIN_NAV: AdminNavSection[] = [
     title: 'Table Bookings',
     color: 'var(--navy)',
     items: [
+      { label: "Today's Schedule",   href: '/admin/schedule',            access: SECTION_ACCESS.tableReservations },
       { label: 'Table Reservations', href: '/admin/tables/reservations', access: SECTION_ACCESS.tableReservations },
       { label: 'Table Map Editor',   href: '/admin/branches/tables',     access: SECTION_ACCESS.branchTables },
     ],
