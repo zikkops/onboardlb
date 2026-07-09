@@ -48,6 +48,7 @@ export const SECTION_LABELS: Record<string, string> = {
   tableReservations: 'Table Reservations',
   gamePurchases:     'Record Game Sales',
   gameTransfers:     'Transfer Stock',
+  weeklyOrders:      'Weekly Order Reports',
 }
 
 export const SECTION_ACCESS = {
@@ -71,6 +72,7 @@ export const SECTION_ACCESS = {
   tableReservations: ['admin', 'manager'] as Role[],
   gamePurchases:     ['admin', 'manager', 'gamer'] as Role[],
   gameTransfers:     ['admin', 'manager', 'gamer'] as Role[],
+  weeklyOrders:      ALL_ROLES,
 }
 
 // Reads either shape — the new `branchIds` array, or the older singular

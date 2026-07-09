@@ -465,6 +465,24 @@ service cloud.firestore {
       allow read, write: if isStaff();
     }
 
+    // ---- Weekly order reports ----
+    // Template items are managed by admin via the template editor page;
+    // all staff can read them (they appear on the submit form).
+    match /orderTemplateItems/{id} {
+      allow read: if isStaff();
+      allow write: if isStaff();
+    }
+    // Reports are created by any staff member and readable by all staff.
+    match /weeklyOrderReports/{id} {
+      allow read: if isStaff();
+      allow create: if isStaff() &&
+        request.auth.uid == request.resource.data.submittedBy &&
+        request.resource.data.branch is string &&
+        request.resource.data.weekStart is string &&
+        request.resource.data.items is list;
+      allow update, delete: if isStaff();
+    }
+
     // Everything else is denied by default — Firestore rejects any
     // collection with no matching `match` block above, so this isn't
     // strictly required, but it's written out explicitly so that's never

@@ -89,6 +89,15 @@ export const ADMIN_NAV: AdminNavSection[] = [
     ],
   },
   {
+    title: 'Weekly Orders',
+    color: 'var(--teal)',
+    items: [
+      { label: 'Order Reports',  href: '/admin/weekly-orders',          access: SECTION_ACCESS.weeklyOrders },
+      { label: 'Submit Report',  href: '/admin/weekly-orders/submit',   access: SECTION_ACCESS.weeklyOrders },
+      { label: 'Edit Template',  href: '/admin/weekly-orders/template', access: ['admin'] as Role[] },
+    ],
+  },
+  {
     title: 'Administration',
     color: 'var(--red)',
     items: [
