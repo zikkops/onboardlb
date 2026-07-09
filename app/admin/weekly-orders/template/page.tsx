@@ -5,8 +5,9 @@ import { useRequireRole } from '../../../lib/adminAuth'
 import {
   listTemplateItems, addTemplateItem, updateTemplateItem, deleteTemplateItem,
   listCategoryMeta, setCategoryMeta,
-  translateToArabic, groupByCategory,
-  type OrderTemplateItem, type OrderCategoryMeta, type OrderUnit, UNIT_LABELS,
+  listProviders,
+  translateToArabic, groupByCategory, packLabel,
+  type OrderTemplateItem, type OrderCategoryMeta, type OrderProvider, type OrderUnit, UNIT_LABELS,
 } from '../../../lib/weeklyOrders'
 
 const UNITS: OrderUnit[] = ['box', 'kg', 'liter']
@@ -90,22 +91,24 @@ function AddItemForm({ categories, onSave }: {
   )
 }
 
-// ---- Provider header per category ----
-function ProviderRow({ category, meta, onSave }: {
+// ---- Provider assignment per category ----
+function ProviderRow({ category, meta, providers, onSave }: {
   category: string
   meta: OrderCategoryMeta | undefined
+  providers: OrderProvider[]
   onSave: (category: string, meta: OrderCategoryMeta) => Promise<void>
 }) {
-  const [name,    setName]    = useState(meta?.providerName ?? '')
-  const [phone,   setPhone]   = useState(meta?.providerPhone ?? '')
-  const [saving,  setSaving]  = useState(false)
-  const [saved,   setSaved]   = useState(false)
-  const dirty = name !== (meta?.providerName ?? '') || phone !== (meta?.providerPhone ?? '')
+  const [selectedId, setSelectedId] = useState(meta?.providerId ?? '')
+  const [saving,     setSaving]     = useState(false)
+  const [saved,      setSaved]      = useState(false)
+
+  const dirty = selectedId !== (meta?.providerId ?? '')
+  const chosen = providers.find(p => p.id === selectedId)
 
   async function save() {
     setSaving(true)
     try {
-      await onSave(category, { providerName: name.trim(), providerPhone: phone.trim() })
+      await onSave(category, { providerId: selectedId || undefined })
       setSaved(true); setTimeout(() => setSaved(false), 2000)
     } finally { setSaving(false) }
   }
@@ -113,37 +116,57 @@ function ProviderRow({ category, meta, onSave }: {
   return (
     <div style={{
       display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap',
-      padding: '0.65rem 1rem', background: 'rgba(0,160,152,0.06)',
-      borderBottom: '1px solid rgba(255,255,255,0.06)',
+      padding: '0.65rem 1rem', background: 'rgba(0,160,152,0.05)',
+      borderBottom: '1px solid rgba(255,255,255,0.05)',
     }}>
-      <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.68rem', color: 'rgba(245,242,236,0.35)', letterSpacing: '0.1em', textTransform: 'uppercase', minWidth: '52px' }}>
-        Provider
+      <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.68rem', color: 'rgba(245,242,236,0.35)', letterSpacing: '0.1em', textTransform: 'uppercase', minWidth: '56px' }}>
+        Supplier
       </span>
-      <input
-        value={name}
-        onChange={e => setName(e.target.value)}
-        placeholder="Supplier name"
-        style={{ ...inp, padding: '0.4rem 0.7rem', fontSize: '0.82rem', flex: '1', minWidth: '140px' }}
-      />
-      <input
-        value={phone}
-        onChange={e => setPhone(e.target.value)}
-        placeholder="+961 XX XXX XXX"
-        style={{ ...inp, padding: '0.4rem 0.7rem', fontSize: '0.82rem', width: '170px' }}
-      />
-      <button
-        onClick={save}
-        disabled={saving || !dirty}
-        style={{
-          ...btnGhost,
-          opacity: saving || !dirty ? 0.4 : 1,
-          cursor: saving || !dirty ? 'default' : 'pointer',
-          color: saved ? 'var(--teal)' : undefined,
-          borderColor: saved ? 'rgba(0,160,152,0.4)' : undefined,
-        }}
+
+      <select
+        value={selectedId}
+        onChange={e => setSelectedId(e.target.value)}
+        style={{ ...inp, padding: '0.4rem 0.7rem', fontSize: '0.82rem', minWidth: '220px', cursor: 'pointer' }}
       >
-        {saving ? '…' : saved ? '✓ Saved' : 'Save'}
-      </button>
+        <option value="">— No provider assigned —</option>
+        {providers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+      </select>
+
+      {/* Phone preview for each branch */}
+      {chosen && (
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+          {Object.entries(chosen.phones ?? {}).map(([branch, phone]) =>
+            phone ? (
+              <span key={branch} style={{ fontFamily: 'var(--font-inter)', fontSize: '0.72rem', color: 'rgba(245,242,236,0.4)', background: 'rgba(255,255,255,0.04)', borderRadius: '2px', padding: '0.2rem 0.5rem' }}>
+                {branch}: <strong style={{ color: 'var(--teal)' }}>{phone}</strong>
+              </span>
+            ) : null
+          )}
+        </div>
+      )}
+
+      {dirty && (
+        <button
+          onClick={save}
+          disabled={saving}
+          style={{
+            ...btnGhost,
+            opacity: saving ? 0.5 : 1,
+            color: saved ? 'var(--teal)' : undefined,
+            borderColor: saved ? 'rgba(0,160,152,0.4)' : undefined,
+          }}
+        >
+          {saving ? '…' : saved ? '✓ Saved' : 'Assign'}
+        </button>
+      )}
+
+      <a href="/admin/weekly-orders/providers" style={{
+        fontFamily: 'var(--font-inter)', fontSize: '0.68rem',
+        color: 'rgba(245,242,236,0.25)', textDecoration: 'none',
+        marginLeft: 'auto',
+      }}>
+        Manage providers →
+      </a>
     </div>
   )
 }
@@ -155,23 +178,25 @@ function ItemRow({ item, categories, onUpdated, onDeleted }: {
   onUpdated: (id: string, before: Partial<OrderTemplateItem>, after: Partial<OrderTemplateItem>) => Promise<void>
   onDeleted: (id: string, name: string) => Promise<void>
 }) {
-  const [editing,      setEditing]      = useState(false)
-  const [name,         setName]         = useState(item.name)
-  const [nameAr,       setNameAr]       = useState(item.nameAr ?? '')
-  const [category,     setCategory]     = useState(item.category)
-  const [unit,         setUnit]         = useState<OrderUnit>(item.unit)
-  const [saving,       setSaving]       = useState(false)
-  const [deleting,     setDeleting]     = useState(false)
-  const [translating,  setTranslating]  = useState(false)
-  const [transErr,     setTransErr]     = useState('')
+  const [editing,     setEditing]     = useState(false)
+  const [name,        setName]        = useState(item.name)
+  const [nameAr,      setNameAr]      = useState(item.nameAr ?? '')
+  const [unit,        setUnit]        = useState<OrderUnit>(item.unit)
+  const [packSize,    setPackSize]    = useState(String(item.packSize ?? ''))
+  const [packUnit,    setPackUnit]    = useState(item.packUnit ?? '')
+  const [saving,      setSaving]      = useState(false)
+  const [deleting,    setDeleting]    = useState(false)
+  const [translating, setTranslating] = useState(false)
+  const [transErr,    setTransErr]    = useState('')
 
   async function save() {
     setSaving(true)
+    const ps = parseInt(packSize, 10)
     try {
       await onUpdated(
         item.id,
-        { name: item.name, nameAr: item.nameAr, category: item.category, unit: item.unit },
-        { name, nameAr, category, unit },
+        { name: item.name, nameAr: item.nameAr, unit: item.unit, packSize: item.packSize, packUnit: item.packUnit },
+        { name, nameAr, unit, packSize: isNaN(ps) || ps < 1 ? undefined : ps, packUnit: packUnit.trim() || undefined },
       )
       setEditing(false)
     } finally { setSaving(false) }
@@ -179,10 +204,8 @@ function ItemRow({ item, categories, onUpdated, onDeleted }: {
 
   async function autoTranslate() {
     setTranslating(true); setTransErr('')
-    try {
-      const ar = await translateToArabic(name)
-      setNameAr(ar)
-    } catch { setTransErr('Translation failed') }
+    try { setNameAr(await translateToArabic(name)) }
+    catch { setTransErr('Translation failed') }
     finally { setTranslating(false) }
   }
 
@@ -192,69 +215,62 @@ function ItemRow({ item, categories, onUpdated, onDeleted }: {
     try { await onDeleted(item.id, item.name) } finally { setDeleting(false) }
   }
 
-  const rowStyle: React.CSSProperties = {
-    display: 'grid',
-    gridTemplateColumns: '2fr 1.4fr auto 1fr auto',
-    alignItems: 'center',
-    gap: '0.6rem',
-    padding: '0.7rem 1rem',
-    borderTop: '1px solid rgba(255,255,255,0.04)',
-  }
+  const basePad: React.CSSProperties = { padding: '0.7rem 1rem', borderTop: '1px solid rgba(255,255,255,0.04)' }
 
   if (editing) {
     return (
-      <div style={rowStyle}>
-        <input value={name} onChange={e => setName(e.target.value)} style={{ ...inp, width: '100%' }} />
-        <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+      <div style={basePad}>
+        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.4fr auto auto', gap: '0.6rem', alignItems: 'center', marginBottom: '0.5rem' }}>
+          <input value={name} onChange={e => setName(e.target.value)} style={{ ...inp, width: '100%' }} />
+          <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+            <input value={nameAr} onChange={e => setNameAr(e.target.value)} placeholder="عربي" dir="rtl" style={{ ...inp, flex: 1, textAlign: 'right' }} />
+            <button onClick={autoTranslate} disabled={translating} title="Auto-translate" style={{
+              background: 'rgba(201,150,44,0.12)', border: '1px solid rgba(201,150,44,0.3)',
+              color: '#C9962C', padding: '0.35rem 0.5rem', borderRadius: '2px', fontSize: '0.72rem', cursor: 'pointer',
+            }}>{translating ? '…' : '🌐'}</button>
+          </div>
+          <select value={unit} onChange={e => setUnit(e.target.value as OrderUnit)} style={{ ...inp, cursor: 'pointer' }}>
+            {UNITS.map(u => <option key={u} value={u}>{UNIT_LABELS[u]}</option>)}
+          </select>
+          <div />
+        </div>
+        {/* Pack size row */}
+        <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', marginBottom: '0.6rem' }}>
+          <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.68rem', color: 'rgba(245,242,236,0.3)', letterSpacing: '0.1em', textTransform: 'uppercase', minWidth: '60px' }}>Pack size</span>
           <input
-            value={nameAr}
-            onChange={e => setNameAr(e.target.value)}
-            placeholder="عربي"
-            dir="rtl"
-            style={{ ...inp, flex: 1, textAlign: 'right' }}
+            type="number" min="1" value={packSize} onChange={e => setPackSize(e.target.value)}
+            placeholder="e.g. 4"
+            style={{ ...inp, width: '90px', textAlign: 'center' }}
           />
-          <button onClick={autoTranslate} disabled={translating} title="Auto-translate" style={{
-            background: 'rgba(201,150,44,0.12)', border: '1px solid rgba(201,150,44,0.3)',
-            color: '#C9962C', padding: '0.35rem 0.5rem', borderRadius: '2px',
-            fontSize: '0.72rem', cursor: 'pointer', whiteSpace: 'nowrap',
-          }}>
-            {translating ? '…' : '🌐'}
-          </button>
+          <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.78rem', color: 'rgba(245,242,236,0.3)' }}>{UNIT_LABELS[unit]} contains</span>
+          <input
+            value={packUnit} onChange={e => setPackUnit(e.target.value)}
+            placeholder="e.g. bottles / pieces"
+            style={{ ...inp, width: '180px' }}
+          />
+          <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.75rem', color: 'rgba(245,242,236,0.2)' }}>each (optional)</span>
         </div>
-        <select value={unit} onChange={e => setUnit(e.target.value as OrderUnit)} style={{ ...inp, cursor: 'pointer' }}>
-          {UNITS.map(u => <option key={u} value={u}>{UNIT_LABELS[u]}</option>)}
-        </select>
-        <div />
         <div style={{ display: 'flex', gap: '0.4rem' }}>
-          <button onClick={save} disabled={saving} style={{ ...btnPrimary, padding: '0.4rem 0.8rem' }}>
-            {saving ? '…' : 'Save'}
-          </button>
-          <button onClick={() => { setName(item.name); setNameAr(item.nameAr ?? ''); setCategory(item.category); setUnit(item.unit); setEditing(false) }} style={{ ...btnGhost, padding: '0.4rem 0.7rem' }}>
-            ✕
-          </button>
+          <button onClick={save} disabled={saving} style={{ ...btnPrimary, padding: '0.4rem 0.8rem' }}>{saving ? '…' : 'Save'}</button>
+          <button onClick={() => { setName(item.name); setNameAr(item.nameAr ?? ''); setUnit(item.unit); setPackSize(String(item.packSize ?? '')); setPackUnit(item.packUnit ?? ''); setEditing(false) }} style={{ ...btnGhost, padding: '0.4rem 0.7rem' }}>Cancel</button>
         </div>
-        {transErr && <p style={{ gridColumn: '1/-1', color: 'var(--red)', fontSize: '0.72rem', marginTop: '0.2rem', fontFamily: 'var(--font-inter)' }}>{transErr}</p>}
+        {transErr && <p style={{ color: 'var(--red)', fontSize: '0.72rem', marginTop: '0.3rem', fontFamily: 'var(--font-inter)' }}>{transErr}</p>}
       </div>
     )
   }
 
   return (
-    <div style={rowStyle}>
-      <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.88rem', color: 'var(--offwhite)', fontWeight: 500 }}>
-        {item.name}
-      </span>
+    <div style={{ ...basePad, display: 'grid', gridTemplateColumns: '2fr 1.4fr auto auto', alignItems: 'center', gap: '0.6rem' }}>
+      <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.88rem', color: 'var(--offwhite)', fontWeight: 500 }}>{item.name}</span>
       <span dir="rtl" style={{ fontFamily: 'var(--font-inter)', fontSize: '0.85rem', color: item.nameAr ? 'rgba(201,150,44,0.9)' : 'rgba(245,242,236,0.2)', textAlign: 'right' }}>
         {item.nameAr || '—'}
       </span>
-      <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.8rem', color: 'rgba(245,242,236,0.4)' }}>
-        {UNIT_LABELS[item.unit]}
+      <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.8rem', color: 'rgba(245,242,236,0.4)', whiteSpace: 'nowrap' }}>
+        {packLabel(item.unit, item.packSize, item.packUnit)}
       </span>
-      <div />
       <div style={{ display: 'flex', gap: '0.4rem' }}>
         <button onClick={() => setEditing(true)} style={{ ...btnGhost, padding: '0.3rem 0.6rem' }}>Edit</button>
-        <button onClick={remove} disabled={deleting} style={{ ...btnDanger, opacity: deleting ? 0.5 : 1 }}>
-          {deleting ? '…' : 'Del'}
-        </button>
+        <button onClick={remove} disabled={deleting} style={{ ...btnDanger, opacity: deleting ? 0.5 : 1 }}>{deleting ? '…' : 'Del'}</button>
       </div>
     </div>
   )
@@ -263,37 +279,32 @@ function ItemRow({ item, categories, onUpdated, onDeleted }: {
 // ---- Main page ----
 export default function OrderTemplatePage() {
   const { checking } = useRequireRole(['admin'])
-  const [items,        setItems]        = useState<OrderTemplateItem[]>([])
+  const [items,        setItems]             = useState<OrderTemplateItem[]>([])
   const [categoryMeta, setCategoryMetaState] = useState<Record<string, OrderCategoryMeta>>({})
-  const [loading,      setLoading]      = useState(true)
-  const [transAll,     setTransAll]     = useState(false)
-  const [transProgress, setTransProgress] = useState('')
+  const [providers,    setProviders]         = useState<OrderProvider[]>([])
+  const [loading,      setLoading]           = useState(true)
+  const [transAll,     setTransAll]          = useState(false)
+  const [transProgress, setTransProgress]   = useState('')
 
   async function load() {
     setLoading(true)
-    const [data, meta] = await Promise.all([listTemplateItems(), listCategoryMeta()])
+    const [data, meta, provs] = await Promise.all([
+      listTemplateItems(), listCategoryMeta(), listProviders(),
+    ])
     setItems(data)
     setCategoryMetaState(meta)
+    setProviders(provs)
     setLoading(false)
   }
 
   useEffect(() => { load() }, [])
 
   const categories = Array.from(new Set(items.map(i => i.category))).sort()
-  const grouped = groupByCategory(items)
+  const grouped    = groupByCategory(items)
 
-  async function handleAdd(item: Omit<OrderTemplateItem, 'id' | 'createdAt'>) {
-    await addTemplateItem(item); await load()
-  }
-
-  async function handleUpdate(id: string, before: Partial<OrderTemplateItem>, after: Partial<OrderTemplateItem>) {
-    await updateTemplateItem(id, before, after); await load()
-  }
-
-  async function handleDelete(id: string, name: string) {
-    await deleteTemplateItem(id, name); await load()
-  }
-
+  async function handleAdd(item: Omit<OrderTemplateItem, 'id' | 'createdAt'>) { await addTemplateItem(item); await load() }
+  async function handleUpdate(id: string, before: Partial<OrderTemplateItem>, after: Partial<OrderTemplateItem>) { await updateTemplateItem(id, before, after); await load() }
+  async function handleDelete(id: string, name: string) { await deleteTemplateItem(id, name); await load() }
   async function handleSaveMeta(category: string, meta: OrderCategoryMeta) {
     await setCategoryMeta(category, meta)
     setCategoryMetaState(prev => ({ ...prev, [category]: meta }))
@@ -334,23 +345,27 @@ export default function OrderTemplatePage() {
                 Order Item Template
               </h1>
               <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.82rem', color: 'rgba(245,242,236,0.3)' }}>
-                Set item names, units, Arabic translations, and supplier info per category.
+                Set items, units, Arabic names, and assign a provider to each category.
               </p>
             </div>
-            {items.filter(i => !i.nameAr).length > 0 && (
-              <button
-                onClick={translateAll}
-                disabled={transAll}
-                style={{
+            <div style={{ display: 'flex', gap: '0.65rem', flexWrap: 'wrap' }}>
+              {items.filter(i => !i.nameAr).length > 0 && (
+                <button onClick={translateAll} disabled={transAll} style={{
                   backgroundColor: 'rgba(201,150,44,0.12)', border: '1px solid rgba(201,150,44,0.3)',
-                  color: '#C9962C', padding: '0.65rem 1.2rem', borderRadius: '2px',
-                  fontSize: '0.75rem', letterSpacing: '0.08em', textTransform: 'uppercase',
+                  color: '#C9962C', padding: '0.6rem 1.1rem', borderRadius: '2px',
+                  fontSize: '0.73rem', letterSpacing: '0.08em', textTransform: 'uppercase',
                   cursor: transAll ? 'not-allowed' : 'pointer', fontFamily: 'var(--font-inter)',
-                }}
-              >
-                {transAll ? `Translating ${transProgress}…` : `🌐 Translate All to Arabic (${items.filter(i => !i.nameAr).length} missing)`}
-              </button>
-            )}
+                }}>
+                  {transAll ? `Translating ${transProgress}…` : `🌐 Translate All (${items.filter(i => !i.nameAr).length})`}
+                </button>
+              )}
+              <a href="/admin/weekly-orders/providers" style={{
+                backgroundColor: 'transparent', border: '1px solid rgba(255,255,255,0.12)',
+                color: 'rgba(245,242,236,0.5)', textDecoration: 'none',
+                padding: '0.6rem 1.1rem', borderRadius: '2px', fontSize: '0.73rem',
+                letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: 'var(--font-inter)',
+              }}>Manage Providers</a>
+            </div>
           </div>
         </div>
 
@@ -368,41 +383,32 @@ export default function OrderTemplatePage() {
               <div key={category} style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '4px', overflow: 'hidden' }}>
 
                 {/* Category header */}
-                <div style={{ padding: '0.75rem 1rem', background: 'rgba(255,255,255,0.03)', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ padding: '0.75rem 1rem', background: 'rgba(255,255,255,0.03)', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
                   <p style={{ fontFamily: 'var(--font-cinzel)', fontSize: '0.78rem', color: 'var(--teal)', letterSpacing: '0.18em', textTransform: 'uppercase' }}>
                     {category}
-                    <span style={{ color: 'rgba(245,242,236,0.25)', marginLeft: '0.5rem', fontSize: '0.7rem' }}>
+                    <span style={{ color: 'rgba(245,242,236,0.25)', marginLeft: '0.5rem', fontSize: '0.7rem', fontFamily: 'var(--font-inter)', fontWeight: 400, letterSpacing: 'normal', textTransform: 'none' }}>
                       {catItems.length} item{catItems.length !== 1 ? 's' : ''}
                     </span>
                   </p>
                 </div>
 
-                {/* Provider row */}
+                {/* Provider assignment */}
                 <ProviderRow
                   category={category}
                   meta={categoryMeta[category]}
+                  providers={providers}
                   onSave={handleSaveMeta}
                 />
 
                 {/* Column headers */}
-                <div style={{
-                  display: 'grid', gridTemplateColumns: '2fr 1.4fr auto 1fr auto',
-                  gap: '0.6rem', padding: '0.4rem 1rem',
-                  borderBottom: '1px solid rgba(255,255,255,0.04)',
-                }}>
-                  {['English Name', 'Arabic Name (اسم بالعربي)', 'Unit', '', ''].map((h, i) => (
+                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.4fr auto auto', gap: '0.6rem', padding: '0.4rem 1rem', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                  {['English Name', 'Arabic / عربي', 'Unit / Pack', ''].map((h, i) => (
                     <span key={i} style={{ fontFamily: 'var(--font-inter)', fontSize: '0.65rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(245,242,236,0.25)' }}>{h}</span>
                   ))}
                 </div>
 
                 {catItems.map(item => (
-                  <ItemRow
-                    key={item.id}
-                    item={item}
-                    categories={categories}
-                    onUpdated={handleUpdate}
-                    onDeleted={handleDelete}
-                  />
+                  <ItemRow key={item.id} item={item} categories={categories} onUpdated={handleUpdate} onDeleted={handleDelete} />
                 ))}
               </div>
             ))}

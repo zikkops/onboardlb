@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRequireRole, ALL_ROLES } from '../../../lib/adminAuth'
 import {
   listTemplateItems, submitWeeklyReport, getCurrentWeek, groupByCategory,
-  type OrderTemplateItem, UNIT_LABELS,
+  packLabel, type OrderTemplateItem, UNIT_LABELS,
 } from '../../../lib/weeklyOrders'
 import { BRANCHES } from '../../../lib/branches'
 
@@ -51,6 +51,8 @@ export default function SubmitOrderPage() {
       name:       item.name,
       category:   item.category,
       unit:       item.unit,
+      packSize:   item.packSize,
+      packUnit:   item.packUnit,
       quantity:   parseFloat(qtys[item.id] ?? '0') || 0,
     })).filter(i => i.quantity > 0)
 
@@ -184,7 +186,7 @@ export default function SubmitOrderPage() {
                           {item.name}
                         </span>
                         <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.75rem', color: 'rgba(245,242,236,0.3)', marginLeft: '0.5rem' }}>
-                          ({UNIT_LABELS[item.unit]})
+                          ({packLabel(item.unit, item.packSize, item.packUnit)})
                         </span>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -198,7 +200,7 @@ export default function SubmitOrderPage() {
                           style={{ ...inp, width: '90px', textAlign: 'right' }}
                         />
                         <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.78rem', color: 'rgba(245,242,236,0.35)', minWidth: '36px' }}>
-                          {UNIT_LABELS[item.unit]}
+                          {packLabel(item.unit, item.packSize, item.packUnit)}
                         </span>
                       </div>
                     </div>

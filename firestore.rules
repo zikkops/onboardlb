@@ -477,6 +477,11 @@ service cloud.firestore {
       allow read: if isStaff();
       allow write: if isStaff();
     }
+    // Supplier/provider directory — name + per-branch phone numbers.
+    match /orderProviders/{id} {
+      allow read: if isStaff();
+      allow write: if isStaff();
+    }
     // Reports are created by any staff member and readable by all staff.
     match /weeklyOrderReports/{id} {
       allow read: if isStaff();

@@ -168,9 +168,10 @@ export default function AdminPage() {
       title: 'Weekly Orders',
       color: 'var(--teal)',
       cards: [
-        { label: 'Order Reports',  desc: 'View all end-of-week order reports submitted by staff', href: '/admin/weekly-orders', access: SECTION_ACCESS.weeklyOrders },
-        { label: 'Submit Report',  desc: 'Fill in quantities and submit this week\'s stock order', href: '/admin/weekly-orders/submit', access: SECTION_ACCESS.weeklyOrders },
-        { label: 'Edit Template',  desc: 'Manage the list of orderable items, categories, and units', href: '/admin/weekly-orders/template', access: ['admin'] as Role[] },
+        { label: 'Order Reports',    desc: 'View all end-of-week order reports submitted by staff', href: '/admin/weekly-orders', access: SECTION_ACCESS.weeklyOrders },
+        { label: 'Submit Report',    desc: 'Fill in quantities and submit this week\'s stock order', href: '/admin/weekly-orders/submit', access: SECTION_ACCESS.weeklyOrders },
+        { label: 'Manage Providers', desc: 'Add suppliers with per-branch phone numbers for WhatsApp ordering', href: '/admin/weekly-orders/providers', access: ['admin'] as Role[] },
+        { label: 'Edit Template',    desc: 'Manage orderable items, pack sizes, categories, Arabic names, and units', href: '/admin/weekly-orders/template', access: ['admin'] as Role[] },
       ],
     },
     {

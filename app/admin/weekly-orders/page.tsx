@@ -3,11 +3,11 @@
 import { useEffect, useState } from 'react'
 import { useRequireRole, ALL_ROLES } from '../../lib/adminAuth'
 import {
-  listWeeklyReports, listTemplateItems, listCategoryMeta,
-  generateOrderText, whatsappUrl, groupByCategory,
+  listWeeklyReports, listTemplateItems, listCategoryMeta, listProviders,
+  generateOrderText, whatsappUrl, groupByCategory, getProviderPhone,
   UNIT_LABELS,
   type WeeklyOrderReport, type WeeklyOrderReportItem,
-  type OrderTemplateItem, type OrderCategoryMeta,
+  type OrderTemplateItem, type OrderCategoryMeta, type OrderProvider,
 } from '../../lib/weeklyOrders'
 import { BRANCHES } from '../../lib/branches'
 
@@ -22,10 +22,12 @@ function fmtDate(ts: { seconds: number } | null): string {
 function ReportCard({
   report,
   categoryMeta,
+  providers,
   nameArMap,
 }: {
   report: WeeklyOrderReport
   categoryMeta: Record<string, OrderCategoryMeta>
+  providers: Record<string, OrderProvider>
   nameArMap: Record<string, string>
 }) {
   const [open,      setOpen]      = useState(false)
@@ -36,13 +38,13 @@ function ReportCard({
   const groups = groupByCategory(report.items)
 
   function copyAll() {
-    const text = generateOrderText(report, categoryMeta, nameArMap, showAr)
+    const text = generateOrderText(report, categoryMeta, providers, nameArMap, showAr)
     navigator.clipboard.writeText(text)
     setCopied(true); setTimeout(() => setCopied(false), 2000)
   }
 
   function copyCat(category: string) {
-    const text = generateOrderText(report, categoryMeta, nameArMap, showAr, category)
+    const text = generateOrderText(report, categoryMeta, providers, nameArMap, showAr, category)
     navigator.clipboard.writeText(text)
     setCopiedCat(category); setTimeout(() => setCopiedCat(null), 2000)
   }
@@ -123,9 +125,10 @@ function ReportCard({
           {/* Items by category */}
           <div style={{ padding: '1.25rem' }}>
             {groups.map(({ category, items: catItems }) => {
-              const meta   = categoryMeta[category]
-              const phone  = meta?.providerPhone?.replace(/\s+/g, '').replace(/^0+/, '')
-              const waText = generateOrderText(report, categoryMeta, nameArMap, showAr, category)
+              const meta      = categoryMeta[category]
+              const provider  = meta?.providerId ? providers[meta.providerId] : undefined
+              const phone     = provider ? getProviderPhone(provider, report.branch) : ''
+              const waText    = generateOrderText(report, categoryMeta, providers, nameArMap, showAr, category)
 
               return (
                 <div key={category} style={{ marginBottom: '1.5rem' }}>
@@ -135,9 +138,9 @@ function ReportCard({
                       <span style={{ fontFamily: 'var(--font-cinzel)', fontSize: '0.7rem', color: 'var(--teal)', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
                         {category}
                       </span>
-                      {meta?.providerName && (
+                      {provider && (
                         <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.75rem', color: 'rgba(245,242,236,0.4)', marginLeft: '0.75rem' }}>
-                          {meta.providerName}{meta.providerPhone ? ` · ${meta.providerPhone}` : ''}
+                          {provider.name}{phone ? ` · ${phone}` : ''}
                         </span>
                       )}
                     </div>
@@ -166,7 +169,7 @@ function ReportCard({
                             fontSize: '0.7rem', textDecoration: 'none', fontFamily: 'var(--font-inter)',
                           }}
                         >
-                          WhatsApp {meta?.providerName ? meta.providerName : ''}
+                          WhatsApp {provider?.name ?? ''}
                         </a>
                       )}
                     </div>
@@ -216,15 +219,17 @@ export default function WeeklyOrdersPage() {
   const { checking, role } = useRequireRole(ALL_ROLES)
   const [reports,      setReports]      = useState<WeeklyOrderReport[]>([])
   const [categoryMeta, setCategoryMeta] = useState<Record<string, OrderCategoryMeta>>({})
+  const [providers,    setProviders]    = useState<Record<string, OrderProvider>>({})
   const [nameArMap,    setNameArMap]    = useState<Record<string, string>>({})  // templateId -> nameAr
   const [loading,      setLoading]      = useState(true)
   const [branchFilter, setBranchFilter] = useState<string>('all')
 
   useEffect(() => {
-    Promise.all([listWeeklyReports(), listTemplateItems(), listCategoryMeta()]).then(
-      ([reps, tItems, meta]) => {
+    Promise.all([listWeeklyReports(), listTemplateItems(), listCategoryMeta(), listProviders()]).then(
+      ([reps, tItems, meta, provs]) => {
         setReports(reps)
         setCategoryMeta(meta)
+        setProviders(Object.fromEntries(provs.map(p => [p.id, p])))
         setNameArMap(Object.fromEntries(
           tItems.filter(i => i.nameAr).map(i => [i.id, i.nameAr!])
         ))
@@ -311,6 +316,7 @@ export default function WeeklyOrdersPage() {
                 key={r.id}
                 report={r}
                 categoryMeta={categoryMeta}
+                providers={providers}
                 nameArMap={nameArMap}
               />
             ))}

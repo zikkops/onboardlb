@@ -4,6 +4,7 @@ import {
 } from 'firebase/firestore'
 import { db } from './firebase'
 import { logActivity, logUpdate, logDelete } from './activityLog'
+import { BRANCHES } from './branches'
 
 export type OrderUnit = 'box' | 'kg' | 'liter'
 
@@ -13,19 +14,60 @@ export const UNIT_LABELS: Record<OrderUnit, string> = {
   liter: 'Liter',
 }
 
+// ---- Providers ----
+
+export interface OrderProvider {
+  id: string
+  name: string
+  phones: Partial<Record<typeof BRANCHES[number], string>>  // branch -> phone
+  notes?: string
+  createdAt: { seconds: number } | null
+}
+
+export async function listProviders(): Promise<OrderProvider[]> {
+  const snap = await getDocs(query(collection(db, 'orderProviders'), orderBy('name')))
+  return snap.docs.map(d => ({ id: d.id, ...d.data() } as OrderProvider))
+}
+
+export async function addProvider(p: Omit<OrderProvider, 'id' | 'createdAt'>): Promise<void> {
+  await addDoc(collection(db, 'orderProviders'), { ...p, createdAt: serverTimestamp() })
+  await logActivity('create', 'Order Provider', p.name)
+}
+
+export async function updateProvider(
+  id: string,
+  before: Partial<OrderProvider>,
+  after: Partial<OrderProvider>,
+): Promise<void> {
+  await updateDoc(doc(db, 'orderProviders', id), { ...after })
+  await logUpdate('Order Provider', after.name ?? id, before, after)
+}
+
+export async function deleteProvider(id: string, name: string): Promise<void> {
+  await deleteDoc(doc(db, 'orderProviders', id))
+  await logDelete('Order Provider', name)
+}
+
+export function getProviderPhone(provider: OrderProvider | undefined, branch: string): string {
+  return provider?.phones?.[branch as typeof BRANCHES[number]] ?? ''
+}
+
+// ---- Template items ----
+
 export interface OrderTemplateItem {
   id: string
   name: string
-  nameAr?: string      // Arabic translation, set in template editor
+  nameAr?: string
   category: string
   unit: OrderUnit
+  packSize?: number    // e.g. 4 — how many individual items are in one ordered unit
+  packUnit?: string    // e.g. "bottles" — the name of the individual item inside the pack
   sortOrder: number
   createdAt: { seconds: number } | null
 }
 
 export interface OrderCategoryMeta {
-  providerName: string
-  providerPhone: string
+  providerId?: string   // reference to orderProviders/{id}
 }
 
 export interface WeeklyOrderReportItem {
@@ -34,21 +76,21 @@ export interface WeeklyOrderReportItem {
   category: string
   unit: OrderUnit
   quantity: number
+  packSize?: number
+  packUnit?: string
 }
 
 export interface WeeklyOrderReport {
   id: string
   branch: string
-  weekStart: string      // YYYY-MM-DD (Monday)
-  weekLabel: string      // "7 Jul – 13 Jul 2026"
+  weekStart: string
+  weekLabel: string
   items: WeeklyOrderReportItem[]
   notes: string
-  submittedBy: string    // uid
+  submittedBy: string
   submittedByEmail: string
   submittedAt: { seconds: number } | null
 }
-
-// ---- Template items ----
 
 export async function listTemplateItems(): Promise<OrderTemplateItem[]> {
   const snap = await getDocs(query(collection(db, 'orderTemplateItems'), orderBy('category')))
@@ -83,13 +125,10 @@ export async function deleteTemplateItem(id: string, name: string): Promise<void
 }
 
 // ---- Category provider meta ----
-// One doc per category, doc id = category name, e.g. orderCategoryMeta/Beverages
 
 export async function listCategoryMeta(): Promise<Record<string, OrderCategoryMeta>> {
   const snap = await getDocs(collection(db, 'orderCategoryMeta'))
-  return Object.fromEntries(
-    snap.docs.map(d => [d.id, d.data() as OrderCategoryMeta])
-  )
+  return Object.fromEntries(snap.docs.map(d => [d.id, d.data() as OrderCategoryMeta]))
 }
 
 export async function setCategoryMeta(category: string, meta: OrderCategoryMeta): Promise<void> {
@@ -116,7 +155,14 @@ export async function listWeeklyReports(): Promise<WeeklyOrderReport[]> {
   return snap.docs.map(d => ({ id: d.id, ...d.data() } as WeeklyOrderReport))
 }
 
-// ---- Translation helper ----
+// Returns a label like "Box of 4 bottles" or just "KG" if no pack info
+export function packLabel(unit: OrderUnit, packSize?: number, packUnit?: string): string {
+  if (!packSize) return UNIT_LABELS[unit]
+  const inside = packUnit ? ` ${packUnit}` : ''
+  return `${UNIT_LABELS[unit]} (${packSize}${inside} each)`
+}
+
+// ---- Translation ----
 
 export async function translateToArabic(text: string): Promise<string> {
   const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|ar`
@@ -132,9 +178,10 @@ export async function translateToArabic(text: string): Promise<string> {
 export function generateOrderText(
   report: WeeklyOrderReport,
   categoryMeta: Record<string, OrderCategoryMeta>,
-  nameArMap: Record<string, string>,  // templateId -> nameAr
+  providers: Record<string, OrderProvider>,   // id -> provider
+  nameArMap: Record<string, string>,          // templateId -> nameAr
   showArabic: boolean,
-  categoryFilter?: string,            // if set, only include this category
+  categoryFilter?: string,
 ): string {
   const lines: string[] = []
 
@@ -148,15 +195,19 @@ export function generateOrderText(
   const filtered = categoryFilter ? groups.filter(g => g.category === categoryFilter) : groups
 
   for (const { category, items } of filtered) {
-    const meta = categoryMeta[category]
+    const providerId = categoryMeta[category]?.providerId
+    const provider   = providerId ? providers[providerId] : undefined
+    const phone      = provider ? getProviderPhone(provider, report.branch) : ''
+
     lines.push(`*${category.toUpperCase()}*`)
-    if (meta?.providerName) {
-      lines.push(`المورد: ${meta.providerName}${meta.providerPhone ? ` — ${meta.providerPhone}` : ''}`)
+    if (provider?.name) {
+      lines.push(`المورد: ${provider.name}${phone ? ` — ${phone}` : ''}`)
     }
     for (const item of items) {
-      const ar = nameArMap[item.templateId]
+      const ar    = nameArMap[item.templateId]
+      const label = packLabel(item.unit, item.packSize, item.packUnit)
       const nameDisplay = showArabic && ar ? `${item.name} (${ar})` : item.name
-      lines.push(`• ${nameDisplay}: ${item.quantity} ${UNIT_LABELS[item.unit]}`)
+      lines.push(`• ${nameDisplay}: ${item.quantity} ${label}`)
     }
     lines.push('')
   }
@@ -169,9 +220,9 @@ export function generateOrderText(
 }
 
 export function whatsappUrl(phone: string, text: string): string {
-  // Normalize phone: strip spaces and leading zeros, ensure it starts with country code
-  const clean = phone.replace(/\s+/g, '').replace(/^0+/, '')
-  return `https://wa.me/${clean}?text=${encodeURIComponent(text)}`
+  const clean = phone.replace(/[\s\-().]/g, '').replace(/^00/, '+').replace(/^0/, '')
+  const num   = clean.startsWith('+') ? clean.slice(1) : clean
+  return `https://wa.me/${num}?text=${encodeURIComponent(text)}`
 }
 
 // ---- Date helpers ----
