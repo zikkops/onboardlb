@@ -223,9 +223,8 @@ export function generateOrderText(
 
       for (const item of pItems) {
         const ar    = nameArMap[item.templateId]
-        const label = packLabel(item.unit, item.packSize, item.packUnit)
         const nameDisplay = showArabic && ar ? `${item.name} (${ar})` : item.name
-        lines.push(`• ${nameDisplay}: ${item.quantity} ${label}`)
+        lines.push(`• ${nameDisplay}: ${item.quantity} ${UNIT_LABELS[item.unit]}`)
       }
       lines.push('')
     }

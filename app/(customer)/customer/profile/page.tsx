@@ -34,6 +34,7 @@ interface CustomerProfile {
   displayName: string
   email: string
   avatarUrl: string
+  avatarBorderId?: string
   themeId: string
   xp: number
   level: number
@@ -112,19 +113,71 @@ const THEMES: Theme[] = [
 
 const DEFAULT_THEME = THEMES[0]
 
-// Stable, key-free placeholder avatars (deterministic SVGs from a seed —
-// no risk of a guessed photo URL not existing). Fantasy-styled to match the
-// site's D&D/tabletop theme.
 const PREMADE_AVATARS = [
-  'https://api.dicebear.com/9.x/adventurer/svg?seed=Aiden',
-  'https://api.dicebear.com/9.x/adventurer/svg?seed=Luna',
-  'https://api.dicebear.com/9.x/adventurer/svg?seed=Zephyr',
-  'https://api.dicebear.com/9.x/adventurer/svg?seed=Nova',
-  'https://api.dicebear.com/9.x/adventurer/svg?seed=Orion',
-  'https://api.dicebear.com/9.x/adventurer/svg?seed=Willow',
-  'https://api.dicebear.com/9.x/adventurer/svg?seed=Rex',
-  'https://api.dicebear.com/9.x/adventurer/svg?seed=Ember',
+  { url: '/images/Profile%20imgs/paladin.png',   label: 'Paladin'   },
+  { url: '/images/Profile%20imgs/rogue.png',     label: 'Rogue'     },
+  { url: '/images/Profile%20imgs/barbarian.png', label: 'Barbarian' },
+  { url: '/images/Profile%20imgs/wizard.jpg',    label: 'Wizard'    },
+  { url: '/images/Profile%20imgs/fighter.jpg',   label: 'Fighter'   },
+  { url: '/images/Profile%20imgs/bard.jpg',      label: 'Bard'      },
+  { url: '/images/Profile%20imgs/sorcerer.jpg',  label: 'Sorcerer'  },
+  { url: '/images/Profile%20imgs/ranger.jpg',    label: 'Ranger'    },
 ]
+
+interface AvatarBorder {
+  id: string
+  label: string
+  minLevel: number
+  bg: string                 // CSS background (solid color or gradient)
+  glow?: string              // optional box-shadow glow color
+  animClass?: string         // CSS class name for animated borders
+}
+
+const AVATAR_BORDERS: AvatarBorder[] = [
+  { id: 'none',           label: 'None',          minLevel: 1,  bg: 'transparent' },
+  { id: 'apprentice',     label: 'Apprentice',     minLevel: 5,  bg: '#888780' },
+  { id: 'adventurer',     label: 'Adventurer',     minLevel: 10, bg: '#1D9E75',                                         glow: 'rgba(29,158,117,0.55)' },
+  { id: 'champion',       label: 'Champion',       minLevel: 20, bg: 'linear-gradient(135deg,#378ADD,#60B4FF)',         glow: 'rgba(55,138,221,0.5)' },
+  { id: 'legend',         label: 'Legend',         minLevel: 30, bg: 'linear-gradient(135deg,#7F77DD,#B070FF)',         glow: 'rgba(127,119,221,0.65)', animClass: 'border-legend' },
+  { id: 'mythic',         label: 'Mythic',         minLevel: 40, bg: 'linear-gradient(135deg,#EF9F27,#FFD700,#FF6B00)', glow: 'rgba(239,159,39,0.7)',  animClass: 'border-mythic' },
+  { id: 'onboard-legend', label: 'Onboard Legend', minLevel: 50, bg: 'conic-gradient(#EF9F27,#B070FF,#378ADD,#1D9E75,#EF9F27)', glow: 'rgba(239,159,39,0.9)', animClass: 'border-onboard' },
+]
+
+const BORDER_ANIMATIONS = `
+  @keyframes legendPulse {
+    0%,100% { box-shadow: 0 0 8px 2px rgba(127,119,221,0.5); }
+    50%      { box-shadow: 0 0 22px 6px rgba(127,119,221,0.9); }
+  }
+  @keyframes mythicPulse {
+    0%,100% { box-shadow: 0 0 10px 3px rgba(239,159,39,0.5); }
+    50%      { box-shadow: 0 0 28px 8px rgba(239,159,39,1); }
+  }
+  @keyframes onboardSpin {
+    to { transform: rotate(360deg); }
+  }
+  @keyframes onboardSpinReverse {
+    to { transform: rotate(-360deg); }
+  }
+  .border-legend  { animation: legendPulse 2.5s ease-in-out infinite; }
+  .border-mythic  { animation: mythicPulse 2s ease-in-out infinite; }
+  .border-onboard { animation: onboardSpin 4s linear infinite; }
+  .border-onboard-inner { animation: onboardSpinReverse 4s linear infinite; }
+`
+
+function getBorderWrapperStyle(borderId: string | undefined, size: string, themeAccent: string): React.CSSProperties {
+  if (!borderId || borderId === 'none') {
+    return { width: size, height: size, borderRadius: '50%', flexShrink: 0, padding: '3px', background: themeAccent, display: 'flex' }
+  }
+  const b = AVATAR_BORDERS.find(x => x.id === borderId)
+  if (!b || b.id === 'none') {
+    return { width: size, height: size, borderRadius: '50%', flexShrink: 0, padding: 0, background: 'transparent', display: 'flex' }
+  }
+  return {
+    width: size, height: size, borderRadius: '50%', flexShrink: 0,
+    padding: '3px', display: 'flex', background: b.bg,
+    boxShadow: b.glow && !b.animClass ? `0 0 14px 3px ${b.glow}` : undefined,
+  }
+}
 
 function TransactionCard({
   tx, theme, isMobile, showStatus, showCheckDetails, showSplit, onImageClick, onCancel, cancelling,
@@ -382,6 +435,7 @@ export default function CustomerProfilePage() {
   const [signOutHovered, setSignOutHovered] = useState(false)
   const [modalCloseHovered, setModalCloseHovered] = useState(false)
   const [hoveredAvatarOption, setHoveredAvatarOption] = useState<string | null>(null)
+  const [hoveredBorderId,    setHoveredBorderId]    = useState<string | null>(null)
   const [hoveredThemeId, setHoveredThemeId] = useState<string | null>(null)
 
   async function handleAcceptInvite(invite: ParticipantInvite) {
@@ -481,6 +535,11 @@ export default function CustomerProfilePage() {
   async function handleSelectAvatar(url: string) {
     if (!user) return
     await updateDoc(doc(db, 'users', user.uid), { avatarUrl: url })
+  }
+
+  async function handleSelectBorder(avatarBorderId: string) {
+    if (!user) return
+    await updateDoc(doc(db, 'users', user.uid), { avatarBorderId })
   }
 
   async function handleSelectTheme(themeId: string) {
@@ -682,22 +741,27 @@ export default function CustomerProfilePage() {
               }}>Sign Out</button>
 
             {/* Avatar — click to open the customize popup */}
+            {/* Outer div provides the unlock border; inner button is the clipped circle */}
+            <div
+              className={AVATAR_BORDERS.find(b => b.id === profile.avatarBorderId)?.animClass}
+              style={getBorderWrapperStyle(profile.avatarBorderId, avatarSize, theme.accent)}
+            >
             <button
               onClick={() => setModalOpen(true)}
               onMouseEnter={() => setAvatarHovered(true)}
               onMouseLeave={() => setAvatarHovered(false)}
+              className={profile.avatarBorderId === 'onboard-legend' ? 'border-onboard-inner' : undefined}
               style={{
                 position: 'relative',
-                width: avatarSize,
-                height: avatarSize,
+                width: '100%',
+                height: '100%',
                 borderRadius: '50%',
                 overflow: 'hidden',
-                border: `3px solid ${theme.accent}`,
+                border: 'none',
                 backgroundColor: 'rgba(0,0,0,0.35)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                flexShrink: 0,
                 padding: 0,
                 cursor: 'pointer',
               }}
@@ -749,6 +813,7 @@ export default function CustomerProfilePage() {
                 <FontAwesomeIcon icon={faPen} style={{ width: '11px', color: '#fff' }} />
               </div>
             </button>
+            </div>
 
             {/* Info */}
             <div style={{
@@ -1433,7 +1498,9 @@ export default function CustomerProfilePage() {
         )}
       </div>
 
-      {/* Customize Profile Modal — avatar + theme color */}
+      <style>{BORDER_ANIMATIONS}</style>
+
+      {/* Customize Profile Modal — avatar + border + theme color */}
       {modalOpen && (
         <div
           onClick={() => setModalOpen(false)}
@@ -1517,14 +1584,14 @@ export default function CustomerProfilePage() {
                   gap: '0.8rem',
                   marginBottom: '1rem',
                 }}>
-                  {PREMADE_AVATARS.map(url => {
-                    const selected = profile.avatarUrl === url
-                    const hov = hoveredAvatarOption === url
+                  {PREMADE_AVATARS.map(avatar => {
+                    const selected = profile.avatarUrl === avatar.url
+                    const hov = hoveredAvatarOption === avatar.url
                     return (
                       <button
-                        key={url}
-                        onClick={() => handleSelectAvatar(url)}
-                        onMouseEnter={() => setHoveredAvatarOption(url)}
+                        key={avatar.url}
+                        onClick={() => handleSelectAvatar(avatar.url)}
+                        onMouseEnter={() => setHoveredAvatarOption(avatar.url)}
                         onMouseLeave={() => setHoveredAvatarOption(null)}
                         style={{
                           aspectRatio: '1',
@@ -1538,7 +1605,82 @@ export default function CustomerProfilePage() {
                           transition: 'all 0.2s ease',
                         }}
                       >
-                        <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        <img src={avatar.url} alt={avatar.label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Border picker */}
+              <div>
+                <p style={{
+                  fontSize: '0.65rem',
+                  letterSpacing: '0.2em',
+                  textTransform: 'uppercase',
+                  color: 'rgba(245,242,236,0.3)',
+                  fontFamily: 'var(--font-inter)',
+                  marginBottom: '1rem',
+                }}>Avatar Border</p>
+
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(4, 1fr)',
+                  gap: '0.8rem',
+                  marginBottom: '1rem',
+                }}>
+                  {AVATAR_BORDERS.map(border => {
+                    const unlocked = (profile.level ?? 1) >= border.minLevel
+                    const selected = (profile.avatarBorderId ?? '') === border.id
+                    const hov      = hoveredBorderId === border.id
+
+                    return (
+                      <button
+                        key={border.id}
+                        onClick={() => unlocked && handleSelectBorder(border.id)}
+                        onMouseEnter={() => setHoveredBorderId(border.id)}
+                        onMouseLeave={() => setHoveredBorderId(null)}
+                        title={unlocked ? border.label : `Unlocks at level ${border.minLevel}`}
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          gap: '0.4rem',
+                          background: 'none',
+                          border: 'none',
+                          cursor: unlocked ? 'pointer' : 'not-allowed',
+                          padding: '0.2rem',
+                          opacity: unlocked ? 1 : 0.35,
+                          transform: hov && unlocked && !selected ? 'scale(1.08)' : 'scale(1)',
+                          transition: 'all 0.2s ease',
+                        }}
+                      >
+                        {/* Mini ring preview */}
+                        <div
+                          className={border.animClass}
+                          style={{
+                            width: '44px', height: '44px', borderRadius: '50%',
+                            padding: border.id === 'none' ? '0' : '3px',
+                            background: border.id === 'none' ? 'transparent' : border.bg,
+                            boxShadow: selected ? `0 0 0 2px #0d0d0d, 0 0 0 4px ${theme.accent}` : 'none',
+                          }}
+                        >
+                          <div
+                            className={border.id === 'onboard-legend' ? 'border-onboard-inner' : undefined}
+                            style={{
+                              width: '100%', height: '100%', borderRadius: '50%',
+                              backgroundColor: '#0d0d0d',
+                              border: border.id === 'none' ? '2px solid rgba(255,255,255,0.15)' : 'none',
+                            }} />
+                        </div>
+                        <span style={{
+                          fontFamily: 'var(--font-inter)', fontSize: '0.58rem',
+                          letterSpacing: '0.05em', textTransform: 'uppercase',
+                          color: selected ? theme.accent : 'rgba(245,242,236,0.4)',
+                          whiteSpace: 'nowrap',
+                        }}>
+                          {unlocked ? border.label : `Lv ${border.minLevel}`}
+                        </span>
                       </button>
                     )
                   })}
