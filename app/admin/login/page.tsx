@@ -18,6 +18,11 @@ export default function AdminLoginPage() {
     setLoading(true)
     setError('')
     try {
+      const check = await fetch('/api/auth/login-preflight', { method: 'POST' })
+      if (!check.ok) {
+        setError('Too many login attempts. Please wait 15 minutes before trying again.')
+        return
+      }
       await signInWithEmailAndPassword(auth, email, password)
       setAdminSessionCookie()
       router.replace('/admin')
