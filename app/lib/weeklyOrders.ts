@@ -1,12 +1,13 @@
 import {
   collection, addDoc, getDocs, query, orderBy,
-  doc, updateDoc, deleteDoc, serverTimestamp, setDoc,
+  doc, updateDoc, deleteDoc, serverTimestamp,
 } from 'firebase/firestore'
 import { db } from './firebase'
 import { logActivity, logUpdate, logDelete } from './activityLog'
 import { BRANCHES } from './branches'
 
 export type OrderUnit = 'box' | 'kg' | 'liter'
+export type Department = 'Kitchen' | 'Bar'
 
 export const UNIT_LABELS: Record<OrderUnit, string> = {
   box:   'Box',
@@ -14,12 +15,14 @@ export const UNIT_LABELS: Record<OrderUnit, string> = {
   liter: 'Liter',
 }
 
+export const DEPARTMENTS: Department[] = ['Kitchen', 'Bar']
+
 // ---- Providers ----
 
 export interface OrderProvider {
   id: string
   name: string
-  phones: Partial<Record<typeof BRANCHES[number], string>>  // branch -> phone
+  phones: Partial<Record<typeof BRANCHES[number], string>>
   notes?: string
   createdAt: { seconds: number } | null
 }
@@ -58,22 +61,20 @@ export interface OrderTemplateItem {
   id: string
   name: string
   nameAr?: string
-  category: string
+  department: Department
+  providerId?: string
   unit: OrderUnit
-  packSize?: number    // e.g. 4 — how many individual items are in one ordered unit
-  packUnit?: string    // e.g. "bottles" — the name of the individual item inside the pack
+  packSize?: number
+  packUnit?: string
   sortOrder: number
   createdAt: { seconds: number } | null
-}
-
-export interface OrderCategoryMeta {
-  providerId?: string   // reference to orderProviders/{id}
 }
 
 export interface WeeklyOrderReportItem {
   templateId: string
   name: string
-  category: string
+  department: Department
+  providerId?: string
   unit: OrderUnit
   quantity: number
   packSize?: number
@@ -93,21 +94,22 @@ export interface WeeklyOrderReport {
 }
 
 export async function listTemplateItems(): Promise<OrderTemplateItem[]> {
-  const snap = await getDocs(query(collection(db, 'orderTemplateItems'), orderBy('category')))
+  const snap = await getDocs(query(collection(db, 'orderTemplateItems'), orderBy('name')))
   return snap.docs
     .map(d => ({ id: d.id, ...d.data() } as OrderTemplateItem))
-    .sort((a, b) =>
-      a.category.localeCompare(b.category) ||
-      (a.sortOrder ?? 0) - (b.sortOrder ?? 0) ||
-      a.name.localeCompare(b.name)
-    )
+    .sort((a, b) => {
+      const dA = DEPARTMENTS.indexOf(a.department ?? 'Kitchen')
+      const dB = DEPARTMENTS.indexOf(b.department ?? 'Kitchen')
+      if (dA !== dB) return dA - dB
+      return (a.providerId ?? '').localeCompare(b.providerId ?? '') || a.name.localeCompare(b.name)
+    })
 }
 
 export async function addTemplateItem(
   item: Omit<OrderTemplateItem, 'id' | 'createdAt'>
 ): Promise<void> {
   await addDoc(collection(db, 'orderTemplateItems'), { ...item, createdAt: serverTimestamp() })
-  await logActivity('create', 'Weekly Order Template', `${item.category} — ${item.name}`)
+  await logActivity('create', 'Weekly Order Template', `${item.department} — ${item.name}`)
 }
 
 export async function updateTemplateItem(
@@ -122,17 +124,6 @@ export async function updateTemplateItem(
 export async function deleteTemplateItem(id: string, name: string): Promise<void> {
   await deleteDoc(doc(db, 'orderTemplateItems', id))
   await logDelete('Weekly Order Template', name)
-}
-
-// ---- Category provider meta ----
-
-export async function listCategoryMeta(): Promise<Record<string, OrderCategoryMeta>> {
-  const snap = await getDocs(collection(db, 'orderCategoryMeta'))
-  return Object.fromEntries(snap.docs.map(d => [d.id, d.data() as OrderCategoryMeta]))
-}
-
-export async function setCategoryMeta(category: string, meta: OrderCategoryMeta): Promise<void> {
-  await setDoc(doc(db, 'orderCategoryMeta', category), meta)
 }
 
 // ---- Reports ----
@@ -155,7 +146,25 @@ export async function listWeeklyReports(): Promise<WeeklyOrderReport[]> {
   return snap.docs.map(d => ({ id: d.id, ...d.data() } as WeeklyOrderReport))
 }
 
-// Returns a label like "Box of 4 bottles" or just "KG" if no pack info
+// ---- Grouping helpers ----
+
+export function groupByProvider<T extends { providerId?: string }>(
+  items: T[]
+): { providerId: string | undefined; items: T[] }[] {
+  const map = new Map<string, T[]>()
+  for (const item of items) {
+    const key = item.providerId ?? '__none__'
+    if (!map.has(key)) map.set(key, [])
+    map.get(key)!.push(item)
+  }
+  return Array.from(map.entries()).map(([key, items]) => ({
+    providerId: key === '__none__' ? undefined : key,
+    items,
+  }))
+}
+
+// ---- Pack label ----
+
 export function packLabel(unit: OrderUnit, packSize?: number, packUnit?: string): string {
   if (!packSize) return UNIT_LABELS[unit]
   const inside = packUnit ? ` ${packUnit}` : ''
@@ -175,45 +184,55 @@ export async function translateToArabic(text: string): Promise<string> {
 
 // ---- Order text generation ----
 
+// providerFilter: when set, generates text only for that provider's items (across all departments)
 export function generateOrderText(
   report: WeeklyOrderReport,
-  categoryMeta: Record<string, OrderCategoryMeta>,
-  providers: Record<string, OrderProvider>,   // id -> provider
-  nameArMap: Record<string, string>,          // templateId -> nameAr
+  providers: Record<string, OrderProvider>,
+  nameArMap: Record<string, string>,
   showArabic: boolean,
-  categoryFilter?: string,
+  providerFilter?: string,
 ): string {
   const lines: string[] = []
 
-  if (!categoryFilter) {
-    lines.push(`*طلب أسبوعي — ${report.branch}*`)
-    lines.push(`الأسبوع: ${report.weekLabel}`)
-    lines.push('')
+  // Always open with branch + week so the recipient knows context
+  lines.push(`*Weekly Order — ${report.branch}*`)
+  lines.push(`Week: ${report.weekLabel}`)
+  lines.push('')
+
+  for (const dept of DEPARTMENTS) {
+    const deptItems = report.items.filter(i => (i.department ?? 'Kitchen') === dept)
+    if (deptItems.length === 0) continue
+
+    const provGroups = groupByProvider(deptItems)
+    const filtered = providerFilter
+      ? provGroups.filter(g => g.providerId === providerFilter)
+      : provGroups
+
+    if (filtered.length === 0) continue
+
+    lines.push(`*${dept.toUpperCase()}*`)
+
+    for (const { providerId, items: pItems } of filtered) {
+      const provider = providerId ? providers[providerId] : undefined
+
+      // In the full copy show the provider name; in a per-provider WhatsApp skip it
+      // (they already know who they are) and never include the phone number
+      if (!providerFilter) {
+        lines.push(`*${provider?.name ?? 'No Provider'}*`)
+      }
+
+      for (const item of pItems) {
+        const ar    = nameArMap[item.templateId]
+        const label = packLabel(item.unit, item.packSize, item.packUnit)
+        const nameDisplay = showArabic && ar ? `${item.name} (${ar})` : item.name
+        lines.push(`• ${nameDisplay}: ${item.quantity} ${label}`)
+      }
+      lines.push('')
+    }
   }
 
-  const groups = groupByCategory(report.items)
-  const filtered = categoryFilter ? groups.filter(g => g.category === categoryFilter) : groups
-
-  for (const { category, items } of filtered) {
-    const providerId = categoryMeta[category]?.providerId
-    const provider   = providerId ? providers[providerId] : undefined
-    const phone      = provider ? getProviderPhone(provider, report.branch) : ''
-
-    lines.push(`*${category.toUpperCase()}*`)
-    if (provider?.name) {
-      lines.push(`المورد: ${provider.name}${phone ? ` — ${phone}` : ''}`)
-    }
-    for (const item of items) {
-      const ar    = nameArMap[item.templateId]
-      const label = packLabel(item.unit, item.packSize, item.packUnit)
-      const nameDisplay = showArabic && ar ? `${item.name} (${ar})` : item.name
-      lines.push(`• ${nameDisplay}: ${item.quantity} ${label}`)
-    }
-    lines.push('')
-  }
-
-  if (!categoryFilter && report.notes) {
-    lines.push(`ملاحظات: ${report.notes}`)
+  if (!providerFilter && report.notes) {
+    lines.push(`Notes: ${report.notes}`)
   }
 
   return lines.join('\n').trimEnd()
@@ -246,13 +265,4 @@ export function getCurrentWeek(): { startStr: string; label: string } {
   ].join('-')
 
   return { startStr, label }
-}
-
-export function groupByCategory<T extends { category: string }>(items: T[]): { category: string; items: T[] }[] {
-  const map = new Map<string, T[]>()
-  for (const item of items) {
-    if (!map.has(item.category)) map.set(item.category, [])
-    map.get(item.category)!.push(item)
-  }
-  return Array.from(map.entries()).map(([category, items]) => ({ category, items }))
 }

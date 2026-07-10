@@ -1,15 +1,19 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRequireRole, ALL_ROLES } from '../../lib/adminAuth'
 import {
-  listWeeklyReports, listTemplateItems, listCategoryMeta, listProviders,
-  generateOrderText, whatsappUrl, groupByCategory, getProviderPhone,
-  UNIT_LABELS,
-  type WeeklyOrderReport, type WeeklyOrderReportItem,
-  type OrderTemplateItem, type OrderCategoryMeta, type OrderProvider,
+  listWeeklyReports, listTemplateItems, listProviders,
+  generateOrderText, whatsappUrl, groupByProvider, getProviderPhone,
+  UNIT_LABELS, DEPARTMENTS,
+  type WeeklyOrderReport, type OrderProvider, type Department,
 } from '../../lib/weeklyOrders'
 import { BRANCHES } from '../../lib/branches'
+
+const DEPT_COLOR: Record<Department, string> = {
+  Kitchen: 'var(--teal)',
+  Bar:     '#C9962C',
+}
 
 function fmtDate(ts: { seconds: number } | null): string {
   if (!ts) return '—'
@@ -21,32 +25,37 @@ function fmtDate(ts: { seconds: number } | null): string {
 
 function ReportCard({
   report,
-  categoryMeta,
   providers,
   nameArMap,
 }: {
   report: WeeklyOrderReport
-  categoryMeta: Record<string, OrderCategoryMeta>
   providers: Record<string, OrderProvider>
   nameArMap: Record<string, string>
 }) {
-  const [open,      setOpen]      = useState(false)
-  const [showAr,    setShowAr]    = useState(false)
-  const [copied,    setCopied]    = useState(false)
-  const [copiedCat, setCopiedCat] = useState<string | null>(null)
+  const [open,         setOpen]        = useState(false)
+  const [showAr,       setShowAr]      = useState(false)
+  const [copied,       setCopied]      = useState(false)
+  const [copiedProv,   setCopiedProv]  = useState<string | null>(null)
 
-  const groups = groupByCategory(report.items)
+  // Department → provider groups for this report
+  const deptGroups = useMemo(() =>
+    DEPARTMENTS.map(dept => {
+      const deptItems = report.items.filter(i => (i.department ?? 'Kitchen') === dept)
+      return { dept, provGroups: groupByProvider(deptItems) }
+    }).filter(d => d.provGroups.some(pg => pg.items.length > 0)),
+  [report.items])
 
   function copyAll() {
-    const text = generateOrderText(report, categoryMeta, providers, nameArMap, showAr)
+    const text = generateOrderText(report, providers, nameArMap, showAr)
     navigator.clipboard.writeText(text)
     setCopied(true); setTimeout(() => setCopied(false), 2000)
   }
 
-  function copyCat(category: string) {
-    const text = generateOrderText(report, categoryMeta, providers, nameArMap, showAr, category)
+  function copyProvider(providerId: string | undefined) {
+    const text = generateOrderText(report, providers, nameArMap, showAr, providerId)
+    const key = providerId ?? '__none__'
     navigator.clipboard.writeText(text)
-    setCopiedCat(category); setTimeout(() => setCopiedCat(null), 2000)
+    setCopiedProv(key); setTimeout(() => setCopiedProv(null), 2000)
   }
 
   const hasArabic = report.items.some(i => nameArMap[i.templateId])
@@ -96,18 +105,16 @@ function ReportCard({
             display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap',
             borderBottom: '1px solid rgba(255,255,255,0.06)',
           }}>
-            {/* Copy all */}
             <button onClick={copyAll} style={{
               backgroundColor: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)',
               color: copied ? 'var(--teal)' : 'rgba(245,242,236,0.7)',
               padding: '0.45rem 1rem', borderRadius: '2px', fontSize: '0.72rem',
               letterSpacing: '0.08em', textTransform: 'uppercase', cursor: 'pointer',
-              fontFamily: 'var(--font-inter)', display: 'flex', alignItems: 'center', gap: '0.4rem',
+              fontFamily: 'var(--font-inter)',
             }}>
               {copied ? '✓ Copied!' : '📋 Copy Full Order'}
             </button>
 
-            {/* Arabic toggle */}
             {hasArabic && (
               <button onClick={e => { e.stopPropagation(); setShowAr(v => !v) }} style={{
                 backgroundColor: showAr ? 'rgba(201,150,44,0.15)' : 'rgba(255,255,255,0.04)',
@@ -122,85 +129,106 @@ function ReportCard({
             )}
           </div>
 
-          {/* Items by category */}
+          {/* Department → Provider → Items */}
           <div style={{ padding: '1.25rem' }}>
-            {groups.map(({ category, items: catItems }) => {
-              const meta      = categoryMeta[category]
-              const provider  = meta?.providerId ? providers[meta.providerId] : undefined
-              const phone     = provider ? getProviderPhone(provider, report.branch) : ''
-              const waText    = generateOrderText(report, categoryMeta, providers, nameArMap, showAr, category)
+            {deptGroups.map(({ dept, provGroups }) => (
+              <div key={dept} style={{ marginBottom: '1.75rem' }}>
 
-              return (
-                <div key={category} style={{ marginBottom: '1.5rem' }}>
-                  {/* Category + provider header */}
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.6rem' }}>
-                    <div>
-                      <span style={{ fontFamily: 'var(--font-cinzel)', fontSize: '0.7rem', color: 'var(--teal)', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
-                        {category}
-                      </span>
-                      {provider && (
-                        <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.75rem', color: 'rgba(245,242,236,0.4)', marginLeft: '0.75rem' }}>
-                          {provider.name}{phone ? ` · ${phone}` : ''}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Per-provider action buttons */}
-                    <div style={{ display: 'flex', gap: '0.4rem' }}>
-                      <button onClick={() => copyCat(category)} style={{
-                        backgroundColor: 'transparent', border: '1px solid rgba(255,255,255,0.1)',
-                        color: copiedCat === category ? 'var(--teal)' : 'rgba(245,242,236,0.4)',
-                        padding: '0.3rem 0.7rem', borderRadius: '2px', fontSize: '0.7rem',
-                        cursor: 'pointer', fontFamily: 'var(--font-inter)',
-                      }}>
-                        {copiedCat === category ? '✓' : '📋'}
-                      </button>
-
-                      {phone && (
-                        <a
-                          href={whatsappUrl(phone, waText)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={e => e.stopPropagation()}
-                          style={{
-                            display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
-                            backgroundColor: 'rgba(37,211,102,0.1)', border: '1px solid rgba(37,211,102,0.3)',
-                            color: '#25D366', padding: '0.3rem 0.75rem', borderRadius: '2px',
-                            fontSize: '0.7rem', textDecoration: 'none', fontFamily: 'var(--font-inter)',
-                          }}
-                        >
-                          WhatsApp {provider?.name ?? ''}
-                        </a>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Item rows */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-                    {catItems.map(item => {
-                      const ar = nameArMap[item.templateId]
-                      return (
-                        <div key={item.templateId} style={{
-                          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                          padding: '0.5rem 0.9rem',
-                          background: 'rgba(255,255,255,0.025)', borderRadius: '2px',
-                        }}>
-                          <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.85rem', color: 'var(--offwhite)' }}>
-                            {item.name}
-                            {showAr && ar && (
-                              <span dir="rtl" style={{ color: '#C9962C', marginRight: '0.6rem', marginLeft: '0.6rem' }}>{ar}</span>
-                            )}
-                          </span>
-                          <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.88rem', color: 'var(--teal)', fontWeight: 700, flexShrink: 0 }}>
-                            {item.quantity} {UNIT_LABELS[item.unit]}
-                          </span>
-                        </div>
-                      )
-                    })}
-                  </div>
+                {/* Department label */}
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: '0.5rem',
+                  marginBottom: '0.85rem',
+                  paddingBottom: '0.45rem',
+                  borderBottom: `1px solid ${DEPT_COLOR[dept]}30`,
+                }}>
+                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: DEPT_COLOR[dept], flexShrink: 0 }} />
+                  <span style={{ fontFamily: 'var(--font-cinzel)', fontSize: '0.7rem', color: DEPT_COLOR[dept], letterSpacing: '0.2em' }}>
+                    {dept.toUpperCase()}
+                  </span>
                 </div>
-              )
-            })}
+
+                {provGroups.map(({ providerId, items: pItems }) => {
+                  const provider = providerId ? providers[providerId] : undefined
+                  const phone    = provider ? getProviderPhone(provider, report.branch) : ''
+                  const waText   = generateOrderText(report, providers, nameArMap, showAr, providerId)
+                  const provKey  = providerId ?? '__none__'
+
+                  return (
+                    <div key={provKey} style={{ marginBottom: '1.25rem' }}>
+                      {/* Provider header row */}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                        <div>
+                          <span style={{
+                            fontFamily: 'var(--font-inter)', fontSize: '0.83rem',
+                            color: provider ? 'var(--offwhite)' : 'rgba(245,242,236,0.3)',
+                            fontWeight: provider ? 600 : 400,
+                          }}>
+                            {provider?.name ?? 'No Provider'}
+                          </span>
+                          {phone && (
+                            <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.75rem', color: 'rgba(245,242,236,0.4)', marginLeft: '0.6rem' }}>
+                              {phone}
+                            </span>
+                          )}
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '0.4rem' }}>
+                          <button onClick={() => copyProvider(providerId)} style={{
+                            backgroundColor: 'transparent', border: '1px solid rgba(255,255,255,0.1)',
+                            color: copiedProv === provKey ? 'var(--teal)' : 'rgba(245,242,236,0.4)',
+                            padding: '0.3rem 0.7rem', borderRadius: '2px', fontSize: '0.7rem',
+                            cursor: 'pointer', fontFamily: 'var(--font-inter)',
+                          }}>
+                            {copiedProv === provKey ? '✓' : '📋'}
+                          </button>
+
+                          {phone && (
+                            <a
+                              href={whatsappUrl(phone, waText)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={e => e.stopPropagation()}
+                              style={{
+                                display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
+                                backgroundColor: 'rgba(37,211,102,0.1)', border: '1px solid rgba(37,211,102,0.3)',
+                                color: '#25D366', padding: '0.3rem 0.75rem', borderRadius: '2px',
+                                fontSize: '0.7rem', textDecoration: 'none', fontFamily: 'var(--font-inter)',
+                              }}
+                            >
+                              WhatsApp {provider?.name ?? ''}
+                            </a>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Item rows */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                        {pItems.map(item => {
+                          const ar = nameArMap[item.templateId]
+                          return (
+                            <div key={item.templateId} style={{
+                              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                              padding: '0.5rem 0.9rem',
+                              background: 'rgba(255,255,255,0.025)', borderRadius: '2px',
+                            }}>
+                              <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.85rem', color: 'var(--offwhite)' }}>
+                                {item.name}
+                                {showAr && ar && (
+                                  <span dir="rtl" style={{ color: '#C9962C', marginRight: '0.6rem', marginLeft: '0.6rem' }}>{ar}</span>
+                                )}
+                              </span>
+                              <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.88rem', color: 'var(--teal)', fontWeight: 700, flexShrink: 0 }}>
+                                {item.quantity} {UNIT_LABELS[item.unit]}
+                              </span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            ))}
 
             {report.notes && (
               <div style={{ marginTop: '0.5rem', padding: '0.7rem 0.9rem', background: 'rgba(255,255,255,0.03)', borderRadius: '2px', borderLeft: '2px solid rgba(255,255,255,0.1)' }}>
@@ -217,18 +245,16 @@ function ReportCard({
 
 export default function WeeklyOrdersPage() {
   const { checking, role } = useRequireRole(ALL_ROLES)
-  const [reports,      setReports]      = useState<WeeklyOrderReport[]>([])
-  const [categoryMeta, setCategoryMeta] = useState<Record<string, OrderCategoryMeta>>({})
-  const [providers,    setProviders]    = useState<Record<string, OrderProvider>>({})
-  const [nameArMap,    setNameArMap]    = useState<Record<string, string>>({})  // templateId -> nameAr
-  const [loading,      setLoading]      = useState(true)
+  const [reports,   setReports]   = useState<WeeklyOrderReport[]>([])
+  const [providers, setProviders] = useState<Record<string, OrderProvider>>({})
+  const [nameArMap, setNameArMap] = useState<Record<string, string>>({})
+  const [loading,   setLoading]   = useState(true)
   const [branchFilter, setBranchFilter] = useState<string>('all')
 
   useEffect(() => {
-    Promise.all([listWeeklyReports(), listTemplateItems(), listCategoryMeta(), listProviders()]).then(
-      ([reps, tItems, meta, provs]) => {
+    Promise.all([listWeeklyReports(), listTemplateItems(), listProviders()]).then(
+      ([reps, tItems, provs]) => {
         setReports(reps)
-        setCategoryMeta(meta)
         setProviders(Object.fromEntries(provs.map(p => [p.id, p])))
         setNameArMap(Object.fromEntries(
           tItems.filter(i => i.nameAr).map(i => [i.id, i.nameAr!])
@@ -315,7 +341,6 @@ export default function WeeklyOrdersPage() {
               <ReportCard
                 key={r.id}
                 report={r}
-                categoryMeta={categoryMeta}
                 providers={providers}
                 nameArMap={nameArMap}
               />
