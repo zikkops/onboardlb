@@ -310,14 +310,37 @@ export default function OrderTemplatePage() {
   [items])
 
 
+  function sortItems(arr: OrderTemplateItem[]): OrderTemplateItem[] {
+    return [...arr].sort((a, b) => {
+      const dA = DEPARTMENTS.indexOf(a.department ?? 'Kitchen')
+      const dB = DEPARTMENTS.indexOf(b.department ?? 'Kitchen')
+      if (dA !== dB) return dA - dB
+      const pDiff = (a.providerId ?? '').localeCompare(b.providerId ?? '')
+      if (pDiff !== 0) return pDiff
+      const cDiff = (a.category ?? '').localeCompare(b.category ?? '')
+      if (cDiff !== 0) return cDiff
+      return a.name.localeCompare(b.name)
+    })
+  }
+
   async function handleAdd(item: Omit<OrderTemplateItem, 'id' | 'createdAt'>) {
     await addTemplateItem(item); await load()
   }
   async function handleUpdate(id: string, before: Partial<OrderTemplateItem>, after: Partial<OrderTemplateItem>) {
-    await updateTemplateItem(id, before, after); await load()
+    await updateTemplateItem(id, before, after)
+    setItems(prev => sortItems(prev.map(i => {
+      if (i.id !== id) return i
+      const merged = { ...i } as Record<string, unknown>
+      for (const [k, v] of Object.entries(after)) {
+        if (v === undefined) delete merged[k]
+        else merged[k] = v
+      }
+      return merged as unknown as OrderTemplateItem
+    })))
   }
   async function handleDelete(id: string, name: string) {
-    await deleteTemplateItem(id, name); await load()
+    await deleteTemplateItem(id, name)
+    setItems(prev => prev.filter(i => i.id !== id))
   }
 
   async function translateAll() {
