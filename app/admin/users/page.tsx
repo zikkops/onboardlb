@@ -20,7 +20,7 @@ interface Account {
   sectionGrants: string[]
 }
 
-const ROLES: Role[] = ['admin', 'manager', 'social', 'gamer', 'dungeonmaster']
+const ROLES: Role[] = ['admin', 'manager', 'social', 'gamer', 'dungeonmaster', 'kitchen_crew', 'barista']
 
 const EMPTY = { email: '', password: '', role: 'manager' as Role, branchIds: [] as string[], isDungeonMaster: false, sectionGrants: [] as string[] }
 
@@ -536,7 +536,7 @@ export default function AdminUsersPage() {
 
               {(() => {
                 const formIsDm = form.role === 'dungeonmaster' || form.isDungeonMaster
-                if (form.role !== 'manager' && !formIsDm) return null
+                if (form.role !== 'manager' && form.role !== 'kitchen_crew' && form.role !== 'barista' && !formIsDm) return null
                 return (
                   <div>
                     <label style={{ ...labelStyle, marginBottom: '0.8rem' }}>Branches</label>
