@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRequireRole } from '../../../lib/adminAuth'
 import {
   listProviders, addProvider, updateProvider, deleteProvider,
-  type OrderProvider,
+  translateToArabic, type OrderProvider,
 } from '../../../lib/weeklyOrders'
 import { BRANCHES } from '../../../lib/branches'
 
@@ -143,24 +143,45 @@ function ProviderCard({
   const [name,       setName]       = useState(provider.name)
   const [phones,     setPhones]     = useState<PhoneMap>({ ...provider.phones })
   const [notes,      setNotes]      = useState(provider.notes ?? '')
-  const [categories, setCategories] = useState<string[]>(provider.categories ?? [])
-  const [newCat,     setNewCat]     = useState('')
-  const [saving,     setSaving]     = useState(false)
-  const [deleting,   setDeleting]   = useState(false)
+  const [categories,     setCategories]     = useState<string[]>(provider.categories ?? [])
+  const [catTranslations,  setCatTranslations]  = useState<Record<string, string>>(provider.categoryTranslations ?? {})
+  const [translatingCats,  setTranslatingCats]  = useState<Set<string>>(new Set())
+  const [newCat,           setNewCat]           = useState('')
+  const [saving,           setSaving]           = useState(false)
+  const [deleting,         setDeleting]         = useState(false)
 
   function setPhone(branch: string, val: string) {
     setPhones(p => ({ ...p, [branch]: val }))
   }
 
-  function addCategory() {
+  async function addCategory() {
     const trimmed = newCat.trim()
     if (!trimmed || categories.includes(trimmed)) return
     setCategories(prev => [...prev, trimmed])
     setNewCat('')
+    setTranslatingCats(prev => new Set(prev).add(trimmed))
+    try {
+      const ar = await translateToArabic(trimmed)
+      setCatTranslations(prev => ({ ...prev, [trimmed]: ar }))
+    } catch { /* leave blank if translation fails */ }
+    finally { setTranslatingCats(prev => { const n = new Set(prev); n.delete(trimmed); return n }) }
+  }
+
+  async function translateAllCats() {
+    const untranslated = categories.filter(c => !catTranslations[c])
+    for (const cat of untranslated) {
+      setTranslatingCats(prev => new Set(prev).add(cat))
+      try {
+        const ar = await translateToArabic(cat)
+        setCatTranslations(prev => ({ ...prev, [cat]: ar }))
+      } catch { /* skip */ }
+      finally { setTranslatingCats(prev => { const n = new Set(prev); n.delete(cat); return n }) }
+    }
   }
 
   function removeCategory(cat: string) {
     setCategories(prev => prev.filter(c => c !== cat))
+    setCatTranslations(prev => { const n = { ...prev }; delete n[cat]; return n })
   }
 
   async function save() {
@@ -171,8 +192,8 @@ function ProviderCard({
       )
       await onUpdated(
         provider.id,
-        { name: provider.name, phones: provider.phones, notes: provider.notes, categories: provider.categories },
-        { name: name.trim(), phones: cleanPhones, notes: notes.trim(), categories },
+        { name: provider.name, phones: provider.phones, notes: provider.notes, categories: provider.categories, categoryTranslations: provider.categoryTranslations },
+        { name: name.trim(), phones: cleanPhones, notes: notes.trim(), categories, categoryTranslations: catTranslations },
       )
       setEditing(false)
     } finally { setSaving(false) }
@@ -183,6 +204,7 @@ function ProviderCard({
     setPhones({ ...provider.phones })
     setNotes(provider.notes ?? '')
     setCategories(provider.categories ?? [])
+    setCatTranslations(provider.categoryTranslations ?? {})
     setNewCat('')
     setEditing(false)
   }
@@ -273,6 +295,44 @@ function ProviderCard({
                 }}
               >+ Add</button>
             </div>
+
+            {categories.length > 0 && (
+              <div style={{ marginTop: '0.65rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.4rem' }}>
+                  <label style={{ ...labelStyle, marginBottom: 0 }}>Arabic Names</label>
+                  {categories.some(c => !catTranslations[c]) && translatingCats.size === 0 && (
+                    <button
+                      type="button"
+                      onClick={translateAllCats}
+                      style={{
+                        background: 'rgba(201,150,44,0.1)', border: '1px solid rgba(201,150,44,0.3)',
+                        color: '#C9962C', padding: '0.2rem 0.55rem', borderRadius: '2px',
+                        fontSize: '0.65rem', cursor: 'pointer', fontFamily: 'var(--font-inter)',
+                        letterSpacing: '0.06em',
+                      }}
+                    >🌐 Translate All</button>
+                  )}
+                  {translatingCats.size > 0 && (
+                    <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.7rem', color: 'rgba(245,242,236,0.3)' }}>Translating…</span>
+                  )}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                  {categories.map(cat => (
+                    <div key={cat} style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                      <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.8rem', color: 'rgba(245,242,236,0.45)', width: '160px', flexShrink: 0 }}>{cat}</span>
+                      <input
+                        value={translatingCats.has(cat) ? '' : (catTranslations[cat] ?? '')}
+                        onChange={e => setCatTranslations(prev => ({ ...prev, [cat]: e.target.value }))}
+                        placeholder={translatingCats.has(cat) ? 'Translating…' : 'بالعربي…'}
+                        dir="rtl"
+                        disabled={translatingCats.has(cat)}
+                        style={{ ...inp, width: '200px', textAlign: 'right', fontSize: '0.82rem', opacity: translatingCats.has(cat) ? 0.4 : 1 }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Notes */}
@@ -312,16 +372,21 @@ function ProviderCard({
           {/* Categories pills */}
           {(provider.categories?.length ?? 0) > 0 && (
             <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', marginBottom: hasBranchPhone ? '0.85rem' : '0' }}>
-              {provider.categories!.map(cat => (
-                <span key={cat} style={{
-                  backgroundColor: 'rgba(0,160,152,0.08)', border: '1px solid rgba(0,160,152,0.2)',
-                  borderRadius: '2px', padding: '0.2rem 0.55rem',
-                  fontFamily: 'var(--font-inter)', fontSize: '0.72rem', color: 'var(--teal)',
-                  letterSpacing: '0.03em',
-                }}>
-                  {cat}
-                </span>
-              ))}
+              {provider.categories!.map(cat => {
+                const ar = provider.categoryTranslations?.[cat]
+                return (
+                  <span key={cat} style={{
+                    display: 'inline-flex', alignItems: 'center', gap: '0.4rem',
+                    backgroundColor: 'rgba(0,160,152,0.08)', border: '1px solid rgba(0,160,152,0.2)',
+                    borderRadius: '2px', padding: '0.2rem 0.55rem',
+                    fontFamily: 'var(--font-inter)', fontSize: '0.72rem', color: 'var(--teal)',
+                    letterSpacing: '0.03em',
+                  }}>
+                    {cat}
+                    {ar && <span style={{ color: 'rgba(0,160,152,0.7)', borderLeft: '1px solid rgba(0,160,152,0.25)', paddingLeft: '0.4rem' }} dir="rtl">{ar}</span>}
+                  </span>
+                )
+              })}
             </div>
           )}
 

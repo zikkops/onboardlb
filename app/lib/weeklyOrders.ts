@@ -30,7 +30,8 @@ export interface OrderProvider {
   id: string
   name: string
   phones: Partial<Record<typeof BRANCHES[number], string>>
-  categories?: string[]   // ordered list of sub-group names for this provider
+  categories?: string[]                   // ordered list of sub-group names for this provider
+  categoryTranslations?: Record<string, string>  // English category name → Arabic
   notes?: string
   createdAt: { seconds: number } | null
 }

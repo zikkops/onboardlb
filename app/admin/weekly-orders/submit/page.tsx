@@ -301,9 +301,14 @@ export default function SubmitOrderPage() {
                                       fontFamily: 'var(--font-inter)', fontSize: '0.7rem',
                                       letterSpacing: '0.1em', textTransform: 'uppercase',
                                       color: category ? DEPT_COLOR[dept] : 'rgba(245,242,236,0.25)',
-                                      fontWeight: 600,
+                                      fontWeight: 600, display: 'flex', justifyContent: 'space-between',
+                                      alignItems: 'center',
                                     }}>
-                                      {category ?? 'Other'}
+                                      <span>{category ?? 'Other'}</span>
+                                      {category && (() => {
+                                        const ar = providerId ? providerMap[providerId]?.categoryTranslations?.[category] : undefined
+                                        return ar ? <span dir="rtl" style={{ opacity: 0.6, letterSpacing: '0.02em', textTransform: 'none' }}>{ar}</span> : null
+                                      })()}
                                     </div>
                                   )}
                                   {cItems.map((item, idx) => (

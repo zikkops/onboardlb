@@ -393,8 +393,13 @@ function ReportCard({
                                   letterSpacing: '0.1em', textTransform: 'uppercase',
                                   color: category ? DEPT_COLOR[dept] : 'rgba(245,242,236,0.2)',
                                   fontWeight: 600, marginTop: '0.2rem',
+                                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                                 }}>
-                                  {category ?? 'Other'}
+                                  <span>{category ?? 'Other'}</span>
+                                  {category && (() => {
+                                    const ar = providerId ? providers[providerId]?.categoryTranslations?.[category] : undefined
+                                    return ar ? <span dir="rtl" style={{ opacity: 0.6, letterSpacing: '0.02em', textTransform: 'none' }}>{ar}</span> : null
+                                  })()}
                                 </div>
                               )}
                               {cItems.map(item => {

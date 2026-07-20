@@ -540,6 +540,17 @@ export default function OrderTemplatePage() {
                                               }}>
                                                 {category ?? 'Uncategorized'}
                                               </span>
+                                              {category && (() => {
+                                                const ar = providerId ? providerMap[providerId]?.categoryTranslations?.[category] : undefined
+                                                return ar ? (
+                                                  <span dir="rtl" style={{
+                                                    fontFamily: 'var(--font-inter)', fontSize: '0.7rem',
+                                                    color: DEPT_COLOR[dept], opacity: 0.6,
+                                                    marginLeft: 'auto', marginRight: '0.5rem',
+                                                    letterSpacing: '0.02em', textTransform: 'none',
+                                                  }}>{ar}</span>
+                                                ) : null
+                                              })()}
                                               <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.65rem', color: 'rgba(245,242,236,0.2)' }}>
                                                 {cItems.length}
                                               </span>
