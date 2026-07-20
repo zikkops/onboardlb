@@ -11,9 +11,9 @@ import {
 import { auth, db, firebaseConfig } from './firebase'
 import { logActivity, logUpdate } from './activityLog'
 
-export type Role = 'admin' | 'manager' | 'social' | 'gamer' | 'dungeonmaster'
+export type Role = 'admin' | 'manager' | 'social' | 'gamer' | 'dungeonmaster' | 'kitchen_crew' | 'barista'
 
-export const ALL_ROLES: Role[] = ['admin', 'manager', 'social', 'gamer', 'dungeonmaster']
+export const ALL_ROLES: Role[] = ['admin', 'manager', 'social', 'gamer', 'dungeonmaster', 'kitchen_crew', 'barista']
 
 export const ROLE_LABELS: Record<Role, string> = {
   admin:         'Admin',
@@ -21,6 +21,8 @@ export const ROLE_LABELS: Record<Role, string> = {
   social:        'Social Media',
   gamer:         'Gamer',
   dungeonmaster: 'Dungeon Master',
+  kitchen_crew:  'Kitchen Crew',
+  barista:       'Barista / Bartender',
 }
 
 export const ROLE_COLORS: Record<Role, string> = {
@@ -29,6 +31,8 @@ export const ROLE_COLORS: Record<Role, string> = {
   social:        'var(--red)',
   gamer:         'var(--teal)',
   dungeonmaster: '#C9962C',
+  kitchen_crew:  '#E8965A',
+  barista:       '#8B6914',
 }
 
 // Human-readable labels for every section key — used in Manage Users to let
@@ -152,7 +156,11 @@ export function useAdminUser() {
         setOrderDepts(
           (roleVal === 'admin' || roleVal === 'manager')
             ? ['Kitchen', 'Bar', 'Cleaning']
-            : (Array.isArray(data.orderDepts) ? data.orderDepts as string[] : [])
+            : roleVal === 'kitchen_crew'
+              ? ['Kitchen']
+              : roleVal === 'barista'
+                ? ['Bar']
+                : (Array.isArray(data.orderDepts) ? data.orderDepts as string[] : [])
         )
       } else {
         // users/{uid} either doesn't exist or has no isStaff: true.
