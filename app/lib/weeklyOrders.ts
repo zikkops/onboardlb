@@ -1,12 +1,12 @@
 import {
   collection, addDoc, getDocs, query, orderBy, limit,
-  doc, updateDoc, deleteDoc, serverTimestamp,
+  doc, updateDoc, deleteDoc, serverTimestamp, deleteField,
 } from 'firebase/firestore'
 import { db } from './firebase'
 import { logActivity, logUpdate, logDelete } from './activityLog'
 import { BRANCHES } from './branches'
 
-export type OrderUnit = 'box' | 'kg' | 'liter' | 'gallon' | 'bottle' | 'bag' | 'pcs'
+export type OrderUnit = 'box' | 'kg' | 'liter' | 'gallon' | 'bottle' | 'bag' | 'pcs' | 'jar' | 'block' | 'can'
 export type Department = 'Kitchen' | 'Bar' | 'Cleaning'
 
 export const UNIT_LABELS: Record<OrderUnit, string> = {
@@ -17,6 +17,9 @@ export const UNIT_LABELS: Record<OrderUnit, string> = {
   bottle: 'Bottle',
   bag:    'Bag',
   pcs:    'Pcs',
+  jar:    'Jar',
+  block:  'Block',
+  can:    'Can',
 }
 
 export const DEPARTMENTS: Department[] = ['Kitchen', 'Bar', 'Cleaning']
@@ -130,7 +133,10 @@ export async function updateTemplateItem(
   before: Partial<OrderTemplateItem>,
   after: Partial<OrderTemplateItem>,
 ): Promise<void> {
-  await updateDoc(doc(db, 'orderTemplateItems', id), { ...after })
+  const update = Object.fromEntries(
+    Object.entries(after).map(([k, v]) => [k, v === undefined ? deleteField() : v])
+  )
+  await updateDoc(doc(db, 'orderTemplateItems', id), update)
   await logUpdate('Weekly Order Template', after.name ?? id, before, after)
 }
 

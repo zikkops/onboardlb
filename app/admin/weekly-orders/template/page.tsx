@@ -10,7 +10,7 @@ import {
   UNIT_LABELS, DEPARTMENTS,
 } from '../../../lib/weeklyOrders'
 
-const UNITS: OrderUnit[] = ['box', 'kg', 'liter', 'gallon', 'bottle', 'bag', 'pcs']
+const UNITS: OrderUnit[] = ['box', 'kg', 'liter', 'gallon', 'bottle', 'bag', 'pcs', 'jar', 'block', 'can']
 
 const DEPT_COLOR: Record<Department, string> = {
   Kitchen:  '#00A098',
