@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic'
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useRequireRole, SECTION_ACCESS } from '../../lib/adminAuth'
 import { BRANCHES } from '../../lib/branches'
@@ -70,7 +70,7 @@ function cashToStr(vals: Record<string, number>): Record<string, string> {
   return Object.fromEntries(Object.entries(vals).map(([k, v]) => [k, v === 0 ? '' : String(v)]))
 }
 
-export default function EndOfDayPage() {
+function EndOfDayInner() {
   const params = useSearchParams()
   const { checking, role, branchIds, user } = useRequireRole(SECTION_ACCESS.endOfDay)
 
@@ -694,6 +694,14 @@ export default function EndOfDayPage() {
         </form>
       </div>
     </div>
+  )
+}
+
+export default function EndOfDayPage() {
+  return (
+    <Suspense fallback={null}>
+      <EndOfDayInner />
+    </Suspense>
   )
 }
 
