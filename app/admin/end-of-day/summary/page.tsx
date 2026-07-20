@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { useRequireRole, SECTION_ACCESS } from '../../../lib/adminAuth'
 import { BRANCHES } from '../../../lib/branches'
 import {
@@ -40,7 +41,8 @@ function Row({ label, value, color, sub }: { label: string; value: string; color
   )
 }
 
-export default function EndOfDaySummaryPage() {
+function EndOfDaySummaryInner() {
+  const params = useSearchParams()
   const { checking, role, branchIds, user } = useRequireRole(SECTION_ACCESS.endOfDayHistory)
 
   const branchOptions = role === 'admin' ? [...BRANCHES] : branchIds
@@ -58,6 +60,15 @@ export default function EndOfDaySummaryPage() {
     if (checking) return
     if (role !== 'admin' && branchIds.length === 1) setBranch(branchIds[0])
   }, [checking, role, branchIds])
+
+  // Pre-fill from URL params (e.g. coming from the EOD submit page)
+  useEffect(() => {
+    if (checking) return
+    const pb = params.get('branch')
+    const pd = params.get('date')
+    if (pb && (role === 'admin' || branchIds.includes(pb))) setBranch(pb)
+    if (pd) setDate(pd)
+  }, [params, checking, role, branchIds])
 
   useEffect(() => {
     if (!branch || !date) return
@@ -298,5 +309,13 @@ export default function EndOfDaySummaryPage() {
 
       </div>
     </div>
+  )
+}
+
+export default function EndOfDaySummaryPage() {
+  return (
+    <Suspense fallback={null}>
+      <EndOfDaySummaryInner />
+    </Suspense>
   )
 }

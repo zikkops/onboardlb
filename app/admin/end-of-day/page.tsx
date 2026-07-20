@@ -664,9 +664,18 @@ function EndOfDayInner() {
               </p>
             )}
             {saved && (
-              <p style={{ color: 'var(--teal)', fontSize: '0.82rem', marginBottom: '1rem', fontFamily: 'var(--font-inter)' }}>
-                ✓ Report saved successfully.
-              </p>
+              <div style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '1.25rem', flexWrap: 'wrap' }}>
+                <p style={{ color: 'var(--teal)', fontSize: '0.82rem', fontFamily: 'var(--font-inter)' }}>
+                  ✓ Report saved successfully.
+                </p>
+                <a
+                  href={`/admin/end-of-day/summary?branch=${encodeURIComponent(branch)}&date=${date}`}
+                  style={{
+                    fontSize: '0.78rem', color: '#C9962C',
+                    textDecoration: 'none', fontFamily: 'var(--font-inter)',
+                  }}
+                >View summary →</a>
+              </div>
             )}
 
             <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
