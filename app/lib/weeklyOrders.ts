@@ -1,21 +1,25 @@
 import {
-  collection, addDoc, getDocs, query, orderBy,
+  collection, addDoc, getDocs, query, orderBy, limit,
   doc, updateDoc, deleteDoc, serverTimestamp,
 } from 'firebase/firestore'
 import { db } from './firebase'
 import { logActivity, logUpdate, logDelete } from './activityLog'
 import { BRANCHES } from './branches'
 
-export type OrderUnit = 'box' | 'kg' | 'liter'
-export type Department = 'Kitchen' | 'Bar'
+export type OrderUnit = 'box' | 'kg' | 'liter' | 'gallon' | 'bottle' | 'bag' | 'pcs'
+export type Department = 'Kitchen' | 'Bar' | 'Cleaning'
 
 export const UNIT_LABELS: Record<OrderUnit, string> = {
-  box:   'Box',
-  kg:    'KG',
-  liter: 'Liter',
+  box:    'Box',
+  kg:     'KG',
+  liter:  'Liter',
+  gallon: 'Gallon',
+  bottle: 'Bottle',
+  bag:    'Bag',
+  pcs:    'Pcs',
 }
 
-export const DEPARTMENTS: Department[] = ['Kitchen', 'Bar']
+export const DEPARTMENTS: Department[] = ['Kitchen', 'Bar', 'Cleaning']
 
 // ---- Providers ----
 
@@ -23,6 +27,7 @@ export interface OrderProvider {
   id: string
   name: string
   phones: Partial<Record<typeof BRANCHES[number], string>>
+  categories?: string[]   // ordered list of sub-group names for this provider
   notes?: string
   createdAt: { seconds: number } | null
 }
@@ -62,6 +67,7 @@ export interface OrderTemplateItem {
   name: string
   nameAr?: string
   department: Department
+  category?: string      // sub-group within a provider, e.g. "Syrups", "Powders"
   providerId?: string
   unit: OrderUnit
   packSize?: number
@@ -74,6 +80,7 @@ export interface WeeklyOrderReportItem {
   templateId: string
   name: string
   department: Department
+  category?: string      // carried from template for display grouping
   providerId?: string
   unit: OrderUnit
   quantity: number
@@ -86,11 +93,13 @@ export interface WeeklyOrderReport {
   branch: string
   weekStart: string
   weekLabel: string
+  department?: Department        // unset on legacy mixed reports
   items: WeeklyOrderReportItem[]
   notes: string
   submittedBy: string
   submittedByEmail: string
   submittedAt: { seconds: number } | null
+  whatsappSent?: Record<string, boolean>  // providerId (or '__none__') → sent
 }
 
 export async function listTemplateItems(): Promise<OrderTemplateItem[]> {
@@ -101,7 +110,11 @@ export async function listTemplateItems(): Promise<OrderTemplateItem[]> {
       const dA = DEPARTMENTS.indexOf(a.department ?? 'Kitchen')
       const dB = DEPARTMENTS.indexOf(b.department ?? 'Kitchen')
       if (dA !== dB) return dA - dB
-      return (a.providerId ?? '').localeCompare(b.providerId ?? '') || a.name.localeCompare(b.name)
+      const pDiff = (a.providerId ?? '').localeCompare(b.providerId ?? '')
+      if (pDiff !== 0) return pDiff
+      const cDiff = (a.category ?? '').localeCompare(b.category ?? '')
+      if (cDiff !== 0) return cDiff
+      return a.name.localeCompare(b.name)
     })
 }
 
@@ -131,11 +144,13 @@ export async function deleteTemplateItem(id: string, name: string): Promise<void
 export async function submitWeeklyReport(
   report: Omit<WeeklyOrderReport, 'id' | 'submittedAt'>
 ): Promise<string> {
+  const clean = Object.fromEntries(Object.entries(report).filter(([, v]) => v !== undefined))
   const ref = await addDoc(collection(db, 'weeklyOrderReports'), {
-    ...report,
+    ...clean,
     submittedAt: serverTimestamp(),
   })
-  await logActivity('create', 'Weekly Order Report', `${report.branch} — ${report.weekLabel}`)
+  const deptLabel = report.department ? ` — ${report.department}` : ''
+  await logActivity('create', 'Weekly Order Report', `${report.branch}${deptLabel} — ${report.weekLabel}`)
   return ref.id
 }
 
@@ -161,6 +176,21 @@ export function groupByProvider<T extends { providerId?: string }>(
     providerId: key === '__none__' ? undefined : key,
     items,
   }))
+}
+
+export function groupByCategory<T extends { category?: string }>(
+  items: T[]
+): { category: string | undefined; items: T[] }[] {
+  const map = new Map<string, T[]>()
+  for (const item of items) {
+    const key = item.category?.trim() || '__none__'
+    if (!map.has(key)) map.set(key, [])
+    map.get(key)!.push(item)
+  }
+  // Named categories alphabetically, items without a category last
+  return Array.from(map.entries())
+    .sort(([a], [b]) => a === '__none__' ? 1 : b === '__none__' ? -1 : a.localeCompare(b))
+    .map(([key, items]) => ({ category: key === '__none__' ? undefined : key, items }))
 }
 
 // ---- Pack label ----
@@ -221,10 +251,15 @@ export function generateOrderText(
         lines.push(`*${provider?.name ?? 'No Provider'}*`)
       }
 
-      for (const item of pItems) {
-        const ar    = nameArMap[item.templateId]
-        const nameDisplay = showArabic && ar ? `${item.name} (${ar})` : item.name
-        lines.push(`• ${nameDisplay}: ${item.quantity} ${UNIT_LABELS[item.unit]}`)
+      const catGroups = groupByCategory(pItems)
+      const hasCategories = catGroups.some(g => g.category !== undefined)
+      for (const { category, items: cItems } of catGroups) {
+        if (hasCategories && category) lines.push(`_${category}_`)
+        for (const item of cItems) {
+          const ar    = nameArMap[item.templateId]
+          const nameDisplay = showArabic && ar ? `${item.name} (${ar})` : item.name
+          lines.push(`• ${nameDisplay}: ${item.quantity} ${UNIT_LABELS[item.unit]}`)
+        }
       }
       lines.push('')
     }
@@ -241,6 +276,70 @@ export function whatsappUrl(phone: string, text: string): string {
   const clean = phone.replace(/[\s\-().]/g, '').replace(/^00/, '+').replace(/^0/, '')
   const num   = clean.startsWith('+') ? clean.slice(1) : clean
   return `https://wa.me/${num}?text=${encodeURIComponent(text)}`
+}
+
+// ---- Weekly Order Logs ----
+
+export interface WeeklyOrderLog {
+  id:            string
+  action:        'edit_quantity' | 'delete_report'
+  reportId:      string
+  branch:        string
+  weekLabel:     string
+  staffUid:      string
+  staffEmail:    string
+  createdAt:     { seconds: number } | null
+  itemName?:     string
+  oldQty?:       number
+  newQty?:       number
+  unit?:         string
+  deletedCount?: number
+}
+
+export async function logWeeklyOrderAction(
+  entry: Omit<WeeklyOrderLog, 'id' | 'createdAt'>
+): Promise<void> {
+  const clean = Object.fromEntries(
+    Object.entries(entry).filter(([, v]) => v !== undefined)
+  )
+  await addDoc(collection(db, 'weeklyOrderLogs'), { ...clean, createdAt: serverTimestamp() })
+}
+
+export async function updateReportItemQty(
+  reportId: string,
+  currentItems: WeeklyOrderReportItem[],
+  templateId: string,
+  newQty: number,
+): Promise<WeeklyOrderReportItem[]> {
+  const updated = currentItems.map(i =>
+    i.templateId === templateId ? { ...i, quantity: newQty } : i
+  )
+  const clean = updated.map(i =>
+    Object.fromEntries(Object.entries(i).filter(([, v]) => v !== undefined))
+  ) as WeeklyOrderReportItem[]
+  await updateDoc(doc(db, 'weeklyOrderReports', reportId), { items: clean })
+  return updated
+}
+
+export async function deleteWeeklyReport(reportId: string): Promise<void> {
+  await deleteDoc(doc(db, 'weeklyOrderReports', reportId))
+}
+
+export async function toggleWhatsappSent(
+  reportId: string,
+  providerKey: string,  // providerId or '__none__'
+  sent: boolean,
+): Promise<void> {
+  await updateDoc(doc(db, 'weeklyOrderReports', reportId), {
+    [`whatsappSent.${providerKey}`]: sent,
+  })
+}
+
+export async function listWeeklyOrderLogs(limitCount = 150): Promise<WeeklyOrderLog[]> {
+  const snap = await getDocs(
+    query(collection(db, 'weeklyOrderLogs'), orderBy('createdAt', 'desc'), limit(limitCount))
+  )
+  return snap.docs.map(d => ({ id: d.id, ...d.data() } as WeeklyOrderLog))
 }
 
 // ---- Date helpers ----

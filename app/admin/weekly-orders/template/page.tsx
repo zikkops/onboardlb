@@ -5,16 +5,17 @@ import { useRequireRole } from '../../../lib/adminAuth'
 import {
   listTemplateItems, addTemplateItem, updateTemplateItem, deleteTemplateItem,
   listProviders,
-  translateToArabic, groupByProvider, packLabel,
+  translateToArabic, groupByProvider, groupByCategory, packLabel,
   type OrderTemplateItem, type OrderProvider, type OrderUnit, type Department,
   UNIT_LABELS, DEPARTMENTS,
 } from '../../../lib/weeklyOrders'
 
-const UNITS: OrderUnit[] = ['box', 'kg', 'liter']
+const UNITS: OrderUnit[] = ['box', 'kg', 'liter', 'gallon', 'bottle', 'bag', 'pcs']
 
 const DEPT_COLOR: Record<Department, string> = {
-  Kitchen: 'var(--teal)',
-  Bar:     '#C9962C',
+  Kitchen:  '#00A098',
+  Bar:      '#C9962C',
+  Cleaning: '#8B7CF6',
 }
 
 const inp: React.CSSProperties = {
@@ -130,6 +131,7 @@ function ItemRow({ item, providers, onUpdated, onDeleted }: {
   const [unit,        setUnit]        = useState<OrderUnit>(item.unit)
   const [department,  setDepartment]  = useState<Department>(item.department ?? 'Kitchen')
   const [providerId,  setProviderId]  = useState(item.providerId ?? '')
+  const [category,    setCategory]    = useState(item.category ?? '')
   const [packSize,    setPackSize]    = useState(String(item.packSize ?? ''))
   const [packUnit,    setPackUnit]    = useState(item.packUnit ?? '')
   const [saving,      setSaving]      = useState(false)
@@ -137,14 +139,17 @@ function ItemRow({ item, providers, onUpdated, onDeleted }: {
   const [translating, setTranslating] = useState(false)
   const [transErr,    setTransErr]    = useState('')
 
+  // Reset category when provider changes — old category may not exist on new provider
+  useEffect(() => { setCategory('') }, [providerId])
+
   async function save() {
     setSaving(true)
     const ps = parseInt(packSize, 10)
     try {
       await onUpdated(
         item.id,
-        { name: item.name, nameAr: item.nameAr, unit: item.unit, department: item.department, providerId: item.providerId, packSize: item.packSize, packUnit: item.packUnit },
-        { name, nameAr, unit, department, providerId: providerId || undefined, packSize: isNaN(ps) || ps < 1 ? undefined : ps, packUnit: packUnit.trim() || undefined },
+        { name: item.name, nameAr: item.nameAr, unit: item.unit, department: item.department, providerId: item.providerId, category: item.category, packSize: item.packSize, packUnit: item.packUnit },
+        { name, nameAr, unit, department, providerId: providerId || undefined, category: category.trim() || undefined, packSize: isNaN(ps) || ps < 1 ? undefined : ps, packUnit: packUnit.trim() || undefined },
       )
       setEditing(false)
     } finally { setSaving(false) }
@@ -194,7 +199,33 @@ function ItemRow({ item, providers, onUpdated, onDeleted }: {
           </select>
         </div>
 
-        {/* Row 2: Pack size */}
+        {/* Row 2: Category — dropdown from this provider's categories */}
+        {(() => {
+          const provCats = providers.find(p => p.id === providerId)?.categories ?? []
+          if (!providerId || provCats.length === 0) return (
+            <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', marginBottom: '0.5rem' }}>
+              <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.68rem', color: 'rgba(245,242,236,0.3)', letterSpacing: '0.1em', textTransform: 'uppercase', minWidth: '60px' }}>Category</span>
+              <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.78rem', color: 'rgba(245,242,236,0.2)' }}>
+                {!providerId ? 'Select a provider to assign a category' : 'No categories — add them in Manage Providers'}
+              </span>
+            </div>
+          )
+          return (
+            <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', marginBottom: '0.5rem' }}>
+              <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.68rem', color: 'rgba(245,242,236,0.3)', letterSpacing: '0.1em', textTransform: 'uppercase', minWidth: '60px' }}>Category</span>
+              <select
+                value={category}
+                onChange={e => setCategory(e.target.value)}
+                style={{ ...inp, cursor: 'pointer', width: '220px' }}
+              >
+                <option value="">— None —</option>
+                {provCats.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+          )
+        })()}
+
+        {/* Row 3: Pack size */}
         <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', marginBottom: '0.6rem' }}>
           <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.68rem', color: 'rgba(245,242,236,0.3)', letterSpacing: '0.1em', textTransform: 'uppercase', minWidth: '60px' }}>Pack size</span>
           <input
@@ -217,6 +248,7 @@ function ItemRow({ item, providers, onUpdated, onDeleted }: {
             onClick={() => {
               setName(item.name); setNameAr(item.nameAr ?? ''); setUnit(item.unit)
               setDepartment(item.department ?? 'Kitchen'); setProviderId(item.providerId ?? '')
+              setCategory(item.category ?? '')
               setPackSize(String(item.packSize ?? '')); setPackUnit(item.packUnit ?? '')
               setEditing(false)
             }}
@@ -254,6 +286,9 @@ export default function OrderTemplatePage() {
   const [loading,       setLoading]      = useState(true)
   const [transAll,      setTransAll]     = useState(false)
   const [transProgress, setTransProgress] = useState('')
+  const [collapsedDepts, setCollapsedDepts] = useState<Set<Department>>(new Set())
+  const [collapsedProvs, setCollapsedProvs] = useState<Set<string>>(new Set()) // key: `${dept}__${provKey}`
+  const [collapsedCats,  setCollapsedCats]  = useState<Set<string>>(new Set()) // key: `${dept}__${provKey}__${category}`
 
   async function load() {
     setLoading(true)
@@ -273,6 +308,7 @@ export default function OrderTemplatePage() {
       return { dept, provGroups: groupByProvider(deptItems) }
     }),
   [items])
+
 
   async function handleAdd(item: Omit<OrderTemplateItem, 'id' | 'createdAt'>) {
     await addTemplateItem(item); await load()
@@ -353,75 +389,162 @@ export default function OrderTemplatePage() {
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
-            {grouped.map(({ dept, provGroups }) => (
-              <div key={dept}>
+            {grouped.map(({ dept, provGroups }) => {
+              const isDeptCollapsed = collapsedDepts.has(dept)
+              const totalItems = provGroups.reduce((n, g) => n + g.items.length, 0)
 
-                {/* Department header */}
-                <div style={{
-                  display: 'flex', alignItems: 'center', gap: '0.7rem',
-                  marginBottom: '1rem',
-                  borderBottom: `1px solid ${DEPT_COLOR[dept]}30`,
-                  paddingBottom: '0.6rem',
-                }}>
-                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: DEPT_COLOR[dept], flexShrink: 0 }} />
-                  <p style={{
-                    fontFamily: 'var(--font-cinzel)', fontSize: '1rem',
-                    color: DEPT_COLOR[dept], letterSpacing: '0.15em',
-                  }}>{dept.toUpperCase()}</p>
-                  <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.72rem', color: 'rgba(245,242,236,0.25)' }}>
-                    {provGroups.reduce((n, g) => n + g.items.length, 0)} items
-                  </span>
-                </div>
+              return (
+                <div key={dept}>
 
-                {provGroups.length === 0 ? (
-                  <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.82rem', color: 'rgba(245,242,236,0.2)', padding: '0 0.25rem' }}>
-                    No items in this section yet.
-                  </p>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                    {provGroups.map(({ providerId, items: pItems }) => {
-                      const provider = providerId ? providerMap[providerId] : undefined
-                      return (
-                        <div key={providerId ?? '__none__'} style={{
-                          background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)',
-                          borderLeft: `3px solid ${DEPT_COLOR[dept]}40`,
-                          borderRadius: '4px', overflow: 'hidden',
-                        }}>
-                          {/* Provider sub-header */}
-                          <div style={{
-                            padding: '0.6rem 1rem', background: 'rgba(255,255,255,0.025)',
-                            borderBottom: '1px solid rgba(255,255,255,0.05)',
-                            display: 'flex', alignItems: 'center', gap: '0.75rem',
-                          }}>
-                            <span style={{
-                              fontFamily: 'var(--font-inter)', fontSize: '0.8rem',
-                              color: provider ? 'var(--offwhite)' : 'rgba(245,242,236,0.3)',
-                              fontWeight: provider ? 600 : 400,
-                            }}>
-                              {provider?.name ?? 'No Provider'}
-                            </span>
-                            <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.7rem', color: 'rgba(245,242,236,0.25)' }}>
-                              {pItems.length} item{pItems.length !== 1 ? 's' : ''}
-                            </span>
-                          </div>
-
-                          {/* Column headers */}
-                          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.4fr auto auto', gap: '0.6rem', padding: '0.4rem 1rem', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                            {['English Name', 'Arabic / عربي', 'Unit / Pack', ''].map((h, i) => (
-                              <span key={i} style={{ fontFamily: 'var(--font-inter)', fontSize: '0.65rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(245,242,236,0.25)' }}>{h}</span>
-                            ))}
-                          </div>
-
-                          {pItems.map(item => (
-                            <ItemRow key={item.id} item={item} providers={providers} onUpdated={handleUpdate} onDeleted={handleDelete} />
-                          ))}
-                        </div>
-                      )
+                  {/* Department header — clickable to collapse */}
+                  <div
+                    onClick={() => setCollapsedDepts(prev => {
+                      const next = new Set(prev)
+                      if (next.has(dept)) next.delete(dept); else next.add(dept)
+                      return next
                     })}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '0.7rem',
+                      marginBottom: isDeptCollapsed ? 0 : '1rem',
+                      borderBottom: `1px solid ${DEPT_COLOR[dept]}30`,
+                      paddingBottom: '0.6rem',
+                      cursor: 'pointer', userSelect: 'none',
+                    }}
+                  >
+                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: DEPT_COLOR[dept], flexShrink: 0 }} />
+                    <p style={{
+                      fontFamily: 'var(--font-cinzel)', fontSize: '1rem',
+                      color: DEPT_COLOR[dept], letterSpacing: '0.15em',
+                    }}>{dept.toUpperCase()}</p>
+                    <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.72rem', color: 'rgba(245,242,236,0.25)' }}>
+                      {totalItems} item{totalItems !== 1 ? 's' : ''}
+                    </span>
+                    <span style={{
+                      marginLeft: 'auto', color: 'rgba(245,242,236,0.25)', fontSize: '1rem',
+                      transform: isDeptCollapsed ? 'rotate(-90deg)' : 'rotate(90deg)',
+                      transition: 'transform 0.15s', lineHeight: 1,
+                    }}>›</span>
                   </div>
-                )}
-              </div>
-            ))}
+
+                  {!isDeptCollapsed && (
+                    provGroups.length === 0 ? (
+                      <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.82rem', color: 'rgba(245,242,236,0.2)', padding: '0 0.25rem' }}>
+                        No items in this section yet.
+                      </p>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                        {provGroups.map(({ providerId, items: pItems }) => {
+                          const provider  = providerId ? providerMap[providerId] : undefined
+                          const provKey   = `${dept}__${providerId ?? '__none__'}`
+                          const isCollapsed = collapsedProvs.has(provKey)
+
+                          return (
+                            <div key={providerId ?? '__none__'} style={{
+                              background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)',
+                              borderLeft: `3px solid ${DEPT_COLOR[dept]}40`,
+                              borderRadius: '4px', overflow: 'hidden',
+                            }}>
+                              {/* Provider sub-header — clickable to collapse */}
+                              <div
+                                onClick={() => setCollapsedProvs(prev => {
+                                  const next = new Set(prev)
+                                  if (next.has(provKey)) next.delete(provKey); else next.add(provKey)
+                                  return next
+                                })}
+                                style={{
+                                  padding: '0.6rem 1rem', background: 'rgba(255,255,255,0.025)',
+                                  borderBottom: isCollapsed ? 'none' : '1px solid rgba(255,255,255,0.05)',
+                                  display: 'flex', alignItems: 'center', gap: '0.75rem',
+                                  cursor: 'pointer', userSelect: 'none',
+                                }}
+                              >
+                                <span style={{
+                                  fontFamily: 'var(--font-inter)', fontSize: '0.8rem',
+                                  color: provider ? 'var(--offwhite)' : 'rgba(245,242,236,0.3)',
+                                  fontWeight: provider ? 600 : 400,
+                                }}>
+                                  {provider?.name ?? 'No Provider'}
+                                </span>
+                                <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.7rem', color: 'rgba(245,242,236,0.25)' }}>
+                                  {pItems.length} item{pItems.length !== 1 ? 's' : ''}
+                                </span>
+                                <span style={{
+                                  marginLeft: 'auto', color: 'rgba(245,242,236,0.2)', fontSize: '0.9rem',
+                                  transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(90deg)',
+                                  transition: 'transform 0.15s', lineHeight: 1,
+                                }}>›</span>
+                              </div>
+
+                              {!isCollapsed && (() => {
+                                const catGroups = groupByCategory(pItems)
+                                const hasCategories = catGroups.some(g => g.category !== undefined)
+
+                                return (
+                                  <>
+                                    {/* Column headers */}
+                                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.4fr auto auto', gap: '0.6rem', padding: '0.4rem 1rem', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                                      {['English Name', 'Arabic / عربي', 'Unit / Pack', ''].map((h, i) => (
+                                        <span key={i} style={{ fontFamily: 'var(--font-inter)', fontSize: '0.65rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(245,242,236,0.25)' }}>{h}</span>
+                                      ))}
+                                    </div>
+
+                                    {catGroups.map(({ category, items: cItems }) => {
+                                      const catKey = `${provKey}__${category ?? '__none__'}`
+                                      const isCatCollapsed = collapsedCats.has(catKey)
+
+                                      return (
+                                        <div key={catKey}>
+                                          {hasCategories && (
+                                            <div
+                                              onClick={() => setCollapsedCats(prev => {
+                                                const next = new Set(prev)
+                                                if (next.has(catKey)) next.delete(catKey); else next.add(catKey)
+                                                return next
+                                              })}
+                                              style={{
+                                                display: 'flex', alignItems: 'center', gap: '0.5rem',
+                                                padding: '0.35rem 1rem',
+                                                borderTop: '1px solid rgba(255,255,255,0.04)',
+                                                background: 'rgba(255,255,255,0.015)',
+                                                cursor: 'pointer', userSelect: 'none',
+                                              }}
+                                            >
+                                              <span style={{
+                                                fontFamily: 'var(--font-inter)', fontSize: '0.7rem',
+                                                letterSpacing: '0.1em', textTransform: 'uppercase',
+                                                color: category ? DEPT_COLOR[dept] : 'rgba(245,242,236,0.25)',
+                                                fontWeight: 600,
+                                              }}>
+                                                {category ?? 'Uncategorized'}
+                                              </span>
+                                              <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.65rem', color: 'rgba(245,242,236,0.2)' }}>
+                                                {cItems.length}
+                                              </span>
+                                              <span style={{
+                                                marginLeft: 'auto', color: 'rgba(245,242,236,0.2)', fontSize: '0.8rem',
+                                                transform: isCatCollapsed ? 'rotate(-90deg)' : 'rotate(90deg)',
+                                                transition: 'transform 0.15s', lineHeight: 1,
+                                              }}>›</span>
+                                            </div>
+                                          )}
+                                          {!isCatCollapsed && cItems.map(item => (
+                                            <ItemRow key={item.id} item={item} providers={providers} onUpdated={handleUpdate} onDeleted={handleDelete} />
+                                          ))}
+                                        </div>
+                                      )
+                                    })}
+                                  </>
+                                )
+                              })()}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )
+                  )}
+                </div>
+              )
+            })}
           </div>
         )}
 

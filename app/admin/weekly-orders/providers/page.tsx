@@ -123,6 +123,12 @@ function AddProviderForm({ onSave }: { onSave: (p: Omit<OrderProvider, 'id' | 'c
   )
 }
 
+const labelStyle: React.CSSProperties = {
+  display: 'block', fontSize: '0.68rem', color: 'rgba(245,242,236,0.3)',
+  letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '0.3rem',
+  fontFamily: 'var(--font-inter)',
+}
+
 // ---- Provider card ----
 function ProviderCard({
   provider,
@@ -133,28 +139,40 @@ function ProviderCard({
   onUpdated: (id: string, before: Partial<OrderProvider>, after: Partial<OrderProvider>) => Promise<void>
   onDeleted: (id: string, name: string) => Promise<void>
 }) {
-  const [editing,  setEditing]  = useState(false)
-  const [name,     setName]     = useState(provider.name)
-  const [phones,   setPhones]   = useState<PhoneMap>({ ...provider.phones })
-  const [notes,    setNotes]    = useState(provider.notes ?? '')
-  const [saving,   setSaving]   = useState(false)
-  const [deleting, setDeleting] = useState(false)
+  const [editing,    setEditing]    = useState(false)
+  const [name,       setName]       = useState(provider.name)
+  const [phones,     setPhones]     = useState<PhoneMap>({ ...provider.phones })
+  const [notes,      setNotes]      = useState(provider.notes ?? '')
+  const [categories, setCategories] = useState<string[]>(provider.categories ?? [])
+  const [newCat,     setNewCat]     = useState('')
+  const [saving,     setSaving]     = useState(false)
+  const [deleting,   setDeleting]   = useState(false)
 
   function setPhone(branch: string, val: string) {
     setPhones(p => ({ ...p, [branch]: val }))
   }
 
+  function addCategory() {
+    const trimmed = newCat.trim()
+    if (!trimmed || categories.includes(trimmed)) return
+    setCategories(prev => [...prev, trimmed])
+    setNewCat('')
+  }
+
+  function removeCategory(cat: string) {
+    setCategories(prev => prev.filter(c => c !== cat))
+  }
+
   async function save() {
     setSaving(true)
     try {
-      // Strip empty strings from phones object
       const cleanPhones = Object.fromEntries(
         Object.entries(phones).filter(([, v]) => v.trim())
       )
       await onUpdated(
         provider.id,
-        { name: provider.name, phones: provider.phones, notes: provider.notes },
-        { name: name.trim(), phones: cleanPhones, notes: notes.trim() },
+        { name: provider.name, phones: provider.phones, notes: provider.notes, categories: provider.categories },
+        { name: name.trim(), phones: cleanPhones, notes: notes.trim(), categories },
       )
       setEditing(false)
     } finally { setSaving(false) }
@@ -164,6 +182,8 @@ function ProviderCard({
     setName(provider.name)
     setPhones({ ...provider.phones })
     setNotes(provider.notes ?? '')
+    setCategories(provider.categories ?? [])
+    setNewCat('')
     setEditing(false)
   }
 
@@ -184,13 +204,13 @@ function ProviderCard({
         <div>
           {/* Name */}
           <div style={{ marginBottom: '1rem' }}>
-            <label style={{ display: 'block', fontSize: '0.68rem', color: 'rgba(245,242,236,0.3)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '0.3rem', fontFamily: 'var(--font-inter)' }}>Name</label>
+            <label style={labelStyle}>Name</label>
             <input value={name} onChange={e => setName(e.target.value)} style={{ ...inp, width: '320px', maxWidth: '100%' }} />
           </div>
 
           {/* Phones */}
           <div style={{ marginBottom: '1rem' }}>
-            <label style={{ display: 'block', fontSize: '0.68rem', color: 'rgba(245,242,236,0.3)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '0.5rem', fontFamily: 'var(--font-inter)' }}>Phone Numbers</label>
+            <label style={labelStyle}>Phone Numbers</label>
             <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
               {BRANCHES.map(branch => (
                 <div key={branch}>
@@ -206,9 +226,58 @@ function ProviderCard({
             </div>
           </div>
 
+          {/* Categories */}
+          <div style={{ marginBottom: '1rem' }}>
+            <label style={labelStyle}>Categories</label>
+            <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
+              {categories.map(cat => (
+                <span key={cat} style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '0.3rem',
+                  backgroundColor: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
+                  borderRadius: '2px', padding: '0.25rem 0.55rem',
+                  fontFamily: 'var(--font-inter)', fontSize: '0.78rem', color: 'var(--offwhite)',
+                }}>
+                  {cat}
+                  <button
+                    type="button"
+                    onClick={() => removeCategory(cat)}
+                    style={{
+                      background: 'none', border: 'none', cursor: 'pointer',
+                      color: 'rgba(245,242,236,0.4)', fontSize: '0.85rem', lineHeight: 1,
+                      padding: '0 0.1rem',
+                    }}
+                  >×</button>
+                </span>
+              ))}
+              {categories.length === 0 && (
+                <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.78rem', color: 'rgba(245,242,236,0.2)' }}>
+                  No categories yet
+                </span>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <input
+                value={newCat}
+                onChange={e => setNewCat(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addCategory() } }}
+                placeholder="e.g. Syrups, Powders…"
+                style={{ ...inp, width: '220px' }}
+              />
+              <button
+                type="button"
+                onClick={addCategory}
+                style={{
+                  backgroundColor: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)',
+                  color: 'rgba(245,242,236,0.6)', padding: '0.55rem 0.9rem', borderRadius: '2px',
+                  fontSize: '0.72rem', cursor: 'pointer', fontFamily: 'var(--font-inter)',
+                }}
+              >+ Add</button>
+            </div>
+          </div>
+
           {/* Notes */}
           <div style={{ marginBottom: '1.1rem' }}>
-            <label style={{ display: 'block', fontSize: '0.68rem', color: 'rgba(245,242,236,0.3)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '0.3rem', fontFamily: 'var(--font-inter)' }}>Notes</label>
+            <label style={labelStyle}>Notes</label>
             <input value={notes} onChange={e => setNotes(e.target.value)} style={{ ...inp, width: '100%' }} />
           </div>
 
@@ -221,7 +290,7 @@ function ProviderCard({
         </div>
       ) : (
         <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', flexWrap: 'wrap', marginBottom: hasBranchPhone ? '1rem' : '0' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem', flexWrap: 'wrap', marginBottom: (hasBranchPhone || (provider.categories?.length ?? 0) > 0) ? '0.85rem' : '0' }}>
             <div>
               <p style={{ fontFamily: 'var(--font-inter)', fontSize: '1rem', fontWeight: 700, color: 'var(--offwhite)', marginBottom: '0.15rem' }}>
                 {provider.name}
@@ -239,6 +308,22 @@ function ProviderCard({
               </button>
             </div>
           </div>
+
+          {/* Categories pills */}
+          {(provider.categories?.length ?? 0) > 0 && (
+            <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', marginBottom: hasBranchPhone ? '0.85rem' : '0' }}>
+              {provider.categories!.map(cat => (
+                <span key={cat} style={{
+                  backgroundColor: 'rgba(0,160,152,0.08)', border: '1px solid rgba(0,160,152,0.2)',
+                  borderRadius: '2px', padding: '0.2rem 0.55rem',
+                  fontFamily: 'var(--font-inter)', fontSize: '0.72rem', color: 'var(--teal)',
+                  letterSpacing: '0.03em',
+                }}>
+                  {cat}
+                </span>
+              ))}
+            </div>
+          )}
 
           {/* Branch phones */}
           {hasBranchPhone && (

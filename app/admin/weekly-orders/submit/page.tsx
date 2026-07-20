@@ -4,15 +4,16 @@ import { useEffect, useMemo, useState } from 'react'
 import { useRequireRole, ALL_ROLES } from '../../../lib/adminAuth'
 import {
   listTemplateItems, listProviders, submitWeeklyReport, getCurrentWeek,
-  groupByProvider, packLabel,
+  groupByProvider, groupByCategory, packLabel,
   type OrderTemplateItem, type OrderProvider,
   DEPARTMENTS, type Department,
 } from '../../../lib/weeklyOrders'
 import { BRANCHES } from '../../../lib/branches'
 
 const DEPT_COLOR: Record<Department, string> = {
-  Kitchen: 'var(--teal)',
-  Bar:     '#C9962C',
+  Kitchen:  '#00A098',
+  Bar:      '#C9962C',
+  Cleaning: '#8B7CF6',
 }
 
 const inp: React.CSSProperties = {
@@ -22,25 +23,38 @@ const inp: React.CSSProperties = {
 }
 
 export default function SubmitOrderPage() {
-  const { checking, role, branchIds, user } = useRequireRole(ALL_ROLES)
+  const { checking, role, branchIds, orderDepts, user } = useRequireRole(ALL_ROLES)
 
   const [items,       setItems]    = useState<OrderTemplateItem[]>([])
   const [providerMap, setProvMap]  = useState<Record<string, OrderProvider>>({})
   const [loading,     setLoading]  = useState(true)
   const [branch,      setBranch]   = useState('')
+  const [dept,        setDept]     = useState<Department | ''>('')
   const [notes,       setNotes]    = useState('')
   const [qtys,        setQtys]     = useState<Record<string, string>>({})
   const [saving,      setSaving]   = useState(false)
   const [err,         setErr]      = useState('')
   const [done,        setDone]     = useState(false)
-  const [showAr,      setShowAr]   = useState(false)
 
   const week = getCurrentWeek()
 
+  // Cast orderDepts (string[]) to Department[] — adminAuth stores as string[]
+  // to avoid importing weeklyOrders types into the auth lib
+  const allowedDepts = useMemo(
+    () => DEPARTMENTS.filter(d => (orderDepts as string[]).includes(d)),
+    [orderDepts],
+  )
+
+  // Auto-select branch when user only has one
   useEffect(() => {
     if (checking) return
     if (role !== 'admin' && branchIds.length === 1) setBranch(branchIds[0])
   }, [checking, role, branchIds])
+
+  // Auto-select department when user only has one allowed
+  useEffect(() => {
+    if (allowedDepts.length === 1) setDept(allowedDepts[0])
+  }, [allowedDepts])
 
   useEffect(() => {
     Promise.all([listTemplateItems(), listProviders()]).then(([data, provs]) => {
@@ -54,28 +68,35 @@ export default function SubmitOrderPage() {
     setQtys(prev => ({ ...prev, [id]: val }))
   }
 
-  // Group by department → provider
-  const grouped = useMemo(() =>
-    DEPARTMENTS.map(dept => {
-      const deptItems = items.filter(i => (i.department ?? 'Kitchen') === dept)
-      return { dept, provGroups: groupByProvider(deptItems) }
-    }).filter(d => d.provGroups.length > 0),
-  [items])
+  // Provider groups for the selected department only
+  const provGroups = useMemo(() => {
+    if (!dept) return []
+    const deptItems = items.filter(i => (i.department ?? 'Kitchen') === dept)
+    return groupByProvider(deptItems)
+  }, [items, dept])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!branch) { setErr('Please select a branch.'); return }
+    if (!dept)   { setErr('Please select a department.'); return }
 
-    const reportItems = items.map(item => ({
-      templateId: item.id,
-      name:       item.name,
-      department: item.department ?? ('Kitchen' as Department),
-      providerId: item.providerId,
-      unit:       item.unit,
-      packSize:   item.packSize,
-      packUnit:   item.packUnit,
-      quantity:   parseFloat(qtys[item.id] ?? '0') || 0,
-    })).filter(i => i.quantity > 0)
+    const reportItems = items
+      .filter(i => (i.department ?? 'Kitchen') === dept)
+      .map(item => {
+        const qty = parseFloat(qtys[item.id] ?? '0') || 0
+        return {
+          templateId: item.id,
+          name:       item.name,
+          department: item.department ?? ('Kitchen' as Department),
+          unit:       item.unit,
+          quantity:   qty,
+          ...(item.providerId != null && { providerId: item.providerId }),
+          ...(item.category   != null && { category:   item.category }),
+          ...(item.packSize   != null && { packSize:   item.packSize }),
+          ...(item.packUnit   != null && { packUnit:   item.packUnit }),
+        }
+      })
+      .filter(i => i.quantity > 0)
 
     if (reportItems.length === 0) { setErr('Please enter at least one quantity.'); return }
 
@@ -83,10 +104,11 @@ export default function SubmitOrderPage() {
     try {
       await submitWeeklyReport({
         branch,
-        weekStart: week.startStr,
-        weekLabel: week.label,
-        items:     reportItems,
-        notes:     notes.trim(),
+        weekStart:        week.startStr,
+        weekLabel:        week.label,
+        department:       dept,
+        items:            reportItems,
+        notes:            notes.trim(),
         submittedBy:      user?.uid ?? '',
         submittedByEmail: user?.email ?? '',
       })
@@ -109,7 +131,7 @@ export default function SubmitOrderPage() {
           <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>✓</div>
           <h2 style={{ fontFamily: 'var(--font-cinzel)', fontSize: '1.5rem', color: 'var(--offwhite)', marginBottom: '0.5rem' }}>Report Submitted</h2>
           <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.85rem', color: 'rgba(245,242,236,0.4)', marginBottom: '2rem' }}>
-            {branch} — {week.label}
+            {branch} — {dept} — {week.label}
           </p>
           <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
             <a href="/admin/weekly-orders" style={{
@@ -141,14 +163,25 @@ export default function SubmitOrderPage() {
             marginBottom: '0.5rem', display: 'block', fontFamily: 'var(--font-inter)',
           }}>← Weekly Orders</a>
           <h1 style={{ fontFamily: 'var(--font-cinzel)', fontSize: '2rem', color: 'var(--offwhite)', marginBottom: '0.25rem' }}>
-            Weekly Order Report
+            Submit Order Report
           </h1>
           <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.85rem', color: 'rgba(245,242,236,0.4)' }}>
             Week of {week.label}
           </p>
         </div>
 
-        {loading ? (
+        {allowedDepts.length === 0 ? (
+          <div style={{
+            border: '1px dashed rgba(255,255,255,0.08)', borderRadius: '4px',
+            padding: '3rem', textAlign: 'center',
+            color: 'rgba(245,242,236,0.25)', fontFamily: 'var(--font-inter)', fontSize: '0.85rem',
+          }}>
+            No departments assigned. Ask your admin to assign you a department at{' '}
+            <a href="/admin/weekly-orders/access" style={{ color: 'var(--teal)' }}>
+              Weekly Orders → Access
+            </a>.
+          </div>
+        ) : loading ? (
           <p style={{ color: 'rgba(245,242,236,0.3)', fontFamily: 'var(--font-inter)' }}>Loading items…</p>
         ) : items.length === 0 ? (
           <div style={{
@@ -163,7 +196,7 @@ export default function SubmitOrderPage() {
           <form onSubmit={handleSubmit}>
 
             {/* Branch selector */}
-            <div style={{ marginBottom: '2.5rem' }}>
+            <div style={{ marginBottom: '2rem' }}>
               <label style={{
                 display: 'block', fontSize: '0.7rem', color: 'rgba(245,242,236,0.35)',
                 letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '0.4rem',
@@ -179,137 +212,180 @@ export default function SubmitOrderPage() {
               )}
             </div>
 
-            {/* Arabic name toggle */}
-            {items.some(i => i.nameAr) && (
-              <div style={{ marginBottom: '2rem' }}>
-                <button
-                  type="button"
-                  onClick={() => setShowAr(v => !v)}
-                  style={{
-                    backgroundColor: showAr ? 'rgba(201,150,44,0.15)' : 'rgba(255,255,255,0.04)',
-                    border: `1px solid ${showAr ? 'rgba(201,150,44,0.4)' : 'rgba(255,255,255,0.1)'}`,
-                    color: showAr ? '#C9962C' : 'rgba(245,242,236,0.5)',
-                    padding: '0.5rem 1.1rem', borderRadius: '2px', fontSize: '0.73rem',
-                    letterSpacing: '0.08em', textTransform: 'uppercase', cursor: 'pointer',
-                    fontFamily: 'var(--font-inter)',
-                  }}
-                >
-                  {showAr ? '🌐 Arabic Names ON' : '🌐 Show Arabic Names'}
-                </button>
-              </div>
-            )}
-
-            {/* Kitchen and Bar sections */}
-            {grouped.map(({ dept, provGroups }) => (
-              <div key={dept} style={{ marginBottom: '3rem' }}>
-
-                {/* Department header */}
-                <div style={{
-                  display: 'flex', alignItems: 'center', gap: '0.7rem',
-                  marginBottom: '1.25rem',
-                  borderBottom: `1px solid ${DEPT_COLOR[dept]}40`,
-                  paddingBottom: '0.65rem',
-                }}>
-                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: DEPT_COLOR[dept], flexShrink: 0 }} />
-                  <p style={{
-                    fontFamily: 'var(--font-cinzel)', fontSize: '1rem',
-                    color: DEPT_COLOR[dept], letterSpacing: '0.15em',
-                  }}>{dept.toUpperCase()}</p>
-                </div>
-
-                {/* Provider groups */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-                  {provGroups.map(({ providerId, items: pItems }) => {
-                    const provider = providerId ? providerMap[providerId] : undefined
-                    return (
-                      <div key={providerId ?? '__none__'}>
-                        {/* Provider label */}
-                        <p style={{
-                          fontFamily: 'var(--font-inter)', fontSize: '0.78rem',
-                          color: provider ? 'rgba(245,242,236,0.55)' : 'rgba(245,242,236,0.25)',
-                          fontWeight: 600, marginBottom: '0.5rem',
-                          letterSpacing: '0.04em',
-                        }}>
-                          {provider?.name ?? 'No Provider'}
-                        </p>
-
-                        <div style={{
-                          background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)',
-                          borderLeft: `3px solid ${DEPT_COLOR[dept]}30`,
-                          borderRadius: '4px', overflow: 'hidden',
-                        }}>
-                          {pItems.map((item, idx) => (
-                            <div key={item.id} style={{
-                              display: 'grid', gridTemplateColumns: '1fr auto',
-                              alignItems: 'center', gap: '1rem',
-                              padding: '0.85rem 1.25rem',
-                              borderTop: idx > 0 ? '1px solid rgba(255,255,255,0.04)' : 'none',
-                            }}>
-                              <div>
-                                <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.88rem', color: 'var(--offwhite)', fontWeight: 500 }}>
-                                  {item.name}
-                                </span>
-                                {showAr && item.nameAr && (
-                                  <span dir="rtl" style={{ fontFamily: 'var(--font-inter)', fontSize: '0.85rem', color: '#C9962C', marginLeft: '0.5rem' }}>
-                                    {item.nameAr}
-                                  </span>
-                                )}
-                                <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.75rem', color: 'rgba(245,242,236,0.3)', marginLeft: '0.5rem' }}>
-                                  ({packLabel(item.unit, item.packSize, item.packUnit)})
-                                </span>
-                              </div>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                <input
-                                  type="number"
-                                  min="0"
-                                  step="0.5"
-                                  value={qtys[item.id] ?? ''}
-                                  onChange={e => setQty(item.id, e.target.value)}
-                                  placeholder="0"
-                                  style={{ ...inp, width: '90px', textAlign: 'right' }}
-                                />
-                                <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.78rem', color: 'rgba(245,242,236,0.35)', minWidth: '36px' }}>
-                                  {packLabel(item.unit, item.packSize, item.packUnit)}
-                                </span>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            ))}
-
-            {/* Notes */}
-            <div style={{ marginBottom: '2rem' }}>
+            {/* Department selector */}
+            <div style={{ marginBottom: '2.5rem' }}>
               <label style={{
                 display: 'block', fontSize: '0.7rem', color: 'rgba(245,242,236,0.35)',
-                letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '0.4rem',
+                letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '0.6rem',
                 fontFamily: 'var(--font-inter)',
-              }}>Notes (optional)</label>
-              <textarea
-                value={notes}
-                onChange={e => setNotes(e.target.value)}
-                rows={3}
-                placeholder="Any additional notes or comments…"
-                style={{ ...inp, width: '100%', resize: 'vertical' }}
-              />
+              }}>Department</label>
+              <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
+                {allowedDepts.map(d => (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() => { setDept(d); setQtys({}) }}
+                    style={{
+                      backgroundColor: dept === d ? `${DEPT_COLOR[d]}20` : 'transparent',
+                      border: `1px solid ${dept === d ? DEPT_COLOR[d] : 'rgba(255,255,255,0.12)'}`,
+                      color: dept === d ? DEPT_COLOR[d] : 'rgba(245,242,236,0.5)',
+                      padding: '0.55rem 1.2rem', borderRadius: '2px', fontSize: '0.78rem',
+                      letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer',
+                      fontFamily: 'var(--font-inter)', fontWeight: dept === d ? 600 : 400,
+                      display: 'flex', alignItems: 'center', gap: '0.4rem',
+                    }}
+                  >
+                    <span style={{
+                      width: '6px', height: '6px', borderRadius: '50%',
+                      backgroundColor: dept === d ? DEPT_COLOR[d] : 'rgba(255,255,255,0.2)',
+                      flexShrink: 0,
+                    }} />
+                    {d}
+                  </button>
+                ))}
+              </div>
             </div>
 
-            {err && (
-              <p style={{ color: 'var(--red)', fontSize: '0.82rem', marginBottom: '1rem', fontFamily: 'var(--font-inter)' }}>{err}</p>
-            )}
+            {/* Items for selected department */}
+            {dept ? (
+              <>
+                {provGroups.length === 0 ? (
+                  <p style={{ color: 'rgba(245,242,236,0.25)', fontFamily: 'var(--font-inter)', fontSize: '0.85rem', marginBottom: '2rem' }}>
+                    No items in the {dept} template yet.
+                  </p>
+                ) : (
+                  <div style={{ marginBottom: '3rem' }}>
+                    {/* Department header */}
+                    <div style={{
+                      display: 'flex', alignItems: 'center', gap: '0.7rem',
+                      marginBottom: '1.25rem',
+                      borderBottom: `1px solid ${DEPT_COLOR[dept]}40`,
+                      paddingBottom: '0.65rem',
+                    }}>
+                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: DEPT_COLOR[dept], flexShrink: 0 }} />
+                      <p style={{
+                        fontFamily: 'var(--font-cinzel)', fontSize: '1rem',
+                        color: DEPT_COLOR[dept], letterSpacing: '0.15em',
+                      }}>{dept.toUpperCase()}</p>
+                    </div>
 
-            <button type="submit" disabled={saving} style={{
-              backgroundColor: 'var(--teal)', color: '#fff', border: 'none',
-              padding: '0.8rem 2rem', borderRadius: '2px', fontSize: '0.82rem',
-              letterSpacing: '0.08em', textTransform: 'uppercase', cursor: saving ? 'not-allowed' : 'pointer',
-              fontFamily: 'var(--font-inter)', opacity: saving ? 0.6 : 1,
-            }}>
-              {saving ? 'Submitting…' : 'Submit Order Report'}
-            </button>
+                    {/* Provider groups */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                      {provGroups.map(({ providerId, items: pItems }) => {
+                        const provider = providerId ? providerMap[providerId] : undefined
+                        const catGroups = groupByCategory(pItems)
+                        const hasCategories = catGroups.some(g => g.category !== undefined)
+                        return (
+                          <div key={providerId ?? '__none__'}>
+                            <p style={{
+                              fontFamily: 'var(--font-inter)', fontSize: '0.78rem',
+                              color: provider ? 'rgba(245,242,236,0.55)' : 'rgba(245,242,236,0.25)',
+                              fontWeight: 600, marginBottom: '0.5rem',
+                              letterSpacing: '0.04em',
+                            }}>
+                              {provider?.name ?? 'No Provider'}
+                            </p>
+
+                            <div style={{
+                              background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)',
+                              borderLeft: `3px solid ${DEPT_COLOR[dept]}30`,
+                              borderRadius: '4px', overflow: 'hidden',
+                            }}>
+                              {catGroups.map(({ category, items: cItems }) => (
+                                <div key={category ?? '__none__'}>
+                                  {hasCategories && (
+                                    <div style={{
+                                      padding: '0.4rem 1.25rem',
+                                      borderTop: '1px solid rgba(255,255,255,0.04)',
+                                      background: 'rgba(255,255,255,0.015)',
+                                      fontFamily: 'var(--font-inter)', fontSize: '0.7rem',
+                                      letterSpacing: '0.1em', textTransform: 'uppercase',
+                                      color: category ? DEPT_COLOR[dept] : 'rgba(245,242,236,0.25)',
+                                      fontWeight: 600,
+                                    }}>
+                                      {category ?? 'Other'}
+                                    </div>
+                                  )}
+                                  {cItems.map((item, idx) => (
+                                    <div key={item.id} style={{
+                                      display: 'grid', gridTemplateColumns: '1fr auto',
+                                      alignItems: 'center', gap: '1rem',
+                                      padding: '0.85rem 1.25rem',
+                                      borderTop: (idx > 0 || hasCategories) ? '1px solid rgba(255,255,255,0.04)' : 'none',
+                                    }}>
+                                      <div>
+                                        <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.88rem', color: 'var(--offwhite)', fontWeight: 500 }}>
+                                          {item.name}
+                                        </span>
+                                        {item.nameAr && (
+                                          <span dir="rtl" style={{ fontFamily: 'var(--font-inter)', fontSize: '0.85rem', color: '#C9962C', marginLeft: '0.5rem' }}>
+                                            {item.nameAr}
+                                          </span>
+                                        )}
+                                        <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.75rem', color: 'rgba(245,242,236,0.3)', marginLeft: '0.5rem' }}>
+                                          ({packLabel(item.unit, item.packSize, item.packUnit)})
+                                        </span>
+                                      </div>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          step="0.5"
+                                          value={qtys[item.id] ?? ''}
+                                          onChange={e => setQty(item.id, e.target.value)}
+                                          placeholder="0"
+                                          style={{ ...inp, width: '90px', textAlign: 'right' }}
+                                        />
+                                        <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.78rem', color: 'rgba(245,242,236,0.35)', minWidth: '36px' }}>
+                                          {packLabel(item.unit, item.packSize, item.packUnit)}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Notes */}
+                <div style={{ marginBottom: '2rem' }}>
+                  <label style={{
+                    display: 'block', fontSize: '0.7rem', color: 'rgba(245,242,236,0.35)',
+                    letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '0.4rem',
+                    fontFamily: 'var(--font-inter)',
+                  }}>Notes (optional)</label>
+                  <textarea
+                    value={notes}
+                    onChange={e => setNotes(e.target.value)}
+                    rows={3}
+                    placeholder="Any additional notes or comments…"
+                    style={{ ...inp, width: '100%', resize: 'vertical' }}
+                  />
+                </div>
+
+                {err && (
+                  <p style={{ color: 'var(--red)', fontSize: '0.82rem', marginBottom: '1rem', fontFamily: 'var(--font-inter)' }}>{err}</p>
+                )}
+
+                <button type="submit" disabled={saving} style={{
+                  backgroundColor: dept ? DEPT_COLOR[dept] : 'var(--teal)', color: '#fff', border: 'none',
+                  padding: '0.8rem 2rem', borderRadius: '2px', fontSize: '0.82rem',
+                  letterSpacing: '0.08em', textTransform: 'uppercase', cursor: saving ? 'not-allowed' : 'pointer',
+                  fontFamily: 'var(--font-inter)', opacity: saving ? 0.6 : 1,
+                }}>
+                  {saving ? 'Submitting…' : `Submit ${dept} Report`}
+                </button>
+              </>
+            ) : (
+              <p style={{ color: 'rgba(245,242,236,0.25)', fontFamily: 'var(--font-inter)', fontSize: '0.85rem' }}>
+                Select a department above to see the order form.
+              </p>
+            )}
           </form>
         )}
       </div>

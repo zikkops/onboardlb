@@ -18,7 +18,7 @@ import {
   faCalendarDay, faDiceD20, faDragon, faUsers, faUser, faClock, faMap,
   faClipboard, faThumbsUp, faGift, faTag, faTrophy, faUserShield,
   faFile, faPaperPlane, faTruck, faList, faImage, faScroll,
-  faClockRotateLeft, faChair, faThumbtack, faGear, faXmark,
+  faClockRotateLeft, faChair, faThumbtack, faGear, faXmark, faMoneyBill,
   type IconDefinition,
 } from '@fortawesome/free-solid-svg-icons'
 
@@ -196,6 +196,15 @@ export default function AdminPage() {
         { label: 'Order Reports',    icon: faFile,       daily: true,  desc: 'View all end-of-week order reports submitted by staff',             href: '/admin/weekly-orders',           access: SECTION_ACCESS.weeklyOrders },
         { label: 'Manage Providers', icon: faTruck,      daily: false, desc: 'Add suppliers with per-branch phone numbers for WhatsApp ordering', href: '/admin/weekly-orders/providers', access: ['admin'] as Role[] },
         { label: 'Edit Template',    icon: faList,       daily: false, desc: 'Manage orderable items, pack sizes, Arabic names, and units',      href: '/admin/weekly-orders/template',  access: ['admin'] as Role[] },
+      ],
+    },
+    {
+      title: 'End of Day',
+      color: '#C9962C',
+      cards: [
+        { label: 'Submit EOD Report', icon: faMoneyBill,       daily: true,  desc: 'Fill in cash count, expenses, income, and attendance for the end of shift', href: '/admin/end-of-day',         access: SECTION_ACCESS.endOfDay },
+        { label: 'EOD History',       icon: faClockRotateLeft, daily: true,  desc: 'Browse and edit past end-of-day reports by branch',                         href: '/admin/end-of-day/history', access: SECTION_ACCESS.endOfDay },
+        { label: 'Staff Roster',      icon: faUsers,           daily: false, desc: 'Configure the default staff list per branch for EOD attendance tracking',   href: '/admin/end-of-day/staff',   access: ['admin'] as Role[] },
       ],
     },
     {

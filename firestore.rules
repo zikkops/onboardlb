@@ -156,11 +156,12 @@ service cloud.firestore {
         request.resource.data.xpAmount >= 0 && request.resource.data.xpAmount <= 10000 &&
         request.resource.data.coinsAmount is int &&
         request.resource.data.coinsAmount >= 0 && request.resource.data.coinsAmount <= 2000;
-      // Staff can update any field (approve/reject). The original submitter
-      // may also cancel their own still-pending submission — not every
-      // person tagged in a split, just whoever created it — and that's the
-      // only transition they get: pending -> cancelled, nothing else.
-      allow update: if isStaff() ||
+      // Staff can update any field (approve/reject) — but not if they are
+      // themselves one of the beneficiaries of the transaction (userId array).
+      // The same Firebase account can be both isStaff() and have submitted a
+      // customer check, so without this check a staff member could approve
+      // their own submission and pocket XP/coins unreviewed.
+      allow update: if (isStaff() && !(request.auth.uid in resource.data.userId)) ||
         (request.auth != null &&
           request.auth.uid == resource.data.submittedBy &&
           resource.data.status == 'pending' &&
@@ -491,6 +492,39 @@ service cloud.firestore {
         request.resource.data.weekStart is string &&
         request.resource.data.items is list;
       allow update, delete: if isStaff();
+    }
+
+    // ---- End-of-day reports ----
+    // Per-branch staff roster — any staff member may read (the EOD form needs
+    // it to populate the attendance list) and any staff member may write
+    // (managers configure their branch roster). One doc per branch (doc id ==
+    // branch name), same pattern as branchTableLayouts.
+    match /branchStaff/{branch} {
+      allow read, write: if isStaff();
+    }
+
+    // One report per (branch, date) — doc id is "{branch}_{YYYY-MM-DD}".
+    // Created and updated by any staff member (the cashier on shift fills it
+    // in); no customer-facing access at all. The submittedBy/updatedBy fields
+    // are set by the client and cross-checked here as a lightweight sanity
+    // gate only — the real audit trail is the updatedBy uid logged on every
+    // write, not a strict immutability enforcement.
+    match /endOfDayReports/{id} {
+      allow read: if isStaff();
+      allow create: if isStaff() &&
+        request.auth.uid == request.resource.data.submittedBy &&
+        request.resource.data.branch is string &&
+        request.resource.data.date is string;
+      allow update: if isStaff();
+    }
+
+    // ---- Audit logs (weekly orders & end-of-day) ----
+    // Staff-only write and read — customers never touch these collections.
+    match /weeklyOrderLogs/{id} {
+      allow read, write: if isStaff();
+    }
+    match /endOfDayLogs/{id} {
+      allow read, write: if isStaff();
     }
 
     // Everything else is denied by default — Firestore rejects any

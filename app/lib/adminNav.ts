@@ -99,6 +99,16 @@ export const ADMIN_NAV: AdminNavSection[] = [
     ],
   },
   {
+    title: 'End of Day',
+    color: '#C9962C',
+    items: [
+      { label: 'Submit EOD Report', href: '/admin/end-of-day',         access: SECTION_ACCESS.endOfDay },
+      { label: 'EOD History',       href: '/admin/end-of-day/history', access: SECTION_ACCESS.endOfDay },
+      { label: 'Tips Calculator',   href: '/admin/end-of-day/tips',    access: SECTION_ACCESS.endOfDay },
+      { label: 'Staff Roster',      href: '/admin/end-of-day/staff',   access: ['admin'] as Role[] },
+    ],
+  },
+  {
     title: 'Administration',
     color: 'var(--red)',
     items: [

@@ -49,6 +49,7 @@ export const SECTION_LABELS: Record<string, string> = {
   gamePurchases:     'Record Game Sales',
   gameTransfers:     'Transfer Stock',
   weeklyOrders:      'Weekly Order Reports',
+  endOfDay:          'End of Day Reports',
 }
 
 export const SECTION_ACCESS = {
@@ -73,6 +74,7 @@ export const SECTION_ACCESS = {
   gamePurchases:     ['admin', 'manager', 'gamer'] as Role[],
   gameTransfers:     ['admin', 'manager', 'gamer'] as Role[],
   weeklyOrders:      ALL_ROLES,
+  endOfDay:          ['admin', 'manager'] as Role[],
 }
 
 // Reads either shape — the new `branchIds` array, or the older singular
@@ -111,6 +113,7 @@ export function useAdminUser() {
   const [user, setUser]             = useState<User | null>(null)
   const [role, setRole]             = useState<Role | null>(null)
   const [branchIds, setBranchIds]   = useState<string[]>([])
+  const [orderDepts, setOrderDepts] = useState<string[]>([])
   const [sectionGrants, setSectionGrants] = useState<string[]>([])
   const [isDungeonMaster, setIsDungeonMaster] = useState(false)
   const [superadmin, setSuperadmin] = useState(false)
@@ -124,6 +127,7 @@ export function useAdminUser() {
         setUser(null)
         setRole(null)
         setBranchIds([])
+        setOrderDepts([])
         setSectionGrants([])
         setIsDungeonMaster(false)
         setSuperadmin(false)
@@ -136,12 +140,20 @@ export function useAdminUser() {
       const snap = await getDoc(doc(db, 'users', u.uid))
       const data = snap.exists() ? snap.data() : null
       if (data?.isStaff === true) {
-        setRole((data.role as Role) ?? null)
+        const roleVal = (data.role as Role) ?? null
+        setRole(roleVal)
         setBranchIds(normalizeBranchIds(data))
         setSectionGrants(Array.isArray(data.sectionGrants) ? data.sectionGrants as string[] : [])
         setIsDungeonMaster(data.isDungeonMaster === true)
         setSuperadmin(data.superadmin === true)
         setProvisioned(true)
+        // Admin/manager always have access to all three order departments.
+        // Other roles only see the departments listed in their orderDepts field.
+        setOrderDepts(
+          (roleVal === 'admin' || roleVal === 'manager')
+            ? ['Kitchen', 'Bar', 'Cleaning']
+            : (Array.isArray(data.orderDepts) ? data.orderDepts as string[] : [])
+        )
       } else {
         // users/{uid} either doesn't exist or has no isStaff: true.
         // First-time admins must be provisioned by hand in Firebase Console:
@@ -149,6 +161,7 @@ export function useAdminUser() {
         // xp: 0, obCoins: 0. See ARCHITECTURE.md.
         setRole(null)
         setBranchIds([])
+        setOrderDepts([])
         setSectionGrants([])
         setIsDungeonMaster(false)
         setSuperadmin(false)
@@ -159,7 +172,7 @@ export function useAdminUser() {
     return unsub
   }, [])
 
-  return { user, role, branchIds, sectionGrants, isDungeonMaster, superadmin, loading, provisioned }
+  return { user, role, branchIds, orderDepts, sectionGrants, isDungeonMaster, superadmin, loading, provisioned }
 }
 
 // Lightweight, read-only staff check for public/customer-facing components
@@ -203,7 +216,7 @@ export function hasSectionAccess(
 
 export function useRequireRole(allowed: Role[]) {
   const router = useRouter()
-  const { user, role, branchIds, sectionGrants, isDungeonMaster, superadmin, loading, provisioned } = useAdminUser()
+  const { user, role, branchIds, orderDepts, sectionGrants, isDungeonMaster, superadmin, loading, provisioned } = useAdminUser()
 
   // Detect which section key this call is gating by reference equality —
   // all callers pass SECTION_ACCESS.xxx directly, so the array object is the same.
@@ -226,7 +239,7 @@ export function useRequireRole(allowed: Role[]) {
   }, [loading, user, hasAccess, provisioned, router])
 
   const checking = loading || !user || !provisioned || !hasAccess
-  return { checking, role, branchIds, sectionGrants, isDungeonMaster, superadmin, user }
+  return { checking, role, branchIds, orderDepts, sectionGrants, isDungeonMaster, superadmin, user }
 }
 
 // Staff accounts live in the same `users` collection as customers — they just

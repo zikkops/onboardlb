@@ -1,18 +1,20 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRequireRole, ALL_ROLES } from '../../lib/adminAuth'
 import {
   listWeeklyReports, listTemplateItems, listProviders,
-  generateOrderText, whatsappUrl, groupByProvider, getProviderPhone,
+  generateOrderText, whatsappUrl, groupByProvider, groupByCategory, getProviderPhone,
   UNIT_LABELS, DEPARTMENTS,
-  type WeeklyOrderReport, type OrderProvider, type Department,
+  updateReportItemQty, deleteWeeklyReport, logWeeklyOrderAction, toggleWhatsappSent,
+  type WeeklyOrderReport, type WeeklyOrderReportItem, type OrderProvider, type Department,
 } from '../../lib/weeklyOrders'
 import { BRANCHES } from '../../lib/branches'
 
 const DEPT_COLOR: Record<Department, string> = {
-  Kitchen: 'var(--teal)',
-  Bar:     '#C9962C',
+  Kitchen:  '#00A098',
+  Bar:      '#C9962C',
+  Cleaning: '#8B7CF6',
 }
 
 function fmtDate(ts: { seconds: number } | null): string {
@@ -27,38 +29,136 @@ function ReportCard({
   report,
   providers,
   nameArMap,
+  canEdit = false,
+  staffUid = '',
+  staffEmail = '',
+  onDeleted,
 }: {
-  report: WeeklyOrderReport
-  providers: Record<string, OrderProvider>
-  nameArMap: Record<string, string>
+  report:      WeeklyOrderReport
+  providers:   Record<string, OrderProvider>
+  nameArMap:   Record<string, string>
+  canEdit?:    boolean
+  staffUid?:   string
+  staffEmail?: string
+  onDeleted?:  (id: string) => void
 }) {
-  const [open,         setOpen]        = useState(false)
-  const [showAr,       setShowAr]      = useState(false)
-  const [copied,       setCopied]      = useState(false)
-  const [copiedProv,   setCopiedProv]  = useState<string | null>(null)
+  const [open,       setOpen]      = useState(false)
+  const [copied,     setCopied]    = useState(false)
+  const [copiedProv, setCopiedProv] = useState<string | null>(null)
+  const [items,      setItems]     = useState<WeeklyOrderReportItem[]>(report.items)
+  const [editingId,  setEditingId] = useState<string | null>(null)
+  const [editVal,    setEditVal]   = useState('')
+  const [saving,     setSaving]    = useState(false)
+  const [deleting,   setDeleting]  = useState(false)
+  const [sentMap,    setSentMap]   = useState<Record<string, boolean>>(report.whatsappSent ?? {})
 
-  // Department → provider groups for this report
+  // Track Escape so onBlur doesn't also save
+  const skipBlurRef = useRef(false)
+
   const deptGroups = useMemo(() =>
     DEPARTMENTS.map(dept => {
-      const deptItems = report.items.filter(i => (i.department ?? 'Kitchen') === dept)
+      const deptItems = items.filter(i => (i.department ?? 'Kitchen') === dept)
       return { dept, provGroups: groupByProvider(deptItems) }
     }).filter(d => d.provGroups.some(pg => pg.items.length > 0)),
-  [report.items])
+  [items])
+
+  // Derive send-progress from current sentMap — recalculates whenever sentMap changes
+  const uniqueProvKeys = [...new Set(
+    deptGroups.flatMap(({ provGroups }) => provGroups.map(pg => pg.providerId ?? '__none__'))
+  )]
+  const totalProvCt  = uniqueProvKeys.length
+  const pendingCount = uniqueProvKeys.filter(k => !sentMap[k]).length
+  const allDone      = totalProvCt > 0 && pendingCount === 0
 
   function copyAll() {
-    const text = generateOrderText(report, providers, nameArMap, showAr)
+    const text = generateOrderText({ ...report, items }, providers, nameArMap, true)
     navigator.clipboard.writeText(text)
     setCopied(true); setTimeout(() => setCopied(false), 2000)
   }
 
   function copyProvider(providerId: string | undefined) {
-    const text = generateOrderText(report, providers, nameArMap, showAr, providerId)
+    const text = generateOrderText({ ...report, items }, providers, nameArMap, true, providerId)
     const key = providerId ?? '__none__'
     navigator.clipboard.writeText(text)
     setCopiedProv(key); setTimeout(() => setCopiedProv(null), 2000)
   }
 
-  const hasArabic = report.items.some(i => nameArMap[i.templateId])
+  async function handleToggleSent(provKey: string) {
+    const next = !sentMap[provKey]
+    setSentMap(prev => ({ ...prev, [provKey]: next }))
+    try {
+      await toggleWhatsappSent(report.id, provKey, next)
+    } catch {
+      // revert on failure
+      setSentMap(prev => ({ ...prev, [provKey]: !next }))
+    }
+  }
+
+  function startEdit(item: WeeklyOrderReportItem) {
+    if (saving) return
+    setEditingId(item.templateId)
+    setEditVal(String(item.quantity))
+  }
+
+  function cancelEdit() {
+    skipBlurRef.current = true
+    setEditingId(null)
+    setEditVal('')
+  }
+
+  async function commitEdit(item: WeeklyOrderReportItem) {
+    if (skipBlurRef.current) {
+      skipBlurRef.current = false
+      return
+    }
+    const newQty = parseFloat(editVal)
+    if (isNaN(newQty) || newQty < 0 || newQty === item.quantity) {
+      setEditingId(null); setEditVal(''); return
+    }
+    setSaving(true)
+    try {
+      const updated = await updateReportItemQty(report.id, items, item.templateId, newQty)
+      setItems(updated)
+      await logWeeklyOrderAction({
+        action:    'edit_quantity',
+        reportId:  report.id,
+        branch:    report.branch,
+        weekLabel: report.weekLabel,
+        staffUid,
+        staffEmail,
+        itemName:  item.name,
+        oldQty:    item.quantity,
+        newQty,
+        unit:      item.unit,
+      })
+    } finally {
+      setSaving(false)
+      setEditingId(null)
+      setEditVal('')
+    }
+  }
+
+  async function handleDelete() {
+    if (!confirm(
+      `Delete the ${report.branch} report for "${report.weekLabel}"?\n\nThis cannot be undone.`
+    )) return
+    setDeleting(true)
+    try {
+      await deleteWeeklyReport(report.id)
+      await logWeeklyOrderAction({
+        action:       'delete_report',
+        reportId:     report.id,
+        branch:       report.branch,
+        weekLabel:    report.weekLabel,
+        staffUid,
+        staffEmail,
+        deletedCount: items.length,
+      })
+      onDeleted?.(report.id)
+    } catch {
+      setDeleting(false)
+    }
+  }
 
   return (
     <div style={{
@@ -68,9 +168,9 @@ function ReportCard({
       {/* Summary row */}
       <div style={{
         padding: '1rem 1.25rem',
-        display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap',
+        display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap',
         cursor: 'pointer',
-      }} onClick={() => setOpen(o => !o)}>
+      }} onClick={() => { cancelEdit(); setOpen(o => !o) }}>
         <span style={{
           backgroundColor: 'rgba(0,160,152,0.12)', border: '1px solid rgba(0,160,152,0.3)',
           color: 'var(--teal)', borderRadius: '2px', padding: '0.2rem 0.6rem',
@@ -78,6 +178,19 @@ function ReportCard({
         }}>
           {report.branch}
         </span>
+
+        {report.department && (
+          <span style={{
+            backgroundColor: `${DEPT_COLOR[report.department]}18`,
+            border: `1px solid ${DEPT_COLOR[report.department]}50`,
+            color: DEPT_COLOR[report.department],
+            borderRadius: '2px', padding: '0.2rem 0.6rem',
+            fontSize: '0.72rem', letterSpacing: '0.1em',
+            fontFamily: 'var(--font-inter)', fontWeight: 600, flexShrink: 0,
+          }}>
+            {report.department}
+          </span>
+        )}
 
         <div style={{ flex: 1, minWidth: '180px' }}>
           <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.9rem', color: 'var(--offwhite)', fontWeight: 600, marginBottom: '0.1rem' }}>
@@ -88,9 +201,26 @@ function ReportCard({
           </p>
         </div>
 
-        <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.75rem', color: 'rgba(245,242,236,0.3)', flexShrink: 0 }}>
-          {report.items.length} item{report.items.length !== 1 ? 's' : ''}
-        </span>
+        {totalProvCt > 0 ? (
+          allDone ? (
+            <span style={{
+              backgroundColor: 'rgba(37,211,102,0.15)', border: '1px solid rgba(37,211,102,0.45)',
+              color: '#25D366', borderRadius: '2px', padding: '0.2rem 0.7rem',
+              fontSize: '0.72rem', letterSpacing: '0.1em', fontFamily: 'var(--font-inter)',
+              fontWeight: 700, flexShrink: 0,
+            }}>
+              ✓ Done
+            </span>
+          ) : (
+            <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.75rem', color: 'rgba(245,242,236,0.35)', flexShrink: 0 }}>
+              {pendingCount} pending
+            </span>
+          )
+        ) : (
+          <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.75rem', color: 'rgba(245,242,236,0.3)', flexShrink: 0 }}>
+            {items.length} item{items.length !== 1 ? 's' : ''}
+          </span>
+        )}
 
         <span style={{ color: 'rgba(245,242,236,0.25)', fontSize: '1.1rem', transform: open ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s', flexShrink: 0 }}>›</span>
       </div>
@@ -115,30 +245,53 @@ function ReportCard({
               {copied ? '✓ Copied!' : '📋 Copy Full Order'}
             </button>
 
-            {hasArabic && (
-              <button onClick={e => { e.stopPropagation(); setShowAr(v => !v) }} style={{
-                backgroundColor: showAr ? 'rgba(201,150,44,0.15)' : 'rgba(255,255,255,0.04)',
-                border: `1px solid ${showAr ? 'rgba(201,150,44,0.4)' : 'rgba(255,255,255,0.1)'}`,
-                color: showAr ? '#C9962C' : 'rgba(245,242,236,0.5)',
-                padding: '0.45rem 1rem', borderRadius: '2px', fontSize: '0.72rem',
-                letterSpacing: '0.08em', textTransform: 'uppercase', cursor: 'pointer',
-                fontFamily: 'var(--font-inter)',
+            {totalProvCt > 0 && (
+              <span style={{
+                fontFamily: 'var(--font-inter)', fontSize: '0.75rem', fontWeight: 600,
+                color: allDone ? '#25D366' : 'rgba(245,242,236,0.4)',
+                letterSpacing: '0.03em',
               }}>
-                {showAr ? '🌐 Arabic ON' : '🌐 Show Arabic'}
+                {allDone ? '✓ All providers sent' : `${pendingCount} of ${totalProvCt} pending`}
+              </span>
+            )}
+
+            {canEdit && (
+              <button
+                onClick={e => { e.stopPropagation(); handleDelete() }}
+                disabled={deleting}
+                style={{
+                  marginLeft: 'auto',
+                  backgroundColor: 'rgba(220,50,50,0.08)', border: '1px solid rgba(220,50,50,0.25)',
+                  color: deleting ? 'rgba(245,242,236,0.25)' : 'rgba(220,90,90,0.9)',
+                  padding: '0.45rem 1rem', borderRadius: '2px', fontSize: '0.72rem',
+                  letterSpacing: '0.08em', textTransform: 'uppercase',
+                  cursor: deleting ? 'not-allowed' : 'pointer',
+                  fontFamily: 'var(--font-inter)',
+                }}
+              >
+                {deleting ? 'Deleting…' : 'Delete Report'}
               </button>
             )}
           </div>
 
-          {/* Department → Provider → Items */}
+          {/* Items */}
           <div style={{ padding: '1.25rem' }}>
+            {canEdit && (
+              <p style={{
+                fontFamily: 'var(--font-inter)', fontSize: '0.68rem',
+                color: 'rgba(245,242,236,0.22)', letterSpacing: '0.05em',
+                marginBottom: '1rem',
+              }}>
+                Click any quantity to edit · Enter to save · Esc to cancel
+              </p>
+            )}
+
             {deptGroups.map(({ dept, provGroups }) => (
               <div key={dept} style={{ marginBottom: '1.75rem' }}>
 
-                {/* Department label */}
                 <div style={{
                   display: 'flex', alignItems: 'center', gap: '0.5rem',
-                  marginBottom: '0.85rem',
-                  paddingBottom: '0.45rem',
+                  marginBottom: '0.85rem', paddingBottom: '0.45rem',
                   borderBottom: `1px solid ${DEPT_COLOR[dept]}30`,
                 }}>
                   <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: DEPT_COLOR[dept], flexShrink: 0 }} />
@@ -150,12 +303,21 @@ function ReportCard({
                 {provGroups.map(({ providerId, items: pItems }) => {
                   const provider = providerId ? providers[providerId] : undefined
                   const phone    = provider ? getProviderPhone(provider, report.branch) : ''
-                  const waText   = generateOrderText(report, providers, nameArMap, showAr, providerId)
+                  const waText   = generateOrderText(
+                    { ...report, items }, providers, nameArMap, true, providerId,
+                  )
                   const provKey  = providerId ?? '__none__'
+                  const isSent   = !!sentMap[provKey]
 
                   return (
-                    <div key={provKey} style={{ marginBottom: '1.25rem' }}>
-                      {/* Provider header row */}
+                    <div key={provKey} style={{
+                      marginBottom: '1rem',
+                      borderRadius: '4px',
+                      border: `1px solid ${isSent ? 'rgba(37,211,102,0.35)' : 'rgba(255,255,255,0.06)'}`,
+                      backgroundColor: isSent ? 'rgba(37,211,102,0.05)' : 'rgba(255,255,255,0.01)',
+                      padding: '0.75rem 0.85rem',
+                      transition: 'border-color 0.25s, background-color 0.25s',
+                    }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.5rem' }}>
                         <div>
                           <span style={{
@@ -172,7 +334,7 @@ function ReportCard({
                           )}
                         </div>
 
-                        <div style={{ display: 'flex', gap: '0.4rem' }}>
+                        <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
                           <button onClick={() => copyProvider(providerId)} style={{
                             backgroundColor: 'transparent', border: '1px solid rgba(255,255,255,0.1)',
                             color: copiedProv === provKey ? 'var(--teal)' : 'rgba(245,242,236,0.4)',
@@ -198,31 +360,126 @@ function ReportCard({
                               WhatsApp {provider?.name ?? ''}
                             </a>
                           )}
+
+                          {/* Checkmark shown for every provider regardless of WhatsApp */}
+                          <button
+                            onClick={e => { e.stopPropagation(); handleToggleSent(provKey) }}
+                            title={isSent ? 'Sent — click to unmark' : 'Mark as sent'}
+                            style={{
+                              backgroundColor: isSent ? 'rgba(37,211,102,0.22)' : 'rgba(255,255,255,0.04)',
+                              border: `1px solid ${isSent ? 'rgba(37,211,102,0.6)' : 'rgba(255,255,255,0.12)'}`,
+                              color: isSent ? '#25D366' : 'rgba(245,242,236,0.3)',
+                              padding: '0.3rem 0.75rem', borderRadius: '2px', fontSize: '0.72rem',
+                              cursor: 'pointer', fontFamily: 'var(--font-inter)',
+                              fontWeight: isSent ? 700 : 400, letterSpacing: '0.04em',
+                              transition: 'all 0.2s',
+                            }}
+                          >
+                            {isSent ? '✓ Sent' : '✓'}
+                          </button>
                         </div>
                       </div>
 
-                      {/* Item rows */}
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-                        {pItems.map(item => {
-                          const ar = nameArMap[item.templateId]
-                          return (
-                            <div key={item.templateId} style={{
-                              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                              padding: '0.5rem 0.9rem',
-                              background: 'rgba(255,255,255,0.025)', borderRadius: '2px',
-                            }}>
-                              <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.85rem', color: 'var(--offwhite)' }}>
-                                {item.name}
-                                {showAr && ar && (
-                                  <span dir="rtl" style={{ color: '#C9962C', marginRight: '0.6rem', marginLeft: '0.6rem' }}>{ar}</span>
-                                )}
-                              </span>
-                              <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.88rem', color: 'var(--teal)', fontWeight: 700, flexShrink: 0 }}>
-                                {item.quantity} {UNIT_LABELS[item.unit]}
-                              </span>
+                        {(() => {
+                          const catGroups = groupByCategory(pItems)
+                          const hasCategories = catGroups.some(g => g.category !== undefined)
+                          return catGroups.map(({ category, items: cItems }) => (
+                            <div key={category ?? '__none__'}>
+                              {hasCategories && (
+                                <div style={{
+                                  padding: '0.3rem 0.9rem',
+                                  fontFamily: 'var(--font-inter)', fontSize: '0.67rem',
+                                  letterSpacing: '0.1em', textTransform: 'uppercase',
+                                  color: category ? DEPT_COLOR[dept] : 'rgba(245,242,236,0.2)',
+                                  fontWeight: 600, marginTop: '0.2rem',
+                                }}>
+                                  {category ?? 'Other'}
+                                </div>
+                              )}
+                              {cItems.map(item => {
+                                const ar        = nameArMap[item.templateId]
+                                const isEditing = editingId === item.templateId
+                                return (
+                                  <div key={item.templateId} style={{
+                                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                    padding: '0.5rem 0.9rem',
+                                    background: isEditing
+                                      ? 'rgba(0,160,152,0.06)'
+                                      : 'rgba(255,255,255,0.025)',
+                                    borderRadius: '2px',
+                                    border: isEditing
+                                      ? '1px solid rgba(0,160,152,0.25)'
+                                      : '1px solid transparent',
+                                  }}>
+                                    <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.85rem', color: 'var(--offwhite)' }}>
+                                      {item.name}
+                                      {ar && (
+                                        <span dir="rtl" style={{ color: '#C9962C', marginRight: '0.6rem', marginLeft: '0.6rem' }}>{ar}</span>
+                                      )}
+                                    </span>
+
+                                    {canEdit ? (
+                                      isEditing ? (
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexShrink: 0 }}>
+                                          <input
+                                            autoFocus
+                                            type="number"
+                                            min="0"
+                                            step="0.5"
+                                            value={editVal}
+                                            onChange={e => setEditVal(e.target.value)}
+                                            onKeyDown={e => {
+                                              if (e.key === 'Enter') { e.preventDefault(); commitEdit(item) }
+                                              if (e.key === 'Escape') { e.preventDefault(); cancelEdit() }
+                                            }}
+                                            onBlur={() => commitEdit(item)}
+                                            style={{
+                                              width: '75px',
+                                              backgroundColor: '#1a1a1a',
+                                              border: '1px solid rgba(0,160,152,0.6)',
+                                              color: '#F5F2EC',
+                                              padding: '0.3rem 0.5rem',
+                                              borderRadius: '2px',
+                                              fontSize: '0.88rem',
+                                              textAlign: 'right',
+                                              outline: 'none',
+                                              fontFamily: 'var(--font-inter)',
+                                            }}
+                                          />
+                                          <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.75rem', color: 'rgba(245,242,236,0.4)', minWidth: '30px' }}>
+                                            {UNIT_LABELS[item.unit]}
+                                          </span>
+                                        </div>
+                                      ) : (
+                                        <button
+                                          onClick={() => startEdit(item)}
+                                          title="Click to edit quantity"
+                                          style={{
+                                            background: 'none', border: 'none',
+                                            cursor: 'pointer',
+                                            fontFamily: 'var(--font-inter)', fontSize: '0.88rem',
+                                            color: 'var(--teal)', fontWeight: 700, flexShrink: 0,
+                                            padding: '0.2rem 0.4rem', borderRadius: '2px',
+                                            textDecoration: 'underline',
+                                            textDecorationStyle: 'dotted',
+                                            textUnderlineOffset: '3px',
+                                          }}
+                                        >
+                                          {item.quantity} {UNIT_LABELS[item.unit]}
+                                        </button>
+                                      )
+                                    ) : (
+                                      <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.88rem', color: 'var(--teal)', fontWeight: 700, flexShrink: 0 }}>
+                                        {item.quantity} {UNIT_LABELS[item.unit]}
+                                      </span>
+                                    )}
+                                  </div>
+                                )
+                              })}
                             </div>
-                          )
-                        })}
+                          ))
+                        })()}
                       </div>
                     </div>
                   )
@@ -244,12 +501,21 @@ function ReportCard({
 }
 
 export default function WeeklyOrdersPage() {
-  const { checking, role } = useRequireRole(ALL_ROLES)
-  const [reports,   setReports]   = useState<WeeklyOrderReport[]>([])
-  const [providers, setProviders] = useState<Record<string, OrderProvider>>({})
-  const [nameArMap, setNameArMap] = useState<Record<string, string>>({})
-  const [loading,   setLoading]   = useState(true)
+  const { checking, role, orderDepts, user } = useRequireRole(ALL_ROLES)
+  const [reports,      setReports]      = useState<WeeklyOrderReport[]>([])
+  const [providers,    setProviders]    = useState<Record<string, OrderProvider>>({})
+  const [nameArMap,    setNameArMap]    = useState<Record<string, string>>({})
+  const [loading,      setLoading]      = useState(true)
   const [branchFilter, setBranchFilter] = useState<string>('all')
+  const [deptFilter,   setDeptFilter]   = useState<Department | 'all'>('all')
+
+  const canEdit = role === 'admin' || role === 'manager'
+
+  // Cast string[] from adminAuth to Department[]
+  const allowedDepts = useMemo(
+    () => DEPARTMENTS.filter(d => (orderDepts as string[]).includes(d)),
+    [orderDepts],
+  )
 
   useEffect(() => {
     Promise.all([listWeeklyReports(), listTemplateItems(), listProviders()]).then(
@@ -264,11 +530,30 @@ export default function WeeklyOrdersPage() {
     )
   }, [])
 
-  const visible = branchFilter === 'all'
-    ? reports
-    : reports.filter(r => r.branch === branchFilter)
+  const visible = useMemo(() => reports.filter(r => {
+    // Department access: admin/manager see all; other staff see only their depts
+    if (canEdit) {
+      // In a specific dept tab, show only reports for that dept (legacy mixed reports
+      // only appear in the "all" tab)
+      if (deptFilter !== 'all') {
+        if (r.department !== deptFilter) return false
+      }
+    } else {
+      // Non-admin/manager: only show reports for their assigned departments
+      if (!r.department || !allowedDepts.includes(r.department)) return false
+      if (deptFilter !== 'all' && r.department !== deptFilter) return false
+    }
+    // Branch filter
+    if (branchFilter !== 'all' && r.branch !== branchFilter) return false
+    return true
+  }), [reports, canEdit, allowedDepts, deptFilter, branchFilter])
 
   if (checking) return null
+
+  // Dept tabs: admin/manager see all 3; other staff see only their depts (skip tabs if only 1)
+  const deptTabs: Array<Department | 'all'> = canEdit
+    ? ['all', ...DEPARTMENTS]
+    : allowedDepts.length > 1 ? ['all', ...allowedDepts] : []
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: 'var(--black)', padding: '3rem' }}>
@@ -297,16 +582,64 @@ export default function WeeklyOrdersPage() {
                 letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: 'var(--font-inter)',
               }}>+ Submit Report</a>
               {role === 'admin' && (
-                <a href="/admin/weekly-orders/template" style={{
+                <>
+                  <a href="/admin/weekly-orders/template" style={{
+                    backgroundColor: 'transparent', border: '1px solid rgba(255,255,255,0.1)',
+                    color: 'rgba(245,242,236,0.5)', textDecoration: 'none',
+                    padding: '0.65rem 1.2rem', borderRadius: '2px', fontSize: '0.72rem',
+                    letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: 'var(--font-inter)',
+                  }}>Edit Template</a>
+                  <a href="/admin/weekly-orders/access" style={{
+                    backgroundColor: 'transparent', border: '1px solid rgba(255,255,255,0.1)',
+                    color: 'rgba(245,242,236,0.4)', textDecoration: 'none',
+                    padding: '0.65rem 1.2rem', borderRadius: '2px', fontSize: '0.72rem',
+                    letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: 'var(--font-inter)',
+                  }}>Dept Access</a>
+                </>
+              )}
+              {canEdit && (
+                <a href="/admin/weekly-orders/log" style={{
                   backgroundColor: 'transparent', border: '1px solid rgba(255,255,255,0.1)',
-                  color: 'rgba(245,242,236,0.5)', textDecoration: 'none',
+                  color: 'rgba(245,242,236,0.4)', textDecoration: 'none',
                   padding: '0.65rem 1.2rem', borderRadius: '2px', fontSize: '0.72rem',
                   letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: 'var(--font-inter)',
-                }}>Edit Template</a>
+                }}>View Log</a>
               )}
             </div>
           </div>
         </div>
+
+        {/* Department filter tabs */}
+        {deptTabs.length > 0 && (
+          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem', flexWrap: 'wrap' }}>
+            {deptTabs.map(d => {
+              const count = d === 'all'
+                ? reports.filter(r => {
+                    if (branchFilter !== 'all' && r.branch !== branchFilter) return false
+                    if (!canEdit && (!r.department || !allowedDepts.includes(r.department))) return false
+                    return true
+                  }).length
+                : reports.filter(r => r.department === d && (branchFilter === 'all' || r.branch === branchFilter)).length
+              const color = d === 'all' ? 'rgba(245,242,236,0.5)' : DEPT_COLOR[d]
+              const active = deptFilter === d
+              return (
+                <button key={d} onClick={() => setDeptFilter(d)} style={{
+                  backgroundColor: active ? (d === 'all' ? 'rgba(255,255,255,0.08)' : `${color}18`) : 'transparent',
+                  border: `1px solid ${active ? (d === 'all' ? 'rgba(255,255,255,0.2)' : color) : 'rgba(255,255,255,0.08)'}`,
+                  color: active ? (d === 'all' ? 'var(--offwhite)' : color) : 'rgba(245,242,236,0.35)',
+                  padding: '0.4rem 0.9rem', borderRadius: '2px', fontSize: '0.7rem',
+                  letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer',
+                  fontFamily: 'var(--font-inter)', display: 'flex', alignItems: 'center', gap: '0.35rem',
+                }}>
+                  {d !== 'all' && (
+                    <span style={{ width: '5px', height: '5px', borderRadius: '50%', backgroundColor: active ? color : 'rgba(255,255,255,0.2)', flexShrink: 0 }} />
+                  )}
+                  {d === 'all' ? `All (${count})` : `${d} (${count})`}
+                </button>
+              )
+            })}
+          </div>
+        )}
 
         {/* Branch filter */}
         <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
@@ -315,11 +648,11 @@ export default function WeeklyOrdersPage() {
               backgroundColor: branchFilter === b ? 'rgba(255,255,255,0.08)' : 'transparent',
               border: `1px solid ${branchFilter === b ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.08)'}`,
               color: branchFilter === b ? 'var(--offwhite)' : 'rgba(245,242,236,0.4)',
-              padding: '0.45rem 1rem', borderRadius: '2px', fontSize: '0.72rem',
+              padding: '0.4rem 0.9rem', borderRadius: '2px', fontSize: '0.7rem',
               letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer',
               fontFamily: 'var(--font-inter)',
             }}>
-              {b === 'all' ? `All (${reports.length})` : `${b} (${reports.filter(r => r.branch === b).length})`}
+              {b === 'all' ? `All Branches (${reports.length})` : `${b} (${reports.filter(r => r.branch === b).length})`}
             </button>
           ))}
         </div>
@@ -333,7 +666,11 @@ export default function WeeklyOrdersPage() {
             padding: '3rem', textAlign: 'center',
             color: 'rgba(245,242,236,0.25)', fontFamily: 'var(--font-inter)', fontSize: '0.85rem',
           }}>
-            {branchFilter === 'all' ? 'No reports submitted yet.' : `No reports for ${branchFilter} yet.`}
+            {deptFilter !== 'all'
+              ? `No ${deptFilter} reports${branchFilter !== 'all' ? ` for ${branchFilter}` : ''} yet.`
+              : branchFilter !== 'all'
+                ? `No reports for ${branchFilter} yet.`
+                : 'No reports submitted yet.'}
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
@@ -343,6 +680,10 @@ export default function WeeklyOrdersPage() {
                 report={r}
                 providers={providers}
                 nameArMap={nameArMap}
+                canEdit={canEdit}
+                staffUid={user?.uid ?? ''}
+                staffEmail={user?.email ?? ''}
+                onDeleted={id => setReports(prev => prev.filter(rr => rr.id !== id))}
               />
             ))}
           </div>
