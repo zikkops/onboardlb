@@ -301,15 +301,16 @@ export default function SubmitOrderPage() {
                             <div style={{
                               background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)',
                               borderLeft: `3px solid ${DEPT_COLOR[dept]}30`,
-                              borderRadius: '4px', overflow: 'hidden',
+                              borderRadius: '4px', overflow: 'clip',
                             }}>
                               {catGroups.map(({ category, items: cItems }) => (
                                 <div key={category ?? '__none__'}>
                                   {hasCategories && (
                                     <div style={{
+                                      position: 'sticky', top: 0, zIndex: 10,
                                       padding: '0.4rem 1.25rem',
                                       borderTop: '1px solid rgba(255,255,255,0.04)',
-                                      background: 'rgba(255,255,255,0.015)',
+                                      background: '#1a1a1a',
                                       fontFamily: 'var(--font-inter)', fontSize: '0.7rem',
                                       letterSpacing: '0.1em', textTransform: 'uppercase',
                                       color: category ? DEPT_COLOR[dept] : 'rgba(245,242,236,0.25)',
