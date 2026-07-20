@@ -104,6 +104,13 @@ export function todayDateStr() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
+// Before 10 am the shift still belongs to the previous day.
+export function defaultEodDateStr() {
+  const now = new Date()
+  const d = now.getHours() < 10 ? new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1) : now
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 export function emptyReport(branch: string, date: string, uid: string, email: string): EndOfDayReport {
   return {
     id:               reportDocId(branch, date),

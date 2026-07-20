@@ -9,7 +9,7 @@ import { BRANCHES } from '../../lib/branches'
 import {
   LBP_DENOMS, USD_DENOMS, SHIFT_LABELS, EXCHANGE_RATE,
   computeTotals, emptyReport, getEndOfDayReport, saveEndOfDayReport,
-  getBranchStaff, listAllStaff, todayDateStr, formatLbp, formatUsd, logEndOfDayAction,
+  getBranchStaff, listAllStaff, defaultEodDateStr, formatLbp, formatUsd, logEndOfDayAction,
   type AttendanceEntry, type EndOfDayReport, type StaffUser,
 } from '../../lib/endOfDay'
 import { ROLE_LABELS } from '../../lib/adminAuth'
@@ -77,7 +77,7 @@ function EndOfDayInner() {
   const branchOptions = role === 'admin' ? [...BRANCHES] : branchIds
 
   const [branch, setBranch] = useState('')
-  const [date,   setDate]   = useState(todayDateStr())
+  const [date,   setDate]   = useState(defaultEodDateStr())
 
   const [cashLbp,    setCashLbp]    = useState<Record<string, string>>({})
   const [cashUsd,    setCashUsd]    = useState<Record<string, string>>({})

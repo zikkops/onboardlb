@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRequireRole, SECTION_ACCESS } from '../../../lib/adminAuth'
 import { BRANCHES } from '../../../lib/branches'
 import {
-  getEndOfDayReport, updateEodTips, computeTotals, formatLbp, formatUsd, todayDateStr,
+  getEndOfDayReport, updateEodTips, computeTotals, formatLbp, formatUsd, defaultEodDateStr,
   type EndOfDayReport,
 } from '../../../lib/endOfDay'
 
@@ -46,7 +46,7 @@ export default function EndOfDaySummaryPage() {
   const branchOptions = role === 'admin' ? [...BRANCHES] : branchIds
 
   const [branch,  setBranch]  = useState('')
-  const [date,    setDate]    = useState(todayDateStr())
+  const [date,    setDate]    = useState(defaultEodDateStr())
   const [report,  setReport]  = useState<EndOfDayReport | null>(null)
   const [loading, setLoading] = useState(false)
   const [tips,    setTips]    = useState('')
