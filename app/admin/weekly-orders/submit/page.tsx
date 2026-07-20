@@ -1,6 +1,17 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+
+function useIsMobile(breakpoint = 640) {
+  const [mobile, setMobile] = useState(false)
+  useEffect(() => {
+    const check = () => setMobile(window.innerWidth < breakpoint)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [breakpoint])
+  return mobile
+}
 import { useRequireRole, ALL_ROLES } from '../../../lib/adminAuth'
 import {
   listTemplateItems, listProviders, submitWeeklyReport, getCurrentWeek,
@@ -23,6 +34,7 @@ const inp: React.CSSProperties = {
 }
 
 export default function SubmitOrderPage() {
+  const isMobile = useIsMobile()
   const { checking, role, branchIds, orderDepts, user } = useRequireRole(ALL_ROLES)
 
   const [items,       setItems]    = useState<OrderTemplateItem[]>([])
@@ -152,8 +164,8 @@ export default function SubmitOrderPage() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: 'var(--black)', padding: '1.5rem 1rem 4rem' }}>
-      <div style={{ maxWidth: '600px', margin: '0 auto' }}>
+    <div style={{ minHeight: '100vh', backgroundColor: 'var(--black)', padding: isMobile ? '1.5rem 1rem 4rem' : '3rem' }}>
+      <div style={{ maxWidth: isMobile ? '600px' : '760px', margin: '0 auto' }}>
 
         {/* Header */}
         <div style={{ marginBottom: '2.5rem' }}>
@@ -312,37 +324,74 @@ export default function SubmitOrderPage() {
                                     </div>
                                   )}
                                   {cItems.map((item, idx) => (
-                                    <div key={item.id} style={{
-                                      padding: '0.9rem 1.25rem',
-                                      borderTop: (idx > 0 || hasCategories) ? '1px solid rgba(255,255,255,0.04)' : 'none',
-                                    }}>
-                                      {/* Quantity input — on top */}
-                                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.5rem' }}>
-                                        <input
-                                          type="number"
-                                          min="0"
-                                          step="0.5"
-                                          value={qtys[item.id] ?? ''}
-                                          onChange={e => setQty(item.id, e.target.value)}
-                                          placeholder="0"
-                                          style={{ ...inp, width: '90px', textAlign: 'center', fontSize: '1rem' }}
-                                        />
-                                        <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.78rem', color: 'rgba(245,242,236,0.4)' }}>
-                                          {packLabel(item.unit, item.packSize, item.packUnit)}
-                                        </span>
-                                      </div>
-                                      {/* Item name + Arabic — below */}
-                                      <div>
-                                        <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.88rem', color: 'var(--offwhite)', fontWeight: 500 }}>
-                                          {item.name}
-                                        </span>
-                                        {item.nameAr && (
-                                          <span dir="rtl" style={{ fontFamily: 'var(--font-inter)', fontSize: '0.85rem', color: '#C9962C', marginLeft: '0.5rem' }}>
-                                            {item.nameAr}
+                                    isMobile ? (
+                                      // Mobile: input on top, name below
+                                      <div key={item.id} style={{
+                                        padding: '0.9rem 1.25rem',
+                                        borderTop: (idx > 0 || hasCategories) ? '1px solid rgba(255,255,255,0.04)' : 'none',
+                                      }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.5rem' }}>
+                                          <input
+                                            type="number"
+                                            min="0"
+                                            step="0.5"
+                                            value={qtys[item.id] ?? ''}
+                                            onChange={e => setQty(item.id, e.target.value)}
+                                            placeholder="0"
+                                            style={{ ...inp, width: '90px', textAlign: 'center', fontSize: '1rem' }}
+                                          />
+                                          <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.78rem', color: 'rgba(245,242,236,0.4)' }}>
+                                            {packLabel(item.unit, item.packSize, item.packUnit)}
                                           </span>
-                                        )}
+                                        </div>
+                                        <div>
+                                          <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.88rem', color: 'var(--offwhite)', fontWeight: 500 }}>
+                                            {item.name}
+                                          </span>
+                                          {item.nameAr && (
+                                            <span dir="rtl" style={{ fontFamily: 'var(--font-inter)', fontSize: '0.85rem', color: '#C9962C', marginLeft: '0.5rem' }}>
+                                              {item.nameAr}
+                                            </span>
+                                          )}
+                                        </div>
                                       </div>
-                                    </div>
+                                    ) : (
+                                      // Desktop: original side-by-side layout
+                                      <div key={item.id} style={{
+                                        display: 'grid', gridTemplateColumns: '1fr auto',
+                                        alignItems: 'center', gap: '1rem',
+                                        padding: '0.85rem 1.25rem',
+                                        borderTop: (idx > 0 || hasCategories) ? '1px solid rgba(255,255,255,0.04)' : 'none',
+                                      }}>
+                                        <div>
+                                          <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.88rem', color: 'var(--offwhite)', fontWeight: 500 }}>
+                                            {item.name}
+                                          </span>
+                                          {item.nameAr && (
+                                            <span dir="rtl" style={{ fontFamily: 'var(--font-inter)', fontSize: '0.85rem', color: '#C9962C', marginLeft: '0.5rem' }}>
+                                              {item.nameAr}
+                                            </span>
+                                          )}
+                                          <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.75rem', color: 'rgba(245,242,236,0.3)', marginLeft: '0.5rem' }}>
+                                            ({packLabel(item.unit, item.packSize, item.packUnit)})
+                                          </span>
+                                        </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                          <input
+                                            type="number"
+                                            min="0"
+                                            step="0.5"
+                                            value={qtys[item.id] ?? ''}
+                                            onChange={e => setQty(item.id, e.target.value)}
+                                            placeholder="0"
+                                            style={{ ...inp, width: '90px', textAlign: 'right' }}
+                                          />
+                                          <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.78rem', color: 'rgba(245,242,236,0.35)', minWidth: '36px' }}>
+                                            {packLabel(item.unit, item.packSize, item.packUnit)}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    )
                                   ))}
                                 </div>
                               ))}
