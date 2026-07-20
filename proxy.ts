@@ -31,7 +31,7 @@ function buildCsp(): string {
   ].join('; ')
 }
 
-export default function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const csp = buildCsp()
 
   const pathname = request.nextUrl.pathname
