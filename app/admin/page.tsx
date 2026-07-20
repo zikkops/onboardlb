@@ -192,7 +192,7 @@ export default function AdminPage() {
       title: 'Weekly Orders',
       color: 'var(--teal)',
       cards: [
-        { label: 'Submit Report',    icon: faPaperPlane, daily: true,  desc: "Fill in quantities and submit this week's stock order",             href: '/admin/weekly-orders/submit',    access: SECTION_ACCESS.weeklyOrders },
+        { label: 'End of Week Order', icon: faPaperPlane, daily: true,  desc: "Fill in quantities and submit this week's stock order",             href: '/admin/weekly-orders/submit',    access: SECTION_ACCESS.weeklyOrdersSubmit },
         { label: 'Order Reports',    icon: faFile,       daily: true,  desc: 'View all end-of-week order reports submitted by staff',             href: '/admin/weekly-orders',           access: SECTION_ACCESS.weeklyOrders },
         { label: 'Manage Providers', icon: faTruck,      daily: false, desc: 'Add suppliers with per-branch phone numbers for WhatsApp ordering', href: '/admin/weekly-orders/providers', access: ['admin'] as Role[] },
         { label: 'Edit Template',    icon: faList,       daily: false, desc: 'Manage orderable items, pack sizes, Arabic names, and units',      href: '/admin/weekly-orders/template',  access: ['admin'] as Role[] },
@@ -202,9 +202,10 @@ export default function AdminPage() {
       title: 'End of Day',
       color: '#C9962C',
       cards: [
-        { label: 'Submit EOD Report', icon: faMoneyBill,       daily: true,  desc: 'Fill in cash count, expenses, income, and attendance for the end of shift', href: '/admin/end-of-day',         access: SECTION_ACCESS.endOfDay },
-        { label: 'EOD History',       icon: faClockRotateLeft, daily: true,  desc: 'Browse and edit past end-of-day reports by branch',                         href: '/admin/end-of-day/history', access: SECTION_ACCESS.endOfDay },
-        { label: 'Staff Roster',      icon: faUsers,           daily: false, desc: 'Configure the default staff list per branch for EOD attendance tracking',   href: '/admin/end-of-day/staff',   access: ['admin'] as Role[] },
+        { label: 'Submit EOD Report', icon: faMoneyBill,       daily: true,  desc: 'Fill in cash count, expenses, income, and attendance for the end of shift', href: '/admin/end-of-day',          access: SECTION_ACCESS.endOfDay },
+        { label: 'EOD History',       icon: faClockRotateLeft, daily: true,  desc: 'Browse past end-of-day reports by branch',                                   href: '/admin/end-of-day/history',  access: SECTION_ACCESS.endOfDayHistory },
+        { label: 'Daily Summary',     icon: faReceipt,         daily: true,  desc: 'View daily totals and add tips — mobile-friendly for screenshots',           href: '/admin/end-of-day/summary',  access: SECTION_ACCESS.endOfDayHistory },
+        { label: 'Staff Roster',      icon: faUsers,           daily: false, desc: 'Configure the default staff list per branch for EOD attendance tracking',    href: '/admin/end-of-day/staff',    access: ['admin'] as Role[] },
       ],
     },
     {

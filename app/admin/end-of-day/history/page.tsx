@@ -9,7 +9,7 @@ import {
 } from '../../../lib/endOfDay'
 
 export default function EndOfDayHistoryPage() {
-  const { checking, role, branchIds } = useRequireRole(SECTION_ACCESS.endOfDay)
+  const { checking, role, branchIds } = useRequireRole(SECTION_ACCESS.endOfDayHistory)
 
   const branchOptions = role === 'admin' ? ['all', ...BRANCHES] : branchIds
   const defaultBranch = role === 'admin' ? 'all' : (branchIds[0] ?? '')

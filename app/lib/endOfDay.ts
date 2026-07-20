@@ -1,5 +1,5 @@
 import {
-  doc, getDoc, setDoc, addDoc, collection, query, where,
+  doc, getDoc, setDoc, addDoc, updateDoc, collection, query, where,
   orderBy, limit, getDocs, serverTimestamp, type Timestamp,
 } from 'firebase/firestore'
 import { db } from './firebase'
@@ -151,6 +151,14 @@ export async function listEndOfDayReports(branch: string | 'all', limitCount = 9
     : query(col, where('branch', '==', branch), orderBy('date', 'desc'), limit(limitCount))
   const snap = await getDocs(q)
   return snap.docs.map(d => ({ id: d.id, ...d.data() }) as EndOfDayReport)
+}
+
+export async function updateEodTips(branch: string, date: string, tipsUsd: number, uid: string): Promise<void> {
+  await updateDoc(doc(db, 'endOfDayReports', reportDocId(branch, date)), {
+    tipsUsd,
+    updatedAt: serverTimestamp(),
+    updatedBy: uid,
+  })
 }
 
 export async function getBranchStaff(branch: string): Promise<BranchStaffConfig | null> {

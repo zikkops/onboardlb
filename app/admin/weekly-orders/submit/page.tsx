@@ -152,8 +152,8 @@ export default function SubmitOrderPage() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: 'var(--black)', padding: '3rem' }}>
-      <div style={{ maxWidth: '760px', margin: '0 auto' }}>
+    <div style={{ minHeight: '100vh', backgroundColor: 'var(--black)', padding: '1.5rem 1rem 4rem' }}>
+      <div style={{ maxWidth: '600px', margin: '0 auto' }}>
 
         {/* Header */}
         <div style={{ marginBottom: '2.5rem' }}>
@@ -313,11 +313,25 @@ export default function SubmitOrderPage() {
                                   )}
                                   {cItems.map((item, idx) => (
                                     <div key={item.id} style={{
-                                      display: 'grid', gridTemplateColumns: '1fr auto',
-                                      alignItems: 'center', gap: '1rem',
-                                      padding: '0.85rem 1.25rem',
+                                      padding: '0.9rem 1.25rem',
                                       borderTop: (idx > 0 || hasCategories) ? '1px solid rgba(255,255,255,0.04)' : 'none',
                                     }}>
+                                      {/* Quantity input — on top */}
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.5rem' }}>
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          step="0.5"
+                                          value={qtys[item.id] ?? ''}
+                                          onChange={e => setQty(item.id, e.target.value)}
+                                          placeholder="0"
+                                          style={{ ...inp, width: '90px', textAlign: 'center', fontSize: '1rem' }}
+                                        />
+                                        <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.78rem', color: 'rgba(245,242,236,0.4)' }}>
+                                          {packLabel(item.unit, item.packSize, item.packUnit)}
+                                        </span>
+                                      </div>
+                                      {/* Item name + Arabic — below */}
                                       <div>
                                         <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.88rem', color: 'var(--offwhite)', fontWeight: 500 }}>
                                           {item.name}
@@ -327,23 +341,6 @@ export default function SubmitOrderPage() {
                                             {item.nameAr}
                                           </span>
                                         )}
-                                        <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.75rem', color: 'rgba(245,242,236,0.3)', marginLeft: '0.5rem' }}>
-                                          ({packLabel(item.unit, item.packSize, item.packUnit)})
-                                        </span>
-                                      </div>
-                                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                        <input
-                                          type="number"
-                                          min="0"
-                                          step="0.5"
-                                          value={qtys[item.id] ?? ''}
-                                          onChange={e => setQty(item.id, e.target.value)}
-                                          placeholder="0"
-                                          style={{ ...inp, width: '90px', textAlign: 'right' }}
-                                        />
-                                        <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.78rem', color: 'rgba(245,242,236,0.35)', minWidth: '36px' }}>
-                                          {packLabel(item.unit, item.packSize, item.packUnit)}
-                                        </span>
                                       </div>
                                     </div>
                                   ))}

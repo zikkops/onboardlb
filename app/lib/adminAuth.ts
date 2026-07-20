@@ -77,8 +77,10 @@ export const SECTION_ACCESS = {
   tableReservations: ['admin', 'manager'] as Role[],
   gamePurchases:     ['admin', 'manager', 'gamer'] as Role[],
   gameTransfers:     ['admin', 'manager', 'gamer'] as Role[],
-  weeklyOrders:      ALL_ROLES,
-  endOfDay:          ['admin', 'manager'] as Role[],
+  weeklyOrders:       ['admin', 'manager'] as Role[],
+  weeklyOrdersSubmit: ALL_ROLES,
+  endOfDay:           ['admin', 'manager'] as Role[],
+  endOfDayHistory:    ALL_ROLES,
 }
 
 // Reads either shape — the new `branchIds` array, or the older singular

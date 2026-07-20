@@ -3,7 +3,8 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { signInWithEmailAndPassword } from 'firebase/auth'
-import { auth } from '../../lib/firebase'
+import { doc, getDoc } from 'firebase/firestore'
+import { auth, db } from '../../lib/firebase'
 import { setAdminSessionCookie } from '../../lib/adminAuth'
 
 export default function AdminLoginPage() {
@@ -23,9 +24,14 @@ export default function AdminLoginPage() {
         setError('Too many login attempts. Please wait 15 minutes before trying again.')
         return
       }
-      await signInWithEmailAndPassword(auth, email, password)
+      const { user } = await signInWithEmailAndPassword(auth, email, password)
       setAdminSessionCookie()
-      router.replace('/admin')
+      const snap = await getDoc(doc(db, 'users', user.uid))
+      const role = snap.data()?.role ?? ''
+      const target = (role === 'kitchen_crew' || role === 'barista')
+        ? '/admin/weekly-orders/submit'
+        : '/admin'
+      router.replace(target)
     } catch {
       setError('Invalid email or password.')
     } finally {

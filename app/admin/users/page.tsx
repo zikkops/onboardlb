@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { faEye, faEyeSlash } from '@fortawesome/free-solid-svg-icons'
 import { collection, getDocs, updateDoc, doc, query, where, deleteField } from 'firebase/firestore'
 import { db } from '../../lib/firebase'
 import {
@@ -50,8 +52,9 @@ export default function AdminUsersPage() {
   const [open, setOpen]         = useState(false)
   const [editing, setEditing]   = useState<Account | null>(null)
   const [form, setForm]         = useState({ ...EMPTY })
-  const [saving, setSaving]     = useState(false)
-  const [error, setError]       = useState('')
+  const [saving, setSaving]       = useState(false)
+  const [error, setError]         = useState('')
+  const [showPassword, setShowPassword] = useState(false)
 
   async function loadAccounts() {
     const snap = await getDocs(query(collection(db, 'users'), where('isStaff', '==', true)))
@@ -102,7 +105,7 @@ export default function AdminUsersPage() {
       // Branches are kept for managers (loyalty-data scoping) and for any
       // DM-capable account (which branches they can be booked at) — discarded
       // for everyone else so a stale selection doesn't linger unused.
-      const branchIds = (form.role === 'manager' || isDungeonMaster) ? form.branchIds : []
+      const branchIds = (form.role === 'manager' || form.role === 'kitchen_crew' || form.role === 'barista' || isDungeonMaster) ? form.branchIds : []
       if (editing) {
         await updateAccountAccess(
           editing.id,
@@ -116,6 +119,7 @@ export default function AdminUsersPage() {
         await createAccount(form.email.trim(), form.password, form.role, branchIds, isDungeonMaster)
       }
       setOpen(false)
+      setShowPassword(false)
       loadAccounts()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save account.')
@@ -502,9 +506,28 @@ export default function AdminUsersPage() {
               {!editing && (
                 <div>
                   <label style={labelStyle}>Password</label>
-                  <input type="password" value={form.password} required minLength={6}
-                    onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
-                    style={inputStyle} />
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      value={form.password} required minLength={6}
+                      onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
+                      style={{ ...inputStyle, paddingRight: '2.5rem' }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(p => !p)}
+                      style={{
+                        position: 'absolute', right: '0.6rem', top: '50%',
+                        transform: 'translateY(-50%)',
+                        background: 'none', border: 'none', cursor: 'pointer',
+                        color: 'rgba(245,242,236,0.35)', fontSize: '1rem', lineHeight: 1,
+                        padding: '0.2rem',
+                      }}
+                      title={showPassword ? 'Hide password' : 'Show password'}
+                    >
+                      <FontAwesomeIcon icon={showPassword ? faEyeSlash : faEye} style={{ width: '16px' }} />
+                    </button>
+                  </div>
                 </div>
               )}
 

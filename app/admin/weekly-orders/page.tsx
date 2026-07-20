@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useRequireRole, ALL_ROLES } from '../../lib/adminAuth'
+import { useRequireRole, ALL_ROLES, SECTION_ACCESS } from '../../lib/adminAuth'
 import {
   listWeeklyReports, listTemplateItems, listProviders,
   generateOrderText, whatsappUrl, groupByProvider, groupByCategory, getProviderPhone,
@@ -506,7 +506,7 @@ function ReportCard({
 }
 
 export default function WeeklyOrdersPage() {
-  const { checking, role, orderDepts, user } = useRequireRole(ALL_ROLES)
+  const { checking, role, orderDepts, user } = useRequireRole(SECTION_ACCESS.weeklyOrders)
   const [reports,      setReports]      = useState<WeeklyOrderReport[]>([])
   const [providers,    setProviders]    = useState<Record<string, OrderProvider>>({})
   const [nameArMap,    setNameArMap]    = useState<Record<string, string>>({})
