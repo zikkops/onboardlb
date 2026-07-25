@@ -3,12 +3,28 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { User } from 'firebase/auth'
+import { getAuth } from 'firebase/auth'
+import { getDoc, doc } from 'firebase/firestore'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faEye, faEyeSlash } from '@fortawesome/free-solid-svg-icons'
 import {
   signInWithGoogle, signInCustomer, signUpWithEmail,
   linkGoogleWithPassword, resolveCustomerEmail, completeAccountSetup,
 } from '../../../lib/customerAuth'
+import { db } from '../../../lib/firebase'
+import { setAdminSessionCookie } from '../../../lib/adminAuth'
+
+async function postLoginTarget(user: User): Promise<string> {
+  const snap = await getDoc(doc(db, 'users', user.uid))
+  if (snap.exists() && snap.data()?.isStaff === true) {
+    setAdminSessionCookie()
+    const role = snap.data()?.role ?? ''
+    return (role === 'kitchen_crew' || role === 'barista')
+      ? '/admin/weekly-orders/submit'
+      : '/admin'
+  }
+  return '/customer/profile'
+}
 
 type Mode = 'login' | 'signup'
 
@@ -115,7 +131,7 @@ export default function CustomerLoginPage() {
         setBusy(false)
         return
       }
-      router.replace('/customer/profile')
+      router.replace(await postLoginTarget(user))
     } catch (err) {
       setError(formatError(err))
       setBusy(false)
@@ -158,7 +174,8 @@ export default function CustomerLoginPage() {
 
     try {
       await signInCustomer(identifier, password)
-      router.replace('/customer/profile')
+      const currentUser = getAuth().currentUser!
+      router.replace(await postLoginTarget(currentUser))
     } catch (err) {
       setError(formatError(err))
       // Could be a wrong password, or a Google-only account that never had
@@ -183,7 +200,7 @@ export default function CustomerLoginPage() {
         setBusy(false)
         return
       }
-      router.replace('/customer/profile')
+      router.replace(await postLoginTarget(user))
     } catch (err) {
       setError(formatError(err))
       setBusy(false)
@@ -197,7 +214,7 @@ export default function CustomerLoginPage() {
     setError('')
     try {
       await completeAccountSetup(pendingUser.uid, pendingUser.email ?? '', pendingUsername, pendingPhone, pendingFirstName, pendingLastName)
-      router.replace('/customer/profile')
+      router.replace(await postLoginTarget(pendingUser))
     } catch (err) {
       setError(formatError(err))
       setBusy(false)
