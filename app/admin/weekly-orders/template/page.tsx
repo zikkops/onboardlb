@@ -289,6 +289,7 @@ export default function OrderTemplatePage() {
   const [collapsedDepts, setCollapsedDepts] = useState<Set<Department>>(new Set())
   const [collapsedProvs, setCollapsedProvs] = useState<Set<string>>(new Set()) // key: `${dept}__${provKey}`
   const [collapsedCats,  setCollapsedCats]  = useState<Set<string>>(new Set()) // key: `${dept}__${provKey}__${category}`
+  const [searchQuery,    setSearchQuery]    = useState('')
 
   async function load() {
     setLoading(true)
@@ -308,6 +309,14 @@ export default function OrderTemplatePage() {
       return { dept, provGroups: groupByProvider(deptItems) }
     }),
   [items])
+
+  const searchResults = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase()
+    if (!q) return []
+    return items.filter(i =>
+      i.name.toLowerCase().includes(q) || (i.nameAr ?? '').includes(q)
+    )
+  }, [items, searchQuery])
 
 
   function sortItems(arr: OrderTemplateItem[]): OrderTemplateItem[] {
@@ -404,12 +413,70 @@ export default function OrderTemplatePage() {
 
         <AddItemForm providers={providers} onSave={handleAdd} />
 
+        {/* Search */}
+        {!loading && items.length > 0 && (
+          <div style={{ marginBottom: '1.5rem', position: 'relative' }}>
+            <input
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Search items…"
+              style={{
+                ...inp,
+                width: '100%',
+                paddingLeft: '2.2rem',
+                boxSizing: 'border-box',
+              }}
+            />
+            <span style={{
+              position: 'absolute', left: '0.75rem', top: '50%',
+              transform: 'translateY(-50%)',
+              color: 'rgba(245,242,236,0.3)', fontSize: '0.85rem', pointerEvents: 'none',
+            }}>⌕</span>
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                style={{
+                  position: 'absolute', right: '0.75rem', top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  color: 'rgba(245,242,236,0.35)', fontSize: '0.85rem', padding: 0,
+                }}
+              >✕</button>
+            )}
+          </div>
+        )}
+
         {loading ? (
           <p style={{ color: 'rgba(245,242,236,0.3)', fontFamily: 'var(--font-inter)' }}>Loading…</p>
         ) : items.length === 0 ? (
           <div style={{ border: '1px dashed rgba(255,255,255,0.08)', borderRadius: '4px', padding: '3rem', textAlign: 'center', color: 'rgba(245,242,236,0.25)', fontFamily: 'var(--font-inter)', fontSize: '0.85rem' }}>
             No items yet — add your first one above.
           </div>
+        ) : searchQuery.trim() ? (
+          searchResults.length === 0 ? (
+            <div style={{ border: '1px dashed rgba(255,255,255,0.08)', borderRadius: '4px', padding: '3rem', textAlign: 'center', color: 'rgba(245,242,236,0.25)', fontFamily: 'var(--font-inter)', fontSize: '0.85rem' }}>
+              No items match &ldquo;{searchQuery.trim()}&rdquo;.
+            </div>
+          ) : (
+            <div style={{
+              background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)',
+              borderRadius: '4px', overflow: 'hidden',
+            }}>
+              <div style={{ padding: '0.5rem 1rem', borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.02)' }}>
+                <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.7rem', color: 'rgba(245,242,236,0.3)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                  {searchResults.length} result{searchResults.length !== 1 ? 's' : ''}
+                </span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.4fr auto auto', gap: '0.6rem', padding: '0.4rem 1rem', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                {['English Name', 'Arabic / عربي', 'Unit / Pack', ''].map((h, i) => (
+                  <span key={i} style={{ fontFamily: 'var(--font-inter)', fontSize: '0.65rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(245,242,236,0.25)' }}>{h}</span>
+                ))}
+              </div>
+              {searchResults.map(item => (
+                <ItemRow key={item.id} item={item} providers={providers} onUpdated={handleUpdate} onDeleted={handleDelete} />
+              ))}
+            </div>
+          )
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
             {grouped.map(({ dept, provGroups }) => {
