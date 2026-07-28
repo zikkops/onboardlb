@@ -170,7 +170,7 @@ export default function Hero() {
         <span style={{ display: 'block', width: '30px', height: '1px', background: 'var(--teal)', opacity: 0.5 }} />
       </p>
 
-      {/* Logo animation */}
+      {/* Logo animation — transparent WebM for Chrome/Firefox/Edge, MOV for Safari */}
       <div ref={logoRef} style={{ position: 'relative', zIndex: 1, marginBottom: '1.5rem', opacity: 0, transform: 'translateY(24px)' }}>
         <video
           autoPlay
@@ -182,7 +182,8 @@ export default function Hero() {
             display: 'block',
           }}
         >
-          <source src="/videos/onboard-logo.mp4" type="video/mp4" />
+          <source src="/videos/onboard-logo-transparent.webm" type="video/webm" />
+          <source src="/videos/onboard-logo-transparent.mov" type="video/quicktime" />
         </video>
       </div>
 
