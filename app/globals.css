@@ -9,8 +9,10 @@
   --navy:     #32327C;
   --black:    #0a0a0a;
   --offwhite: #F5F2EC;
-  --font-display: var(--font-cinzel);
-  --font-body:    var(--font-inter);
+  --font-cinzel:  var(--font-bree);
+  --font-inter:   var(--font-bree);
+  --font-display: var(--font-bree);
+  --font-body:    var(--font-bree);
 }
 
 * {

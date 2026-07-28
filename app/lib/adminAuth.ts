@@ -121,6 +121,7 @@ export function useAdminUser() {
   const [branchIds, setBranchIds]   = useState<string[]>([])
   const [orderDepts, setOrderDepts] = useState<string[]>([])
   const [sectionGrants, setSectionGrants] = useState<string[]>([])
+  const [sectionRevocations, setSectionRevocations] = useState<string[]>([])
   const [isDungeonMaster, setIsDungeonMaster] = useState(false)
   const [superadmin, setSuperadmin] = useState(false)
   const [loading, setLoading]       = useState(true)
@@ -135,6 +136,7 @@ export function useAdminUser() {
         setBranchIds([])
         setOrderDepts([])
         setSectionGrants([])
+        setSectionRevocations([])
         setIsDungeonMaster(false)
         setSuperadmin(false)
         setProvisioned(true)
@@ -150,6 +152,7 @@ export function useAdminUser() {
         setRole(roleVal)
         setBranchIds(normalizeBranchIds(data))
         setSectionGrants(Array.isArray(data.sectionGrants) ? data.sectionGrants as string[] : [])
+        setSectionRevocations(Array.isArray(data.sectionRevocations) ? data.sectionRevocations as string[] : [])
         setIsDungeonMaster(data.isDungeonMaster === true)
         setSuperadmin(data.superadmin === true)
         setProvisioned(true)
@@ -173,6 +176,7 @@ export function useAdminUser() {
         setBranchIds([])
         setOrderDepts([])
         setSectionGrants([])
+        setSectionRevocations([])
         setIsDungeonMaster(false)
         setSuperadmin(false)
         setProvisioned(false)
@@ -182,7 +186,7 @@ export function useAdminUser() {
     return unsub
   }, [])
 
-  return { user, role, branchIds, orderDepts, sectionGrants, isDungeonMaster, superadmin, loading, provisioned }
+  return { user, role, branchIds, orderDepts, sectionGrants, sectionRevocations, isDungeonMaster, superadmin, loading, provisioned }
 }
 
 // Lightweight, read-only staff check for public/customer-facing components
@@ -215,23 +219,25 @@ export function hasSectionAccess(
   allowed: Role[],
   sectionGrants?: string[],
   sectionKey?: string,
+  sectionRevocations?: string[],
 ): boolean {
   if (!role) return false
+  // Explicit revocation always wins — overrides role-based access and grants
+  if (sectionKey && sectionRevocations?.includes(sectionKey)) return false
   if (allowed.includes(role)) return true
   if (isDungeonMaster && allowed.includes('dungeonmaster')) return true
-  // Per-user explicit grant: checked last so role-based access always wins
   if (sectionKey && sectionGrants?.includes(sectionKey)) return true
   return false
 }
 
 export function useRequireRole(allowed: Role[]) {
   const router = useRouter()
-  const { user, role, branchIds, orderDepts, sectionGrants, isDungeonMaster, superadmin, loading, provisioned } = useAdminUser()
+  const { user, role, branchIds, orderDepts, sectionGrants, sectionRevocations, isDungeonMaster, superadmin, loading, provisioned } = useAdminUser()
 
   // Detect which section key this call is gating by reference equality —
   // all callers pass SECTION_ACCESS.xxx directly, so the array object is the same.
   const sectionKey = Object.entries(SECTION_ACCESS).find(([, v]) => v === allowed)?.[0]
-  const hasAccess = hasSectionAccess(role, isDungeonMaster, allowed, sectionGrants, sectionKey)
+  const hasAccess = hasSectionAccess(role, isDungeonMaster, allowed, sectionGrants, sectionKey, sectionRevocations)
 
   useEffect(() => {
     if (loading) return
@@ -249,7 +255,7 @@ export function useRequireRole(allowed: Role[]) {
   }, [loading, user, hasAccess, provisioned, router])
 
   const checking = loading || !user || !provisioned || !hasAccess
-  return { checking, role, branchIds, orderDepts, sectionGrants, isDungeonMaster, superadmin, user }
+  return { checking, role, branchIds, orderDepts, sectionGrants, sectionRevocations, isDungeonMaster, superadmin, user }
 }
 
 // Staff accounts live in the same `users` collection as customers — they just

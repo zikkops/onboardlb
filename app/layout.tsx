@@ -1,16 +1,11 @@
 import type { Metadata } from 'next'
-import { Inter, Cinzel } from 'next/font/google'
+import { Bree_Serif } from 'next/font/google'
 import './globals.css'
 
-const inter = Inter({
+const breeSerif = Bree_Serif({
   subsets: ['latin'],
-  variable: '--font-inter',
-})
-
-const cinzel = Cinzel({
-  subsets: ['latin'],
-  variable: '--font-cinzel',
-  weight: ['400', '700', '900'],
+  variable: '--font-bree',
+  weight: '400',
 })
 
 export const metadata: Metadata = {
@@ -28,7 +23,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className={`${inter.variable} ${cinzel.variable}`}>
+    <html lang="en" className={breeSerif.variable}>
       <body>
         {children}
       </body>

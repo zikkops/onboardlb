@@ -20,11 +20,12 @@ interface Account {
   isDungeonMaster: boolean
   superadmin: boolean
   sectionGrants: string[]
+  sectionRevocations: string[]
 }
 
 const ROLES: Role[] = ['admin', 'manager', 'social', 'gamer', 'dungeonmaster', 'kitchen_crew', 'barista']
 
-const EMPTY = { email: '', password: '', role: 'manager' as Role, branchIds: [] as string[], isDungeonMaster: false, sectionGrants: [] as string[] }
+const EMPTY = { email: '', password: '', role: 'manager' as Role, branchIds: [] as string[], isDungeonMaster: false, sectionGrants: [] as string[], sectionRevocations: [] as string[] }
 
 // Reads either the new `branchIds` array or the older singular `branchId`
 // from accounts created before multi-branch support existed.
@@ -66,6 +67,7 @@ export default function AdminUsersPage() {
         isDungeonMaster: data.isDungeonMaster === true,
         superadmin: data.superadmin === true,
         sectionGrants: Array.isArray(data.sectionGrants) ? data.sectionGrants as string[] : [],
+        sectionRevocations: Array.isArray(data.sectionRevocations) ? data.sectionRevocations as string[] : [],
       } as Account
     }))
     setLoading(false)
@@ -82,7 +84,7 @@ export default function AdminUsersPage() {
 
   function openEdit(account: Account) {
     setEditing(account)
-    setForm({ email: account.email, password: '', role: account.role, branchIds: account.branchIds, isDungeonMaster: account.isDungeonMaster, sectionGrants: account.sectionGrants })
+    setForm({ email: account.email, password: '', role: account.role, branchIds: account.branchIds, isDungeonMaster: account.isDungeonMaster, sectionGrants: account.sectionGrants, sectionRevocations: account.sectionRevocations })
     setError('')
     setOpen(true)
   }
@@ -110,8 +112,8 @@ export default function AdminUsersPage() {
           { role: editing.role, branchIds: editing.branchIds, isDungeonMaster: editing.isDungeonMaster },
           { role: form.role, branchIds, isDungeonMaster }
         )
-        // Save section grants separately — only meaningful fields that differ from role defaults
-        await updateDoc(doc(db, 'users', editing.id), { sectionGrants: form.sectionGrants })
+        // Save section grants + revocations separately from role/branch fields
+        await updateDoc(doc(db, 'users', editing.id), { sectionGrants: form.sectionGrants, sectionRevocations: form.sectionRevocations })
       } else {
         await createAccount(form.email.trim(), form.password, form.role, branchIds, isDungeonMaster)
       }
@@ -400,7 +402,18 @@ export default function AdminUsersPage() {
                             color: 'var(--purple)',
                             fontFamily: 'var(--font-inter)',
                             letterSpacing: '0.05em',
-                          }}>+{account.sectionGrants.length} extra</span>
+                          }}>+{account.sectionGrants.length} granted</span>
+                        )}
+                        {account.sectionRevocations.length > 0 && (
+                          <span style={{
+                            fontSize: '0.7rem',
+                            padding: '0.25rem 0.7rem',
+                            borderRadius: '2px',
+                            backgroundColor: 'rgba(228,51,41,0.1)',
+                            color: 'var(--red)',
+                            fontFamily: 'var(--font-inter)',
+                            letterSpacing: '0.05em',
+                          }}>−{account.sectionRevocations.length} revoked</span>
                         )}
                       </div>
                     </td>
@@ -626,50 +639,80 @@ export default function AdminUsersPage() {
                 </div>
               )}
 
-              {/* Per-user section grants — only shown when editing, not on create */}
+              {/* Per-user section access — only shown when editing, not on create */}
               {editing && (() => {
                 const formIsDm = form.role === 'dungeonmaster' || form.isDungeonMaster
                 const sectionKeys = Object.keys(SECTION_ACCESS) as (keyof typeof SECTION_ACCESS)[]
                 return (
                   <div>
-                    <label style={{ ...labelStyle, marginBottom: '0.4rem' }}>Extra Section Access</label>
+                    <label style={{ ...labelStyle, marginBottom: '0.4rem' }}>Section Access</label>
                     <p style={{ fontSize: '0.72rem', color: 'rgba(245,242,236,0.3)', fontFamily: 'var(--font-inter)', marginBottom: '0.8rem', lineHeight: 1.5 }}>
-                      Grant access to specific sections beyond what this user&apos;s role normally covers. Sections already unlocked by their role are shown greyed out.
+                      Click any section to cycle its access state. Sections the role normally has can be revoked; sections it doesn&apos;t have can be explicitly granted.
                     </p>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
                       {sectionKeys.map(key => {
                         const viaRole = SECTION_ACCESS[key].includes(form.role) ||
                           (formIsDm && SECTION_ACCESS[key].includes('dungeonmaster'))
-                        const granted = form.sectionGrants.includes(key)
+                        const revoked  = form.sectionRevocations.includes(key)
+                        const granted  = form.sectionGrants.includes(key)
+
+                        // Effective state: revoked > granted > via-role > locked
+                        type State = 'revoked' | 'via-role' | 'granted' | 'locked'
+                        const state: State = revoked ? 'revoked' : granted ? 'granted' : viaRole ? 'via-role' : 'locked'
+
+                        function toggle() {
+                          setForm(f => {
+                            // Remove from both lists first, then add to whichever applies
+                            const grants  = f.sectionGrants.filter(g => g !== key)
+                            const revokes = f.sectionRevocations.filter(r => r !== key)
+                            if (state === 'via-role') {
+                              // via-role → revoked
+                              return { ...f, sectionGrants: grants, sectionRevocations: [...revokes, key] }
+                            } else if (state === 'revoked') {
+                              // revoked → via-role (clear revocation)
+                              return { ...f, sectionGrants: grants, sectionRevocations: revokes }
+                            } else if (state === 'locked') {
+                              // locked → granted
+                              return { ...f, sectionGrants: [...grants, key], sectionRevocations: revokes }
+                            } else {
+                              // granted → locked
+                              return { ...f, sectionGrants: grants, sectionRevocations: revokes }
+                            }
+                          })
+                        }
+
+                        const bg    = state === 'revoked'  ? 'rgba(228,51,41,0.08)'
+                                    : state === 'granted'  ? 'rgba(149,102,210,0.12)'
+                                    : state === 'via-role' ? 'rgba(255,255,255,0.02)'
+                                    : 'transparent'
+                        const border = state === 'revoked'  ? '1px solid rgba(228,51,41,0.4)'
+                                     : state === 'granted'  ? '1px solid var(--purple)'
+                                     : state === 'via-role' ? '1px solid rgba(255,255,255,0.07)'
+                                     : '1px solid rgba(255,255,255,0.06)'
+                        const color  = state === 'revoked'  ? 'var(--red)'
+                                     : state === 'granted'  ? 'var(--purple)'
+                                     : state === 'via-role' ? 'rgba(245,242,236,0.45)'
+                                     : 'rgba(245,242,236,0.2)'
+                        const badge  = state === 'revoked'  ? '✕ revoked'
+                                     : state === 'granted'  ? '+ granted'
+                                     : state === 'via-role' ? 'via role'
+                                     : ''
+
                         return (
-                          <button key={key} type="button"
-                            disabled={viaRole}
-                            onClick={() => {
-                              if (viaRole) return
-                              setForm(f => ({
-                                ...f,
-                                sectionGrants: f.sectionGrants.includes(key)
-                                  ? f.sectionGrants.filter(g => g !== key)
-                                  : [...f.sectionGrants, key],
-                              }))
-                            }}
+                          <button key={key} type="button" onClick={toggle}
                             style={{
                               display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                              backgroundColor: viaRole ? 'rgba(255,255,255,0.02)' : granted ? 'rgba(149,102,210,0.12)' : 'transparent',
-                              border: `1px solid ${viaRole ? 'rgba(255,255,255,0.05)' : granted ? 'var(--purple)' : 'rgba(255,255,255,0.08)'}`,
-                              color: viaRole ? 'rgba(245,242,236,0.2)' : granted ? 'var(--purple)' : 'rgba(245,242,236,0.5)',
-                              padding: '0.45rem 0.8rem',
-                              borderRadius: '2px',
-                              fontSize: '0.78rem',
-                              cursor: viaRole ? 'default' : 'pointer',
-                              fontFamily: 'var(--font-inter)',
-                              textAlign: 'left',
-                              width: '100%',
+                              backgroundColor: bg, border, color,
+                              padding: '0.45rem 0.8rem', borderRadius: '2px',
+                              fontSize: '0.78rem', cursor: 'pointer',
+                              fontFamily: 'var(--font-inter)', textAlign: 'left', width: '100%',
                             }}>
                             <span>{SECTION_LABELS[key] ?? key}</span>
-                            <span style={{ fontSize: '0.6rem', letterSpacing: '0.08em', textTransform: 'uppercase', opacity: 0.6, flexShrink: 0, marginLeft: '0.5rem' }}>
-                              {viaRole ? 'via role' : granted ? '✓ granted' : ''}
-                            </span>
+                            {badge && (
+                              <span style={{ fontSize: '0.6rem', letterSpacing: '0.08em', textTransform: 'uppercase', opacity: 0.7, flexShrink: 0, marginLeft: '0.5rem' }}>
+                                {badge}
+                              </span>
+                            )}
                           </button>
                         )
                       })}
