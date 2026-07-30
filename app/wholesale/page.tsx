@@ -79,19 +79,16 @@ function GameCard({ game }: { game: Game }) {
           </div>
         )}
 
-        {/* Wholesale price badge */}
-        <div style={{
-          position: 'absolute', top: '0.6rem', right: '0.6rem',
-          background: '#6A6AB7',
-          color: '#fff',
-          padding: '0.25rem 0.6rem',
-          borderRadius: '3px',
-          fontSize: '0.82rem',
-          fontWeight: 700,
-          fontFamily: 'var(--font-inter)',
-          letterSpacing: '0.02em',
-        }}>
-          ${game.wholesalePrice.toFixed(2)}
+        {/* Price badges — stacked top-right */}
+        <div style={{ position: 'absolute', top: '0.6rem', right: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.3rem', alignItems: 'flex-end' }}>
+          <div style={{ background: '#6A6AB7', color: '#fff', padding: '0.22rem 0.55rem', borderRadius: '3px', fontSize: '0.75rem', fontWeight: 700, fontFamily: 'var(--font-inter)', letterSpacing: '0.02em', whiteSpace: 'nowrap' }}>
+            WS ${game.wholesalePrice.toFixed(2)}
+          </div>
+          {game.retailPrice > 0 && (
+            <div style={{ background: '#C9962C', color: '#000', padding: '0.22rem 0.55rem', borderRadius: '3px', fontSize: '0.75rem', fontWeight: 700, fontFamily: 'var(--font-inter)', letterSpacing: '0.02em', whiteSpace: 'nowrap' }}>
+              RP ${game.retailPrice.toFixed(2)}
+            </div>
+          )}
         </div>
 
         {/* Stock badge */}
@@ -122,10 +119,10 @@ function GameCard({ game }: { game: Game }) {
           </span>
         )}
 
-        {/* Retail price comparison */}
+        {/* Margin line */}
         {game.retailPrice > 0 && (
-          <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.7rem', color: 'rgba(245,242,236,0.3)', marginTop: '0.1rem' }}>
-            Retail ${game.retailPrice.toFixed(2)} &nbsp;·&nbsp; margin ${(game.retailPrice - game.wholesalePrice).toFixed(2)}
+          <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.68rem', color: 'rgba(245,242,236,0.28)', marginTop: '0.1rem' }}>
+            Margin ${(game.retailPrice - game.wholesalePrice).toFixed(2)}
           </p>
         )}
 
@@ -159,7 +156,7 @@ export default function WholesalePage() {
   const [loading, setLoading]       = useState(true)
   const [search, setSearch]         = useState('')
   const [category, setCategory]     = useState('All')
-  const [stockOnly, setStockOnly]   = useState(false)
+  const [stockOnly, setStockOnly]   = useState(true)
   const [categories, setCategories] = useState<string[]>([])
   const isMobile = useIsMobile()
 
@@ -239,14 +236,16 @@ export default function WholesalePage() {
               )}
             </div>
 
-            {/* Category pills */}
-            <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', flex: 1 }}>
+            {/* Category selector */}
+            <select
+              value={category}
+              onChange={e => setCategory(e.target.value)}
+              style={{ flex: isMobile ? undefined : '0 0 200px', background: '#1c1c1c', border: '1px solid rgba(255,255,255,0.15)', color: '#F5F2EC', padding: '0.7rem 1rem', borderRadius: '4px', fontSize: '0.85rem', fontFamily: 'var(--font-inter)', outline: 'none', cursor: 'pointer' }}
+            >
               {allCats.map(cat => (
-                <button key={cat} onClick={() => setCategory(cat)} style={{ padding: '0.4rem 0.85rem', borderRadius: '20px', border: 'none', fontSize: '0.72rem', letterSpacing: '0.06em', textTransform: 'uppercase', cursor: 'pointer', fontFamily: 'var(--font-inter)', backgroundColor: category === cat ? '#6A6AB7' : 'rgba(255,255,255,0.06)', color: category === cat ? '#fff' : 'rgba(245,242,236,0.5)', transition: 'all 0.15s ease' }}>
-                  {cat}
-                </button>
+                <option key={cat} value={cat} style={{ background: '#1c1c1c', color: '#F5F2EC' }}>{cat}</option>
               ))}
-            </div>
+            </select>
 
             {/* In-stock toggle */}
             <button onClick={() => setStockOnly(s => !s)} style={{ padding: '0.4rem 0.85rem', borderRadius: '20px', border: `1px solid ${stockOnly ? 'var(--teal)' : 'rgba(255,255,255,0.1)'}`, fontSize: '0.72rem', letterSpacing: '0.06em', textTransform: 'uppercase', cursor: 'pointer', fontFamily: 'var(--font-inter)', backgroundColor: stockOnly ? 'rgba(0,160,152,0.12)' : 'transparent', color: stockOnly ? 'var(--teal)' : 'rgba(245,242,236,0.45)', whiteSpace: 'nowrap', transition: 'all 0.15s ease' }}>
