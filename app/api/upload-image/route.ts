@@ -29,13 +29,19 @@ export async function POST(request: Request) {
   }
 
   try {
+    // Convert to base64 before forwarding — sending the raw Blob in a new
+    // FormData loses the content-type header in some runtimes, causing imgbb
+    // to silently reject the upload. Base64 is always accepted.
+    const buf = await file.arrayBuffer()
+    const base64 = Buffer.from(buf).toString('base64')
+
     const upstream = new FormData()
-    upstream.append('image', file)
     upstream.append('key', process.env.IMGBB_API_KEY ?? '')
+    upstream.append('image', base64)
 
     const uploadRes = await fetch('https://api.imgbb.com/1/upload', { method: 'POST', body: upstream })
     const data = await uploadRes.json()
-    if (!data?.data?.url) throw new Error('imgbb upload failed')
+    if (!data?.data?.url) throw new Error(data?.error?.message ?? 'imgbb upload failed')
 
     return Response.json({
       url: data.data.url as string,
