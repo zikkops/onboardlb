@@ -177,7 +177,7 @@ export default function ShopPage() {
       const matchPlayers = gameMax >= minPlayers && gameMin <= maxPlayers
 
       return matchCat && matchSearch && matchPrice && matchPlayers
-    })
+    }).sort((a, b) => a.name.localeCompare(b.name))
   }, [games, filter, search, maxPrice, minPlayers, maxPlayers])
 
   const PAGE_SIZE = 20

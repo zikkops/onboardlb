@@ -745,7 +745,7 @@ export default function AdminGamesPage() {
                 </div>
                 <div>
                   <label style={labelStyle}>Retail Price ($)</label>
-                  <input type="number" value={form.price} required min={0}
+                  <input type="number" value={form.price} required min={0} step="0.01"
                     onChange={e => setForm(f => ({ ...f, price: +e.target.value }))}
                     style={inputStyle} />
                 </div>
@@ -756,6 +756,7 @@ export default function AdminGamesPage() {
                 <input
                   type="number"
                   min={0}
+                  step="0.01"
                   placeholder="Leave blank if no wholesale pricing"
                   value={form.wholesalePrice ?? ''}
                   onChange={e => setForm(f => ({
