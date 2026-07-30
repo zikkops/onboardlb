@@ -170,15 +170,17 @@ export default function Hero() {
         <span style={{ display: 'block', width: '30px', height: '1px', background: 'var(--teal)', opacity: 0.5 }} />
       </p>
 
-      {/* Logo */}
+      {/* Logo animation — transparent WebM for Chrome/Firefox/Edge, MOV for Safari */}
       <div ref={logoRef} style={{ position: 'relative', zIndex: 1, marginBottom: '1.5rem', opacity: 0, transform: 'translateY(24px)' }}>
-        <Image
-          src="/images/logo.png"
-          alt="Onboard Games & Tales"
-          width={isMobile ? 200 : 340}
-          height={isMobile ? 134 : 227}
-          priority
-        />
+        <video
+          autoPlay
+          muted
+          playsInline
+          style={{ width: isMobile ? 200 : 340, height: 'auto', display: 'block' }}
+        >
+          <source src="/videos/onboard-logo-transparent.webm" type="video/webm" />
+          <source src="/videos/onboard-logo-transparent.mov" type="video/quicktime" />
+        </video>
       </div>
 
       {/* Tagline */}
