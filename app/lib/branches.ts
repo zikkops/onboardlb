@@ -1,4 +1,4 @@
-export const BRANCHES = ['Beirut', 'Zouk', 'Broummana'] as const
+export const BRANCHES = ['Beirut', 'Zouk', 'Broummana', 'Faten'] as const
 
 export function emptyStock(): Record<string, number> {
   return Object.fromEntries(BRANCHES.map(b => [b, 0]))
