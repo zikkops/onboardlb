@@ -199,6 +199,13 @@ export default function AdminPage() {
       ],
     },
     {
+      title: 'Supplies',
+      color: '#6A9E5A',
+      cards: [
+        { label: 'Supplies', icon: faClipboard, daily: true, desc: 'Track consumable stock levels across Kitchen, Bar, and Cleaning — color alerts when items run low', href: '/admin/supplies', access: SECTION_ACCESS.games },
+      ],
+    },
+    {
       title: 'End of Day',
       color: '#C9962C',
       cards: [
@@ -227,161 +234,113 @@ export default function AdminPage() {
     }))
     .filter(section => section.cards.length > 0)
 
+  const hour = new Date().getHours()
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
+
   if (checking) {
     return (
-      <div style={{
-        minHeight: '100vh',
-        backgroundColor: 'var(--black)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}>
-        <p style={{
-          color: 'var(--teal)',
-          fontFamily: 'var(--font-cinzel)',
-          fontSize: '1.2rem',
-        }}>Loading…</p>
+      <div style={{ minHeight: '100vh', backgroundColor: 'var(--black)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <p style={{ color: 'var(--teal)', fontFamily: 'var(--font-cinzel)', fontSize: '1.2rem' }}>Loading…</p>
       </div>
     )
   }
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      backgroundColor: 'var(--black)',
-      padding: isMobile ? '1.5rem' : '3rem',
-    }}>
-      <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+    <div style={{ minHeight: '100vh', backgroundColor: '#0d0d0d', fontFamily: 'var(--font-inter)' }}>
 
-        {/* Header */}
-        <div style={{
-          display: 'flex',
-          flexDirection: isMobile ? 'column' : 'row',
-          justifyContent: 'space-between',
-          alignItems: isMobile ? 'flex-start' : 'center',
-          gap: isMobile ? '1.25rem' : '0',
-          marginBottom: isMobile ? '2rem' : '3rem',
-          borderBottom: '1px solid rgba(255,255,255,0.06)',
-          paddingBottom: '2rem',
-        }}>
-          <div>
-            <h1 style={{
-              fontFamily: 'var(--font-cinzel)',
-              fontSize: '2rem',
-              color: 'var(--offwhite)',
-              marginBottom: '0.3rem',
-            }}>
-              Dashboard
-            </h1>
-            <p style={{
-              fontFamily: 'var(--font-inter)',
-              fontSize: '0.78rem',
-              color: 'rgba(245,242,236,0.3)',
-            }}>
-              Signed in as {user?.email} · {role ? ROLE_LABELS[role] : ''}
-            </p>
-          </div>
-          <div style={{ display: 'flex', gap: '0.8rem' }}>
-            <Link
-              href="/"
-              style={{
-                backgroundColor: 'transparent',
-                border: '1px solid rgba(255,255,255,0.1)',
-                color: 'rgba(245,242,236,0.5)',
-                padding: '0.6rem 1.5rem',
-                borderRadius: '2px',
-                fontSize: '0.75rem',
-                letterSpacing: '0.1em',
-                textTransform: 'uppercase',
-                fontFamily: 'var(--font-inter)',
-                textDecoration: 'none',
-              }}
-            >
-              View Site
-            </Link>
-            <button
-              onClick={handleSignOut}
-              style={{
-                backgroundColor: 'transparent',
-                border: '1px solid rgba(255,255,255,0.1)',
-                color: 'rgba(245,242,236,0.5)',
-                padding: '0.6rem 1.5rem',
-                borderRadius: '2px',
-                fontSize: '0.75rem',
-                letterSpacing: '0.1em',
-                textTransform: 'uppercase',
-                cursor: 'pointer',
-                fontFamily: 'var(--font-inter)',
-              }}
-            >
-              Sign Out
-            </button>
-          </div>
+      {/* Top bar */}
+      <div style={{ borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.02)', padding: isMobile ? '1rem 1.25rem' : '1rem 2.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
+          <span style={{ fontFamily: 'var(--font-cinzel)', fontSize: '1.1rem', color: 'var(--offwhite)', letterSpacing: '0.05em' }}>Onboard</span>
+          <span style={{ width: '1px', height: '20px', background: 'rgba(255,255,255,0.1)' }} />
+          <span style={{ fontSize: '0.72rem', color: 'rgba(245,242,236,0.35)', letterSpacing: '0.05em' }}>
+            {new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}
+          </span>
         </div>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+          <span style={{ fontSize: '0.68rem', color: 'rgba(245,242,236,0.3)', marginRight: '0.25rem' }}>{user?.email}</span>
+          <Link href="/" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(245,242,236,0.55)', padding: '0.45rem 1rem', borderRadius: '6px', fontSize: '0.72rem', letterSpacing: '0.05em', textDecoration: 'none' }}>
+            View Site
+          </Link>
+          <button onClick={handleSignOut} style={{ background: 'rgba(228,51,41,0.08)', border: '1px solid rgba(228,51,41,0.2)', color: 'rgba(228,51,41,0.7)', padding: '0.45rem 1rem', borderRadius: '6px', fontSize: '0.72rem', letterSpacing: '0.05em', cursor: 'pointer' }}>
+            Sign Out
+          </button>
+        </div>
+      </div>
+
+      <div style={{ maxWidth: '1200px', margin: '0 auto', padding: isMobile ? '1.5rem 1.25rem 4rem' : '2.5rem 2.5rem 5rem' }}>
+
+        {/* Greeting */}
+        <div style={{ marginBottom: '2.5rem' }}>
+          <h1 style={{ fontFamily: 'var(--font-cinzel)', fontSize: isMobile ? '1.6rem' : '2rem', color: 'var(--offwhite)', marginBottom: '0.3rem' }}>
+            {greeting}
+          </h1>
+          <p style={{ fontSize: '0.8rem', color: 'rgba(245,242,236,0.3)' }}>
+            {role ? ROLE_LABELS[role] : ''} dashboard — {sections.reduce((n, s) => n + s.cards.length, 0)} tools available
+          </p>
+        </div>
+
+        {/* Needs Attention */}
+        {(() => {
+          const attention = sections.flatMap(s =>
+            s.cards.filter(c => c.badge && c.badge > 0).map(c => ({ ...c, color: s.color }))
+          )
+          if (attention.length === 0) return null
+          return (
+            <div style={{ marginBottom: '2.5rem', background: 'rgba(228,51,41,0.06)', border: '1px solid rgba(228,51,41,0.2)', borderRadius: '10px', padding: '1.25rem 1.5rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '1rem' }}>
+                <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: 'var(--red)', flexShrink: 0 }} />
+                <p style={{ fontSize: '0.68rem', letterSpacing: '0.2em', textTransform: 'uppercase', color: 'var(--red)', fontWeight: 600 }}>
+                  Needs Attention
+                </p>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : `repeat(${Math.min(attention.length, 3)}, 1fr)`, gap: '0.75rem' }}>
+                {attention.map(card => (
+                  <a key={card.label} href={card.href} style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: 'rgba(228,51,41,0.06)', border: '1px solid rgba(228,51,41,0.18)', borderRadius: '8px', padding: '0.9rem 1.1rem', textDecoration: 'none' }}>
+                    <div style={{ width: '36px', height: '36px', borderRadius: '8px', background: `${card.color}20`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <FontAwesomeIcon icon={card.icon} style={{ color: card.color, fontSize: '0.95rem' }} />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontFamily: 'var(--font-cinzel)', fontSize: '0.88rem', color: 'var(--offwhite)', marginBottom: '0.1rem' }}>{card.label}</p>
+                      <p style={{ fontSize: '0.72rem', color: 'rgba(245,242,236,0.4)' }}>{card.badge} pending</p>
+                    </div>
+                    <span style={{ background: 'var(--red)', color: '#fff', borderRadius: '999px', minWidth: '26px', height: '26px', padding: '0 0.4rem', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.78rem', fontWeight: 700, flexShrink: 0 }}>{card.badge}</span>
+                  </a>
+                ))}
+              </div>
+            </div>
+          )
+        })()}
 
         {/* Quick Access */}
         {(() => {
           const allCards = sections.flatMap(s => s.cards.map(c => ({ ...c, color: s.color })))
           const pinned = pinnedHrefs.map(h => allCards.find(c => c.href === h)).filter(Boolean) as typeof allCards
           return (
-            <div style={{ marginBottom: '3rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.7rem', marginBottom: '1.25rem' }}>
-                <FontAwesomeIcon icon={faThumbtack} style={{ fontSize: '0.65rem', color: 'rgba(245,242,236,0.4)' }} />
-                <p style={{
-                  fontSize: '0.72rem', letterSpacing: '0.2em', textTransform: 'uppercase',
-                  color: 'rgba(245,242,236,0.4)', fontFamily: 'var(--font-inter)', fontWeight: 600,
-                }}>Quick Access</p>
-                <span style={{ flex: 1, height: '1px', backgroundColor: 'rgba(255,255,255,0.06)' }} />
+            <div style={{ marginBottom: '2.5rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '1rem' }}>
+                <FontAwesomeIcon icon={faThumbtack} style={{ fontSize: '0.6rem', color: 'rgba(245,242,236,0.3)' }} />
+                <p style={{ fontSize: '0.68rem', letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(245,242,236,0.35)', fontWeight: 600 }}>Quick Access</p>
+                <span style={{ flex: 1, height: '1px', background: 'rgba(255,255,255,0.05)' }} />
               </div>
               {pinned.length === 0 ? (
-                <p style={{
-                  fontFamily: 'var(--font-inter)', fontSize: '0.78rem',
-                  color: 'rgba(245,242,236,0.2)', fontStyle: 'italic',
-                  border: '1px dashed rgba(255,255,255,0.07)', borderRadius: '6px',
-                  padding: '1.25rem 1.5rem',
-                }}>
-                  Hover any card below and click the <FontAwesomeIcon icon={faThumbtack} style={{ margin: '0 0.3rem' }} /> pin to add it here.
+                <p style={{ fontSize: '0.78rem', color: 'rgba(245,242,236,0.18)', fontStyle: 'italic', border: '1px dashed rgba(255,255,255,0.06)', borderRadius: '8px', padding: '1.25rem 1.5rem' }}>
+                  Pin any card below with the <FontAwesomeIcon icon={faThumbtack} style={{ margin: '0 0.3rem', fontSize: '0.7rem' }} /> icon to add it here.
                 </p>
               ) : (
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)',
-                  gap: '0.75rem',
-                }}>
+                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(4, 1fr)', gap: '0.6rem' }}>
                   {pinned.map(card => (
                     <div key={card.href} style={{ position: 'relative' }}>
-                      <a href={card.href} style={{
-                        display: 'flex', alignItems: 'center', gap: '0.8rem',
-                        background: `${card.color}0d`,
-                        borderTop: `2px solid ${card.color}`,
-                        borderRight: `1px solid ${card.color}25`,
-                        borderBottom: `1px solid ${card.color}25`,
-                        borderLeft: `1px solid ${card.color}25`,
-                        borderRadius: '6px', padding: '0.85rem 1rem',
-                        textDecoration: 'none', paddingRight: '2.2rem',
-                      }}>
-                        <FontAwesomeIcon icon={card.icon} style={{ color: card.color, fontSize: '1rem', width: '1rem', flexShrink: 0 }} />
-                        <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.8rem', color: 'var(--offwhite)', fontWeight: 500, lineHeight: 1.3 }}>
-                          {card.label}
-                        </span>
+                      <a href={card.href} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', background: `${card.color}0e`, border: `1px solid ${card.color}30`, borderRadius: '8px', padding: '0.75rem 1rem', textDecoration: 'none', paddingRight: '2rem' }}>
+                        <div style={{ width: '30px', height: '30px', borderRadius: '6px', background: `${card.color}20`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          <FontAwesomeIcon icon={card.icon} style={{ color: card.color, fontSize: '0.8rem' }} />
+                        </div>
+                        <span style={{ fontSize: '0.78rem', color: 'var(--offwhite)', fontWeight: 500, lineHeight: 1.3 }}>{card.label}</span>
                         {card.badge != null && card.badge > 0 && (
-                          <span style={{
-                            marginLeft: 'auto', backgroundColor: 'var(--red)', color: '#fff',
-                            borderRadius: '999px', minWidth: '20px', height: '20px', padding: '0 0.3rem',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontSize: '0.68rem', fontFamily: 'var(--font-inter)', fontWeight: 700, flexShrink: 0,
-                          }}>{card.badge}</span>
+                          <span style={{ marginLeft: 'auto', background: 'var(--red)', color: '#fff', borderRadius: '999px', minWidth: '18px', height: '18px', padding: '0 0.25rem', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem', fontWeight: 700, flexShrink: 0 }}>{card.badge}</span>
                         )}
                       </a>
-                      <button
-                        onClick={() => togglePin(card.href)}
-                        title="Remove from Quick Access"
-                        style={{
-                          position: 'absolute', top: '0.4rem', right: '0.4rem',
-                          background: 'none', border: 'none', cursor: 'pointer', padding: '0.2rem',
-                          color: 'rgba(245,242,236,0.25)', fontSize: '0.65rem', lineHeight: 1,
-                        }}
-                      >
+                      <button onClick={() => togglePin(card.href)} title="Unpin" style={{ position: 'absolute', top: '0.35rem', right: '0.4rem', background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(245,242,236,0.2)', fontSize: '0.65rem', padding: '0.2rem' }}>
                         <FontAwesomeIcon icon={faXmark} />
                       </button>
                     </div>
@@ -392,119 +351,47 @@ export default function AdminPage() {
           )
         })()}
 
-        {/* Needs Attention */}
-        {(() => {
-          const attention = sections.flatMap(s =>
-            s.cards.filter(c => c.badge && c.badge > 0).map(c => ({ ...c, color: s.color }))
-          )
-          if (attention.length === 0) return null
-          return (
-            <div style={{ marginBottom: '3rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.7rem', marginBottom: '1.25rem' }}>
-                <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: 'var(--red)', flexShrink: 0 }} />
-                <p style={{
-                  fontSize: '0.72rem', letterSpacing: '0.2em', textTransform: 'uppercase',
-                  color: 'var(--red)', fontFamily: 'var(--font-inter)', fontWeight: 600,
-                }}>Needs Attention</p>
-                <span style={{ flex: 1, height: '1px', backgroundColor: 'rgba(180,30,30,0.3)' }} />
-              </div>
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: isMobile ? '1fr' : `repeat(${Math.min(attention.length, 3)}, 1fr)`,
-                gap: '1rem',
-              }}>
-                {attention.map(card => (
-                  <a key={card.label} href={card.href} style={{
-                    display: 'flex', alignItems: 'center', gap: '1.2rem',
-                    background: 'rgba(200,50,50,0.07)',
-                    borderTop: '1px solid rgba(200,50,50,0.25)',
-                    borderRight: '1px solid rgba(200,50,50,0.25)',
-                    borderBottom: '1px solid rgba(200,50,50,0.25)',
-                    borderLeft: '4px solid var(--red)',
-                    borderRadius: '4px', padding: '1.1rem 1.4rem', textDecoration: 'none',
-                  }}>
-                    <FontAwesomeIcon icon={card.icon} style={{ fontSize: '1.4rem', color: card.color, flexShrink: 0 }} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ fontFamily: 'var(--font-cinzel)', fontSize: '0.95rem', color: 'var(--offwhite)', marginBottom: '0.1rem' }}>{card.label}</p>
-                      <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.75rem', color: 'rgba(245,242,236,0.4)' }}>
-                        {card.badge} pending
-                      </p>
-                    </div>
-                    <span style={{
-                      backgroundColor: 'var(--red)', color: '#fff', borderRadius: '999px',
-                      minWidth: '28px', height: '28px', padding: '0 0.5rem',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: '0.82rem', fontFamily: 'var(--font-inter)', fontWeight: 700, flexShrink: 0,
-                    }}>{card.badge}</span>
-                  </a>
-                ))}
-              </div>
-            </div>
-          )
-        })()}
-
         {/* Sections */}
-        {sections.map((section, i) => {
-          const dailyCards  = section.cards.filter(c => c.daily)
-          const configCards = section.cards.filter(c => !c.daily)
-          return (
-            <div key={section.title} style={{ marginTop: i === 0 ? 0 : '3rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.7rem', marginBottom: '1.25rem' }}>
-                <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: section.color, flexShrink: 0 }} />
-                <p style={{
-                  fontSize: '0.72rem', letterSpacing: '0.2em', textTransform: 'uppercase',
-                  color: section.color, fontFamily: 'var(--font-inter)', fontWeight: 600,
-                }}>{section.title}</p>
-                <span style={{ flex: 1, height: '1px', backgroundColor: `${section.color}30` }} />
-              </div>
-
-              {dailyCards.length > 0 && (
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)',
-                  gap: '1.5rem',
-                  marginBottom: configCards.length > 0 ? '1rem' : 0,
-                }}>
-                  {dailyCards.map(card => (
-                    <DashboardCard
-                      key={card.label} {...card} color={section.color}
-                      pinned={pinnedHrefs.includes(card.href)}
-                      onTogglePin={() => togglePin(card.href)}
-                    />
-                  ))}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
+          {sections.map(section => {
+            const dailyCards  = section.cards.filter(c => c.daily)
+            const configCards = section.cards.filter(c => !c.daily)
+            return (
+              <div key={section.title}>
+                {/* Section header */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem', padding: '0.55rem 1rem', background: `${section.color}0d`, border: `1px solid ${section.color}22`, borderRadius: '8px' }}>
+                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: section.color, flexShrink: 0 }} />
+                  <p style={{ fontSize: '0.7rem', letterSpacing: '0.2em', textTransform: 'uppercase', color: section.color, fontWeight: 600 }}>{section.title}</p>
                 </div>
-              )}
 
-              {configCards.length > 0 && (
-                <>
-                  {dailyCards.length > 0 && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: '0.75rem 0' }}>
-                      <FontAwesomeIcon icon={faGear} style={{ fontSize: '0.6rem', color: 'rgba(245,242,236,0.2)' }} />
-                      <span style={{
-                        fontSize: '0.6rem', letterSpacing: '0.15em', textTransform: 'uppercase',
-                        color: 'rgba(245,242,236,0.2)', fontFamily: 'var(--font-inter)',
-                      }}>Configure</span>
-                      <span style={{ flex: 1, height: '1px', backgroundColor: 'rgba(255,255,255,0.05)' }} />
-                    </div>
-                  )}
-                  <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)',
-                    gap: '1.5rem',
-                  }}>
-                    {configCards.map(card => (
-                      <DashboardCard
-                        key={card.label} {...card} color={section.color}
-                        pinned={pinnedHrefs.includes(card.href)}
-                        onTogglePin={() => togglePin(card.href)}
-                      />
+                {dailyCards.length > 0 && (
+                  <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: '0.6rem', marginBottom: configCards.length > 0 ? '0.5rem' : 0 }}>
+                    {dailyCards.map(card => (
+                      <DashboardCard key={card.label} {...card} color={section.color} pinned={pinnedHrefs.includes(card.href)} onTogglePin={() => togglePin(card.href)} />
                     ))}
                   </div>
-                </>
-              )}
-            </div>
-          )
-        })}
+                )}
+
+                {configCards.length > 0 && (
+                  <>
+                    {dailyCards.length > 0 && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: '0.6rem 0' }}>
+                        <FontAwesomeIcon icon={faGear} style={{ fontSize: '0.55rem', color: 'rgba(245,242,236,0.15)' }} />
+                        <span style={{ fontSize: '0.58rem', letterSpacing: '0.15em', textTransform: 'uppercase', color: 'rgba(245,242,236,0.15)' }}>Configure</span>
+                        <span style={{ flex: 1, height: '1px', background: 'rgba(255,255,255,0.04)' }} />
+                      </div>
+                    )}
+                    <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: '0.6rem' }}>
+                      {configCards.map(card => (
+                        <DashboardCard key={card.label} {...card} color={section.color} pinned={pinnedHrefs.includes(card.href)} onTogglePin={() => togglePin(card.href)} />
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )
+          })}
+        </div>
 
       </div>
     </div>
@@ -531,61 +418,53 @@ function DashboardCard({ label, desc, href, color, badge, icon, daily, pinned, o
       style={{
         position: 'relative',
         display: 'flex',
-        flexDirection: 'column',
+        alignItems: 'center',
         gap: '0.75rem',
-        background: hovered ? `${color}14` : `${color}08`,
-        borderTop: `3px solid ${color}`,
-        borderRight: `1px solid ${hovered ? `${color}55` : `${color}25`}`,
-        borderBottom: `1px solid ${hovered ? `${color}55` : `${color}25`}`,
-        borderLeft: `1px solid ${hovered ? `${color}55` : `${color}25`}`,
-        borderRadius: '6px',
-        padding: '1.5rem',
+        background: hovered ? `${color}14` : 'rgba(255,255,255,0.025)',
+        border: `1px solid ${hovered ? `${color}45` : 'rgba(255,255,255,0.07)'}`,
+        borderRadius: '8px',
+        padding: '0.85rem 1rem',
         textDecoration: 'none',
-        transition: 'background 0.15s, border-color 0.15s, transform 0.15s, opacity 0.15s',
-        transform: hovered ? 'translateY(-2px)' : 'none',
-        opacity: daily || hovered ? 1 : 0.55,
+        transition: 'all 0.18s ease',
+        transform: hovered ? 'translateY(-1px)' : 'none',
+        boxShadow: hovered ? `0 4px 16px ${color}15` : 'none',
+        opacity: daily ? 1 : hovered ? 1 : 0.6,
+        paddingRight: '2.2rem',
       }}
     >
-      {!!badge && badge > 0 && (
-        <span style={{
-          position: 'absolute', top: '-10px', right: '1.2rem',
-          backgroundColor: 'var(--red)', color: '#fff', borderRadius: '999px',
-          minWidth: '24px', height: '24px', padding: '0 0.4rem',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: '0.72rem', fontFamily: 'var(--font-inter)', fontWeight: 600,
-          border: '2px solid var(--black)',
-        }}>{badge}</span>
-      )}
-
-      {/* Pin button — visible on hover or when already pinned */}
-      {(hovered || pinned) && (
-        <button
-          onClick={e => { e.preventDefault(); e.stopPropagation(); onTogglePin() }}
-          title={pinned ? 'Remove from Quick Access' : 'Add to Quick Access'}
-          style={{
-            position: 'absolute', top: '0.7rem', right: '0.8rem',
-            background: 'none', border: 'none', cursor: 'pointer', padding: '0.25rem',
-            color: pinned ? color : 'rgba(245,242,236,0.25)',
-            fontSize: '0.75rem', lineHeight: 1,
-            transform: pinned ? 'rotate(-45deg)' : 'none',
-            transition: 'color 0.15s, transform 0.15s',
-          }}
-        >
-          <FontAwesomeIcon icon={faThumbtack} />
-        </button>
-      )}
-
-      <FontAwesomeIcon icon={icon} style={{ fontSize: '1.5rem', color, width: '1.5rem' }} />
-      <div>
-        <h2 style={{
-          fontFamily: 'var(--font-cinzel)', fontSize: '1rem',
-          color: 'var(--offwhite)', marginBottom: '0.35rem',
-        }}>{label}</h2>
-        <p style={{
-          fontFamily: 'var(--font-inter)', fontSize: '0.78rem',
-          color: 'rgba(245,242,236,0.4)', lineHeight: 1.5,
-        }}>{desc}</p>
+      {/* Icon block */}
+      <div style={{ width: '34px', height: '34px', borderRadius: '8px', background: hovered ? `${color}28` : `${color}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'background 0.18s' }}>
+        <FontAwesomeIcon icon={icon} style={{ color, fontSize: '0.9rem', width: '0.9rem' }} />
       </div>
+
+      {/* Text */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <h2 style={{ fontFamily: 'var(--font-cinzel)', fontSize: '0.82rem', color: 'var(--offwhite)', marginBottom: '0.15rem', lineHeight: 1.2 }}>{label}</h2>
+        <p style={{ fontSize: '0.68rem', color: 'rgba(245,242,236,0.35)', lineHeight: 1.4 }}>{desc}</p>
+      </div>
+
+      {/* Badge */}
+      {!!badge && badge > 0 && (
+        <span style={{ background: 'var(--red)', color: '#fff', borderRadius: '999px', minWidth: '22px', height: '22px', padding: '0 0.35rem', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', fontWeight: 700, flexShrink: 0, border: '2px solid #0d0d0d' }}>
+          {badge}
+        </span>
+      )}
+
+      {/* Pin */}
+      <button
+        onClick={e => { e.preventDefault(); e.stopPropagation(); onTogglePin() }}
+        title={pinned ? 'Remove from Quick Access' : 'Pin to Quick Access'}
+        style={{
+          position: 'absolute', top: '0.6rem', right: '0.7rem',
+          background: 'none', border: 'none', cursor: 'pointer', padding: '0.25rem',
+          color: pinned ? color : hovered ? 'rgba(245,242,236,0.2)' : 'transparent',
+          fontSize: '0.7rem', lineHeight: 1,
+          transform: pinned ? 'rotate(-45deg)' : 'none',
+          transition: 'color 0.15s, transform 0.15s',
+        }}
+      >
+        <FontAwesomeIcon icon={faThumbtack} />
+      </button>
     </a>
   )
 }

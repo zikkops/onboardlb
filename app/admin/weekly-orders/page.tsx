@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { collection, getDocs } from 'firebase/firestore'
+import { db } from '../../lib/firebase'
 import { useRequireRole, ALL_ROLES, SECTION_ACCESS } from '../../lib/adminAuth'
 import {
   listWeeklyReports, listTemplateItems, listProviders,
@@ -10,6 +12,68 @@ import {
   type WeeklyOrderReport, type WeeklyOrderReportItem, type OrderProvider, type Department,
 } from '../../lib/weeklyOrders'
 import { BRANCHES } from '../../lib/branches'
+
+interface Supply { id: string; name: string; quantity: number; unit: string; threshold: number; category: string }
+
+function SuppliesStatus() {
+  const [supplies, setSupplies] = useState<Supply[]>([])
+  const [open, setOpen] = useState(true)
+
+  useEffect(() => {
+    getDocs(collection(db, 'supplies')).then(snap => {
+      setSupplies(snap.docs.map(d => ({ id: d.id, ...(d.data() as Omit<Supply, 'id'>) }))
+        .sort((a, b) => a.name.localeCompare(b.name)))
+    })
+  }, [])
+
+  const alerts = supplies.filter(s => s.quantity < s.threshold)
+  const ok     = supplies.filter(s => s.quantity >= s.threshold)
+
+  if (supplies.length === 0) return null
+
+  return (
+    <div style={{ marginBottom: '2rem', border: `1px solid ${alerts.length > 0 ? 'rgba(228,51,41,0.3)' : 'rgba(0,160,152,0.2)'}`, borderRadius: '6px', overflow: 'hidden' }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.75rem 1rem', background: alerts.length > 0 ? 'rgba(228,51,41,0.06)' : 'rgba(0,160,152,0.06)', border: 'none', color: '#F5F2EC', cursor: 'pointer', fontFamily: 'var(--font-inter)', fontSize: '0.78rem', letterSpacing: '0.08em', textTransform: 'uppercase' }}
+      >
+        <span style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+          <span style={{ color: alerts.length > 0 ? '#E43329' : '#00A098' }}>●</span>
+          Supplies Status
+          {alerts.length > 0
+            ? <span style={{ background: '#E43329', color: '#fff', borderRadius: '3px', padding: '0.05rem 0.4rem', fontSize: '0.65rem', fontWeight: 700 }}>{alerts.length} low</span>
+            : <span style={{ color: '#00A098', fontSize: '0.7rem' }}>All OK</span>
+          }
+        </span>
+        <span style={{ opacity: 0.4, fontSize: '0.9rem' }}>{open ? '▲' : '▼'}</span>
+      </button>
+
+      {open && (
+        <div style={{ padding: '0.75rem 1rem', display: 'flex', flexWrap: 'wrap', gap: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+          {alerts.map(s => (
+            <div key={s.id} style={{ background: s.quantity <= 0 ? 'rgba(228,51,41,0.12)' : 'rgba(201,150,44,0.1)', border: `1px solid ${s.quantity <= 0 ? 'rgba(228,51,41,0.35)' : 'rgba(201,150,44,0.3)'}`, borderRadius: '4px', padding: '0.3rem 0.7rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span style={{ fontSize: '0.78rem', color: '#F5F2EC' }}>{s.name}</span>
+              <span style={{ fontSize: '0.9rem', fontWeight: 700, color: s.quantity <= 0 ? '#E43329' : '#C9962C' }}>{s.quantity}</span>
+              <span style={{ fontSize: '0.65rem', color: 'rgba(245,242,236,0.35)' }}>{s.unit} / alert &lt;{s.threshold}</span>
+            </div>
+          ))}
+          {ok.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+              {ok.map(s => (
+                <span key={s.id} style={{ background: 'rgba(0,160,152,0.07)', border: '1px solid rgba(0,160,152,0.18)', borderRadius: '4px', padding: '0.3rem 0.6rem', fontSize: '0.72rem', color: 'rgba(245,242,236,0.5)', display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
+                  {s.name} <span style={{ color: '#00A098', fontWeight: 600 }}>{s.quantity}</span>
+                </span>
+              ))}
+            </div>
+          )}
+          <a href="/admin/supplies" style={{ marginLeft: 'auto', fontSize: '0.68rem', color: 'rgba(245,242,236,0.3)', textDecoration: 'none', alignSelf: 'center', whiteSpace: 'nowrap', letterSpacing: '0.06em' }}>
+            Manage supplies →
+          </a>
+        </div>
+      )}
+    </div>
+  )
+}
 
 const DEPT_COLOR: Record<Department, string> = {
   Kitchen:  '#00A098',
@@ -613,6 +677,9 @@ export default function WeeklyOrdersPage() {
             </div>
           </div>
         </div>
+
+        {/* Supplies status */}
+        <SuppliesStatus />
 
         {/* Department filter tabs */}
         {deptTabs.length > 0 && (
