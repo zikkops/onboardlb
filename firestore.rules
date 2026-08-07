@@ -494,6 +494,11 @@ service cloud.firestore {
       allow update, delete: if isStaff();
     }
 
+    // ---- Consumable supplies inventory ----
+    match /supplies/{id} {
+      allow read, write: if isStaff();
+    }
+
     // ---- End-of-day reports ----
     // Per-branch staff roster — any staff member may read (the EOD form needs
     // it to populate the attendance list) and any staff member may write

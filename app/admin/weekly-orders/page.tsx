@@ -13,7 +13,21 @@ import {
 } from '../../lib/weeklyOrders'
 import { BRANCHES } from '../../lib/branches'
 
-interface Supply { id: string; name: string; quantity: number; unit: string; threshold: number; category: string }
+const SUPPLY_BRANCHES = ['Beirut', 'Zouk', 'Broummana'] as const
+type SupplyBranch = typeof SUPPLY_BRANCHES[number]
+
+interface Supply {
+  id: string
+  name: string
+  quantity: Record<SupplyBranch, number>
+  unit: string
+  threshold: number
+  category: string
+}
+
+function minQty(qty: Record<SupplyBranch, number>): number {
+  return Math.min(...SUPPLY_BRANCHES.map(b => qty[b] ?? 0))
+}
 
 function SuppliesStatus() {
   const [supplies, setSupplies] = useState<Supply[]>([])
@@ -21,13 +35,19 @@ function SuppliesStatus() {
 
   useEffect(() => {
     getDocs(collection(db, 'supplies')).then(snap => {
-      setSupplies(snap.docs.map(d => ({ id: d.id, ...(d.data() as Omit<Supply, 'id'>) }))
-        .sort((a, b) => a.name.localeCompare(b.name)))
+      setSupplies(snap.docs.map(d => {
+        const data = d.data() as Omit<Supply, 'id'>
+        const qty = typeof data.quantity === 'number'
+          ? { Beirut: data.quantity, Zouk: 0, Broummana: 0 }
+          : (data.quantity ?? { Beirut: 0, Zouk: 0, Broummana: 0 })
+        return { ...data, id: d.id, quantity: qty }
+      }).sort((a, b) => a.name.localeCompare(b.name)))
     })
   }, [])
 
-  const alerts = supplies.filter(s => s.quantity < s.threshold)
-  const ok     = supplies.filter(s => s.quantity >= s.threshold)
+  // A supply is low if any branch is below threshold
+  const alerts = supplies.filter(s => SUPPLY_BRANCHES.some(b => (s.quantity[b] ?? 0) < s.threshold))
+  const ok     = supplies.filter(s => SUPPLY_BRANCHES.every(b => (s.quantity[b] ?? 0) >= s.threshold))
 
   if (supplies.length === 0) return null
 
@@ -50,18 +70,24 @@ function SuppliesStatus() {
 
       {open && (
         <div style={{ padding: '0.75rem 1rem', display: 'flex', flexWrap: 'wrap', gap: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-          {alerts.map(s => (
-            <div key={s.id} style={{ background: s.quantity <= 0 ? 'rgba(228,51,41,0.12)' : 'rgba(201,150,44,0.1)', border: `1px solid ${s.quantity <= 0 ? 'rgba(228,51,41,0.35)' : 'rgba(201,150,44,0.3)'}`, borderRadius: '4px', padding: '0.3rem 0.7rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <span style={{ fontSize: '0.78rem', color: '#F5F2EC' }}>{s.name}</span>
-              <span style={{ fontSize: '0.9rem', fontWeight: 700, color: s.quantity <= 0 ? '#E43329' : '#C9962C' }}>{s.quantity}</span>
-              <span style={{ fontSize: '0.65rem', color: 'rgba(245,242,236,0.35)' }}>{s.unit} / alert &lt;{s.threshold}</span>
-            </div>
-          ))}
+          {alerts.map(s => {
+            const lowBranches = SUPPLY_BRANCHES.filter(b => (s.quantity[b] ?? 0) < s.threshold)
+            const out = lowBranches.some(b => (s.quantity[b] ?? 0) <= 0)
+            return (
+              <div key={s.id} style={{ background: out ? 'rgba(228,51,41,0.12)' : 'rgba(201,150,44,0.1)', border: `1px solid ${out ? 'rgba(228,51,41,0.35)' : 'rgba(201,150,44,0.3)'}`, borderRadius: '4px', padding: '0.3rem 0.7rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span style={{ fontSize: '0.78rem', color: '#F5F2EC' }}>{s.name}</span>
+                <span style={{ fontSize: '0.65rem', color: out ? '#E43329' : '#C9962C', fontWeight: 600 }}>
+                  {lowBranches.map(b => `${b} ${s.quantity[b]}`).join(' · ')}
+                </span>
+                <span style={{ fontSize: '0.62rem', color: 'rgba(245,242,236,0.3)' }}>/ min {s.threshold}</span>
+              </div>
+            )
+          })}
           {ok.length > 0 && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
               {ok.map(s => (
-                <span key={s.id} style={{ background: 'rgba(0,160,152,0.07)', border: '1px solid rgba(0,160,152,0.18)', borderRadius: '4px', padding: '0.3rem 0.6rem', fontSize: '0.72rem', color: 'rgba(245,242,236,0.5)', display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
-                  {s.name} <span style={{ color: '#00A098', fontWeight: 600 }}>{s.quantity}</span>
+                <span key={s.id} style={{ background: 'rgba(0,160,152,0.07)', border: '1px solid rgba(0,160,152,0.18)', borderRadius: '4px', padding: '0.3rem 0.6rem', fontSize: '0.72rem', color: 'rgba(245,242,236,0.5)' }}>
+                  {s.name}
                 </span>
               ))}
             </div>

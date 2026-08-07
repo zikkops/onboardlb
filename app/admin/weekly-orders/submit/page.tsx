@@ -12,6 +12,8 @@ function useIsMobile(breakpoint = 640) {
   }, [breakpoint])
   return mobile
 }
+import { collection, getDocs } from 'firebase/firestore'
+import { db } from '../../../lib/firebase'
 import { useRequireRole, ALL_ROLES } from '../../../lib/adminAuth'
 import {
   listTemplateItems, listProviders, submitWeeklyReport, getCurrentWeek,
@@ -20,6 +22,15 @@ import {
   DEPARTMENTS, type Department,
 } from '../../../lib/weeklyOrders'
 import { BRANCHES } from '../../../lib/branches'
+
+type SupplyBranch = 'Beirut' | 'Zouk' | 'Broummana'
+interface Supply { id: string; name: string; quantity: Record<SupplyBranch, number>; unit: string; threshold: number; category: string }
+
+function supplyStatus(qty: number, threshold: number): 'ok' | 'low' | 'out' {
+  if (qty <= 0) return 'out'
+  if (qty < threshold) return 'low'
+  return 'ok'
+}
 
 const DEPT_COLOR: Record<Department, string> = {
   Kitchen:  '#00A098',
@@ -47,6 +58,8 @@ export default function SubmitOrderPage() {
   const [saving,      setSaving]   = useState(false)
   const [err,         setErr]      = useState('')
   const [done,        setDone]     = useState(false)
+  const [supplies,    setSupplies] = useState<Supply[]>([])
+  const [suppliesOpen, setSuppliesOpen] = useState(true)
 
   const week = getCurrentWeek()
 
@@ -69,16 +82,38 @@ export default function SubmitOrderPage() {
   }, [allowedDepts])
 
   useEffect(() => {
+    // Template items and providers are required; load supplies separately so a
+    // missing Firestore rule doesn't break the whole page.
     Promise.all([listTemplateItems(), listProviders()]).then(([data, provs]) => {
       setItems(data)
       setProvMap(Object.fromEntries(provs.map(p => [p.id, p])))
       setLoading(false)
     })
+    getDocs(collection(db, 'supplies')).then(snap => {
+      setSupplies(snap.docs.map(d => {
+        const s = d.data() as Omit<Supply, 'id'>
+        const qty = typeof s.quantity === 'number'
+          ? { Beirut: s.quantity, Zouk: 0, Broummana: 0 }
+          : (s.quantity ?? { Beirut: 0, Zouk: 0, Broummana: 0 })
+        return { ...s, id: d.id, quantity: qty }
+      }).sort((a, b) => a.name.localeCompare(b.name)))
+    }).catch(() => { /* rules not yet deployed — quantities stay hidden */ })
   }, [])
 
   function setQty(id: string, val: string) {
     setQtys(prev => ({ ...prev, [id]: val }))
   }
+
+  // Map supply name (lowercase) → { qty, threshold } for the current branch
+  const supplyMap = useMemo(() => {
+    const m = new Map<string, { qty: number; threshold: number; unit: string }>()
+    const b = branch as SupplyBranch
+    if (b !== 'Beirut' && b !== 'Zouk' && b !== 'Broummana') return m
+    for (const s of supplies) {
+      m.set(s.name.toLowerCase().trim(), { qty: s.quantity[b] ?? 0, threshold: s.threshold, unit: s.unit })
+    }
+    return m
+  }, [supplies, branch])
 
   // Provider groups for the selected department only
   const provGroups = useMemo(() => {
@@ -224,6 +259,70 @@ export default function SubmitOrderPage() {
               )}
             </div>
 
+            {/* Supplies panel — shown when branch is selected */}
+            {branch && supplies.length > 0 && (() => {
+              const branchKey = branch as SupplyBranch
+              const validBranch = branchKey === 'Beirut' || branchKey === 'Zouk' || branchKey === 'Broummana'
+              if (!validBranch) return null
+              const alerts = supplies.filter(s => supplyStatus(s.quantity[branchKey] ?? 0, s.threshold) !== 'ok')
+              const ok     = supplies.filter(s => supplyStatus(s.quantity[branchKey] ?? 0, s.threshold) === 'ok')
+              return (
+                <div style={{ marginBottom: '2rem', border: `1px solid ${alerts.length > 0 ? 'rgba(228,51,41,0.25)' : 'rgba(0,160,152,0.18)'}`, borderRadius: '6px', overflow: 'hidden' }}>
+                  <button type="button" onClick={() => setSuppliesOpen(o => !o)} style={{
+                    width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: '0.65rem 1rem', background: alerts.length > 0 ? 'rgba(228,51,41,0.05)' : 'rgba(0,160,152,0.05)',
+                    border: 'none', color: '#F5F2EC', cursor: 'pointer', fontFamily: 'var(--font-inter)',
+                    fontSize: '0.72rem', letterSpacing: '0.1em', textTransform: 'uppercase',
+                  }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <span style={{ color: alerts.length > 0 ? '#E43329' : '#00A098' }}>●</span>
+                      {branch} Supplies
+                      {alerts.length > 0
+                        ? <span style={{ background: '#E43329', color: '#fff', borderRadius: '3px', padding: '0.05rem 0.35rem', fontSize: '0.6rem', fontWeight: 700 }}>{alerts.length} low</span>
+                        : <span style={{ color: '#00A098', fontSize: '0.65rem' }}>All OK</span>
+                      }
+                    </span>
+                    <span style={{ opacity: 0.4 }}>{suppliesOpen ? '▲' : '▼'}</span>
+                  </button>
+
+                  {suppliesOpen && (
+                    <div style={{ padding: '0.75rem 1rem', borderTop: '1px solid rgba(255,255,255,0.05)', display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                      {alerts.map(s => {
+                        const qty = s.quantity[branchKey] ?? 0
+                        const st  = supplyStatus(qty, s.threshold)
+                        return (
+                          <div key={s.id} style={{
+                            background: st === 'out' ? 'rgba(228,51,41,0.1)' : 'rgba(201,150,44,0.09)',
+                            border: `1px solid ${st === 'out' ? 'rgba(228,51,41,0.3)' : 'rgba(201,150,44,0.28)'}`,
+                            borderRadius: '4px', padding: '0.3rem 0.65rem',
+                            display: 'flex', alignItems: 'center', gap: '0.45rem',
+                          }}>
+                            <span style={{ fontSize: '0.75rem', color: '#F5F2EC' }}>{s.name}</span>
+                            <span style={{ fontSize: '0.88rem', fontWeight: 700, color: st === 'out' ? '#E43329' : '#C9962C' }}>{qty}</span>
+                            <span style={{ fontSize: '0.6rem', color: 'rgba(245,242,236,0.3)' }}>{s.unit} · min {s.threshold}</span>
+                          </div>
+                        )
+                      })}
+                      {ok.map(s => (
+                        <div key={s.id} style={{
+                          background: 'rgba(0,160,152,0.06)', border: '1px solid rgba(0,160,152,0.16)',
+                          borderRadius: '4px', padding: '0.3rem 0.65rem',
+                          display: 'flex', alignItems: 'center', gap: '0.4rem',
+                        }}>
+                          <span style={{ fontSize: '0.75rem', color: 'rgba(245,242,236,0.55)' }}>{s.name}</span>
+                          <span style={{ fontSize: '0.88rem', fontWeight: 700, color: '#00A098' }}>{s.quantity[branchKey] ?? 0}</span>
+                          <span style={{ fontSize: '0.6rem', color: 'rgba(245,242,236,0.25)' }}>{s.unit}</span>
+                        </div>
+                      ))}
+                      <a href="/admin/supplies" style={{ marginLeft: 'auto', alignSelf: 'center', fontSize: '0.62rem', color: 'rgba(245,242,236,0.25)', textDecoration: 'none', whiteSpace: 'nowrap' }}>
+                        Update supplies →
+                      </a>
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
+
             {/* Department selector */}
             <div style={{ marginBottom: '2.5rem' }}>
               <label style={{
@@ -324,8 +423,12 @@ export default function SubmitOrderPage() {
                                       })()}
                                     </div>
                                   )}
-                                  {cItems.map((item, idx) => (
-                                    isMobile ? (
+                                  {cItems.map((item, idx) => {
+                                    const si = supplyMap.get(item.name.toLowerCase().trim())
+                                    const st = si ? supplyStatus(si.qty, si.threshold) : null
+                                    const stColor = st === 'ok' ? '#00A098' : st === 'low' ? '#C9962C' : st === 'out' ? '#E43329' : null
+                                    const stBg    = st === 'ok' ? 'rgba(0,160,152,0.12)' : st === 'low' ? 'rgba(201,150,44,0.14)' : st === 'out' ? 'rgba(228,51,41,0.14)' : null
+                                    return isMobile ? (
                                       // Mobile: input on top, name below
                                       <div key={item.id} style={{
                                         padding: '0.9rem 1.25rem',
@@ -333,9 +436,7 @@ export default function SubmitOrderPage() {
                                       }}>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.5rem' }}>
                                           <input
-                                            type="number"
-                                            min="0"
-                                            step="0.5"
+                                            type="number" min="0" step="0.5"
                                             value={qtys[item.id] ?? ''}
                                             onChange={e => setQty(item.id, e.target.value)}
                                             placeholder="0"
@@ -344,44 +445,44 @@ export default function SubmitOrderPage() {
                                           <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.78rem', color: 'rgba(245,242,236,0.4)' }}>
                                             {packLabel(item.unit, item.packSize, item.packUnit)}
                                           </span>
+                                          {si && stColor && (
+                                            <span style={{ marginLeft: 'auto', background: stBg!, borderRadius: '4px', padding: '0.2rem 0.5rem', fontSize: '0.72rem', fontWeight: 700, color: stColor, whiteSpace: 'nowrap' }}>
+                                              {si.qty} {si.unit}
+                                            </span>
+                                          )}
                                         </div>
                                         <div>
-                                          <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.88rem', color: 'var(--offwhite)', fontWeight: 500 }}>
-                                            {item.name}
-                                          </span>
+                                          <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.88rem', color: 'var(--offwhite)', fontWeight: 500 }}>{item.name}</span>
                                           {item.nameAr && (
-                                            <span dir="rtl" style={{ fontFamily: 'var(--font-inter)', fontSize: '0.85rem', color: '#C9962C', marginLeft: '0.5rem' }}>
-                                              {item.nameAr}
-                                            </span>
+                                            <span dir="rtl" style={{ fontFamily: 'var(--font-inter)', fontSize: '0.85rem', color: '#C9962C', marginLeft: '0.5rem' }}>{item.nameAr}</span>
                                           )}
                                         </div>
                                       </div>
                                     ) : (
-                                      // Desktop: original side-by-side layout
+                                      // Desktop: side-by-side with supply badge
                                       <div key={item.id} style={{
                                         display: 'grid', gridTemplateColumns: '1fr auto',
                                         alignItems: 'center', gap: '1rem',
                                         padding: '0.85rem 1.25rem',
                                         borderTop: (idx > 0 || hasCategories) ? '1px solid rgba(255,255,255,0.04)' : 'none',
                                       }}>
-                                        <div>
-                                          <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.88rem', color: 'var(--offwhite)', fontWeight: 500 }}>
-                                            {item.name}
-                                          </span>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+                                          <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.88rem', color: 'var(--offwhite)', fontWeight: 500 }}>{item.name}</span>
                                           {item.nameAr && (
-                                            <span dir="rtl" style={{ fontFamily: 'var(--font-inter)', fontSize: '0.85rem', color: '#C9962C', marginLeft: '0.5rem' }}>
-                                              {item.nameAr}
-                                            </span>
+                                            <span dir="rtl" style={{ fontFamily: 'var(--font-inter)', fontSize: '0.85rem', color: '#C9962C' }}>{item.nameAr}</span>
                                           )}
-                                          <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.75rem', color: 'rgba(245,242,236,0.3)', marginLeft: '0.5rem' }}>
+                                          <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.75rem', color: 'rgba(245,242,236,0.3)' }}>
                                             ({packLabel(item.unit, item.packSize, item.packUnit)})
                                           </span>
+                                          {si && stColor && (
+                                            <span style={{ background: stBg!, borderRadius: '4px', padding: '0.18rem 0.5rem', fontSize: '0.72rem', fontWeight: 700, color: stColor, whiteSpace: 'nowrap' }}>
+                                              {si.qty} {si.unit}
+                                            </span>
+                                          )}
                                         </div>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                           <input
-                                            type="number"
-                                            min="0"
-                                            step="0.5"
+                                            type="number" min="0" step="0.5"
                                             value={qtys[item.id] ?? ''}
                                             onChange={e => setQty(item.id, e.target.value)}
                                             placeholder="0"
@@ -393,7 +494,7 @@ export default function SubmitOrderPage() {
                                         </div>
                                       </div>
                                     )
-                                  ))}
+                                  })}
                                 </div>
                               ))}
                             </div>
