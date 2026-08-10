@@ -94,7 +94,8 @@ export const ADMIN_NAV: AdminNavSection[] = [
     items: [
       { label: 'Order Reports',      href: '/admin/weekly-orders',           access: SECTION_ACCESS.weeklyOrders },
       { label: 'End of Week Order',  href: '/admin/weekly-orders/submit',    access: SECTION_ACCESS.weeklyOrdersSubmit },
-      { label: 'Supplies',           href: '/admin/supplies',                access: SECTION_ACCESS.games },
+      { label: 'Inventory Management', href: '/admin/supplies',              access: SECTION_ACCESS.games },
+      { label: 'Daily Inventory Count', href: '/admin/supplies/daily',       access: SECTION_ACCESS.dailyInventory },
       { label: 'Manage Providers',   href: '/admin/weekly-orders/providers', access: ['admin'] as Role[] },
       { label: 'Edit Template',      href: '/admin/weekly-orders/template',  access: ['admin'] as Role[] },
     ],

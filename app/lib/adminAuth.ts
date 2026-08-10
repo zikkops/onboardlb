@@ -54,6 +54,7 @@ export const SECTION_LABELS: Record<string, string> = {
   gameTransfers:     'Transfer Stock',
   weeklyOrders:      'Weekly Order Reports',
   endOfDay:          'End of Day Reports',
+  dailyInventory:    'Daily Inventory Count',
 }
 
 export const SECTION_ACCESS = {
@@ -81,6 +82,10 @@ export const SECTION_ACCESS = {
   weeklyOrdersSubmit: ALL_ROLES,
   endOfDay:           ['admin', 'manager'] as Role[],
   endOfDayHistory:    ['admin', 'manager', 'social', 'gamer', 'dungeonmaster', 'barista'] as Role[],
+  // Floor staff who'd actually be doing a physical stock count day-to-day.
+  // Anyone else (e.g. a gamer or social hire helping out) can be granted
+  // this section individually from Manage Users → sectionGrants.
+  dailyInventory:     ['admin', 'manager', 'kitchen_crew', 'barista'] as Role[],
 }
 
 // Reads either shape — the new `branchIds` array, or the older singular

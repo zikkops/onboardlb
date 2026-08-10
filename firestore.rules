@@ -499,6 +499,21 @@ service cloud.firestore {
       allow read, write: if isStaff();
     }
 
+    // One count per (branch, date) — doc id is "{branch}_{YYYY-MM-DD}", same
+    // pattern as endOfDayReports below. Submitting a final count also writes
+    // the counted quantities back onto the matching supplies/{id} docs in the
+    // same batch (already covered by the supplies rule above — no separate
+    // rule needed for that part of the write).
+    match /dailyInventoryCounts/{id} {
+      allow read: if isStaff();
+      allow create: if isStaff() &&
+        request.auth.uid == request.resource.data.submittedBy &&
+        request.resource.data.branch is string &&
+        request.resource.data.date is string &&
+        request.resource.data.department is string;
+      allow update: if isStaff();
+    }
+
     // ---- End-of-day reports ----
     // Per-branch staff roster — any staff member may read (the EOD form needs
     // it to populate the attendance list) and any staff member may write

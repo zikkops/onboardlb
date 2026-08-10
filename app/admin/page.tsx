@@ -19,6 +19,7 @@ import {
   faClipboard, faThumbsUp, faGift, faTag, faTrophy, faUserShield,
   faFile, faPaperPlane, faTruck, faList, faImage, faScroll,
   faClockRotateLeft, faChair, faThumbtack, faGear, faXmark, faMoneyBill,
+  faClipboardCheck,
   type IconDefinition,
 } from '@fortawesome/free-solid-svg-icons'
 
@@ -199,10 +200,11 @@ export default function AdminPage() {
       ],
     },
     {
-      title: 'Supplies',
+      title: 'Inventory Management',
       color: '#6A9E5A',
       cards: [
-        { label: 'Supplies', icon: faClipboard, daily: true, desc: 'Track consumable stock levels across Kitchen, Bar, and Cleaning — color alerts when items run low', href: '/admin/supplies', access: SECTION_ACCESS.games },
+        { label: 'Inventory Management', icon: faClipboard, daily: true, desc: 'Track consumable stock levels across Kitchen, Bar, and Cleaning — color alerts when items run low', href: '/admin/supplies', access: SECTION_ACCESS.games },
+        { label: 'Daily Inventory Count', icon: faClipboardCheck, daily: true, desc: 'Count today\'s stock at your branch and submit — updates live inventory levels', href: '/admin/supplies/daily', access: SECTION_ACCESS.dailyInventory },
       ],
     },
     {

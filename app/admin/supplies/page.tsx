@@ -83,10 +83,6 @@ export default function SuppliesPage() {
   const [search, setSearch]   = useState('')
   const [groupBy, setGroupBy] = useState<'category' | 'provider'>('category')
 
-  // Inline qty edit
-  const [qtyEditId, setQtyEditId] = useState<string | null>(null)
-  const [qtyVal, setQtyVal]       = useState('')
-
   // Inline threshold edit
   const [thrEditId, setThrEditId] = useState<string | null>(null)
   const [thrVal, setThrVal]       = useState('')
@@ -120,12 +116,14 @@ export default function SuppliesPage() {
     setSaving(true)
     const data = {
       name: form.name, category: form.category, unit: form.unit, threshold: form.threshold,
-      provider: form.provider.trim() || null, quantity: formQty, updatedAt: serverTimestamp(),
+      provider: form.provider.trim() || null, updatedAt: serverTimestamp(),
     }
     if (editing) {
+      // Quantity isn't editable here — it's only ever set by a submitted
+      // Daily Inventory Count, so it's deliberately left out of this update.
       await updateDoc(doc(db, 'supplies', editing.id), data)
     } else {
-      await addDoc(collection(db, 'supplies'), data)
+      await addDoc(collection(db, 'supplies'), { ...data, quantity: formQty })
     }
     setSaving(false); setModal(null); load()
   }
@@ -135,23 +133,6 @@ export default function SuppliesPage() {
     await deleteDoc(doc(db, 'supplies', id))
     setDeletingId(null)
     setSupplies(prev => prev.filter(s => s.id !== id))
-  }
-
-  async function adjustQty(s: Supply, delta: number) {
-    const next = Math.max(0, (s.quantity[branch] ?? 0) + delta)
-    const newQty = { ...s.quantity, [branch]: next }
-    setSupplies(prev => prev.map(x => x.id === s.id ? { ...x, quantity: newQty } : x))
-    await updateDoc(doc(db, 'supplies', s.id), { quantity: newQty, updatedAt: serverTimestamp() })
-  }
-
-  async function commitQtyEdit(s: Supply) {
-    const v = parseFloat(qtyVal)
-    if (!isNaN(v) && v >= 0) {
-      const newQty = { ...s.quantity, [branch]: v }
-      setSupplies(prev => prev.map(x => x.id === s.id ? { ...x, quantity: newQty } : x))
-      await updateDoc(doc(db, 'supplies', s.id), { quantity: newQty, updatedAt: serverTimestamp() })
-    }
-    setQtyEditId(null); setQtyVal('')
   }
 
   async function commitThrEdit(s: Supply) {
@@ -225,13 +206,16 @@ export default function SuppliesPage() {
         </a>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
           <div>
-            <h1 style={{ fontFamily: 'var(--font-cinzel)', fontSize: '2rem', marginBottom: '0.25rem' }}>Supplies</h1>
+            <h1 style={{ fontFamily: 'var(--font-cinzel)', fontSize: '2rem', marginBottom: '0.25rem' }}>Inventory Management</h1>
             <p style={{ fontSize: '0.82rem', color: 'rgba(245,242,236,0.35)' }}>
               {supplies.length} items tracked
               {alertCount > 0 && <span style={{ color: '#E43329', marginLeft: '0.5rem' }}>• {alertCount} need attention in {branch}</span>}
             </p>
           </div>
           <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
+            <a href="/admin/supplies/daily" style={{ background: 'transparent', color: '#6A9E5A', border: '1px solid rgba(106,158,90,0.35)', borderRadius: '4px', padding: '0.65rem 1.2rem', fontSize: '0.78rem', letterSpacing: '0.08em', textTransform: 'uppercase', textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>
+              Daily Inventory Count
+            </a>
             <button onClick={seedFromTemplates} disabled={seeding} style={{ background: 'transparent', color: 'rgba(245,242,236,0.5)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '4px', padding: '0.65rem 1.2rem', fontSize: '0.78rem', letterSpacing: '0.08em', textTransform: 'uppercase', cursor: seeding ? 'not-allowed' : 'pointer', opacity: seeding ? 0.5 : 1 }}>
               {seeding ? 'Importing…' : 'Import from Weekly Orders'}
             </button>
@@ -297,7 +281,6 @@ export default function SuppliesPage() {
                   {group.items.map(s => {
                     const qty = s.quantity[branch] ?? 0
                     const st  = branchStatus(qty, s.threshold)
-                    const isEditingQty = qtyEditId === s.id
                     return (
                       <div key={s.id} style={{ background: S_BG[st], border: `1px solid ${S_BORDER[st]}`, borderRadius: '8px', padding: '1rem 1.1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
 
@@ -315,23 +298,12 @@ export default function SuppliesPage() {
                           </span>
                         </div>
 
-                        {/* Quantity row */}
+                        {/* Quantity row — read-only; counted and set via Daily Inventory Count */}
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.1rem' }}>
-                          <button onClick={() => adjustQty(s, -1)} style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F2EC', borderRadius: '4px', width: '26px', height: '26px', cursor: 'pointer', fontSize: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>−</button>
-                          {isEditingQty ? (
-                            <input type="number" value={qtyVal} min={0} autoFocus
-                              onChange={e => setQtyVal(e.target.value)}
-                              onBlur={() => commitQtyEdit(s)}
-                              onKeyDown={e => { if (e.key === 'Enter') commitQtyEdit(s); if (e.key === 'Escape') { setQtyEditId(null); setQtyVal('') } }}
-                              style={{ ...inp, width: '60px', textAlign: 'center', color: S_COLOR[st], fontWeight: 700, fontSize: '1rem', padding: '0.2rem 0.3rem' }}
-                            />
-                          ) : (
-                            <button onClick={() => { setQtyEditId(s.id); setQtyVal(String(qty)) }} title="Click to edit" style={{ background: 'none', border: 'none', cursor: 'text', padding: '0 0.2rem' }}>
-                              <span style={{ fontSize: '1.3rem', fontWeight: 700, color: S_COLOR[st], letterSpacing: '-0.02em' }}>{qty}</span>
-                              <span style={{ fontSize: '0.7rem', color: 'rgba(245,242,236,0.4)', marginLeft: '0.2rem' }}>{s.unit}</span>
-                            </button>
-                          )}
-                          <button onClick={() => adjustQty(s, 1)} style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: '#F5F2EC', borderRadius: '4px', width: '26px', height: '26px', cursor: 'pointer', fontSize: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>+</button>
+                          <span>
+                            <span style={{ fontSize: '1.3rem', fontWeight: 700, color: S_COLOR[st], letterSpacing: '-0.02em' }}>{qty}</span>
+                            <span style={{ fontSize: '0.7rem', color: 'rgba(245,242,236,0.4)', marginLeft: '0.2rem' }}>{s.unit}</span>
+                          </span>
 
                           {/* Threshold inline edit */}
                           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
@@ -401,19 +373,22 @@ export default function SuppliesPage() {
                 </div>
               </div>
 
-              {/* Per-branch initial quantities */}
-              <div>
-                <label style={{ ...lbl, marginBottom: '0.5rem' }}>Starting Quantities</label>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                  {SUPPLY_BRANCHES.map(branch => (
-                    <div key={branch} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                      <span style={{ width: '80px', fontSize: '0.72rem', letterSpacing: '0.06em', textTransform: 'uppercase', color: BRANCH_COLOR[branch] }}>{branch}</span>
-                      <input type="number" min={0} value={formQty[branch]} onChange={e => setFormQty(q => ({ ...q, [branch]: Number(e.target.value) }))}
-                        style={{ ...inp, width: '90px' }} />
-                    </div>
-                  ))}
+              {/* Per-branch initial quantities — add-only; existing items' quantities
+                  only change via a submitted Daily Inventory Count. */}
+              {modal === 'add' && (
+                <div>
+                  <label style={{ ...lbl, marginBottom: '0.5rem' }}>Starting Quantities</label>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                    {SUPPLY_BRANCHES.map(branch => (
+                      <div key={branch} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                        <span style={{ width: '80px', fontSize: '0.72rem', letterSpacing: '0.06em', textTransform: 'uppercase', color: BRANCH_COLOR[branch] }}>{branch}</span>
+                        <input type="number" min={0} value={formQty[branch]} onChange={e => setFormQty(q => ({ ...q, [branch]: Number(e.target.value) }))}
+                          style={{ ...inp, width: '90px' }} />
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div>
                 <label style={lbl}>Minimum (Alert Threshold)</label>
