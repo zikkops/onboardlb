@@ -8,6 +8,7 @@ import { BRANCHES, normalizeStock } from '../../../lib/branches'
 import { transferGameStock } from '../../../lib/gamePurchases'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faSearch, faArrowRight, faXmark, faPlus } from '@fortawesome/free-solid-svg-icons'
+import { useIsMobile } from '../../../lib/useIsMobile'
 
 interface Game {
   id: string
@@ -44,6 +45,7 @@ const selectStyle: React.CSSProperties = {
 }
 
 export default function TransferStockPage() {
+  const isMobile = useIsMobile()
   const { checking, role, branchIds } = useRequireRole(SECTION_ACCESS.gameTransfers)
 
   // Gamers are locked to their own branch as the source — they can only send
@@ -151,7 +153,7 @@ export default function TransferStockPage() {
   if (checking) return null
 
   return (
-    <div style={{ maxWidth: '760px', margin: '0 auto', padding: '2rem 1.5rem 4rem' }}>
+    <div style={{ maxWidth: '760px', margin: '0 auto', padding: isMobile ? '1.25rem 1rem 3rem' : '2rem 1.5rem 4rem' }}>
       <p style={{ fontSize: '0.68rem', letterSpacing: '0.2em', textTransform: 'uppercase', color: 'var(--teal)', fontFamily: 'var(--font-inter)', marginBottom: '0.6rem' }}>
         Game Library
       </p>
@@ -165,7 +167,7 @@ export default function TransferStockPage() {
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
 
         {/* ── Branch row ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: '0.8rem', alignItems: 'end' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr auto 1fr', gap: '0.8rem', alignItems: isMobile ? 'stretch' : 'end' }}>
           <div>
             <label style={labelStyle}>From Branch</label>
             {lockedFrom ? (
@@ -188,8 +190,8 @@ export default function TransferStockPage() {
             )}
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', paddingBottom: '0.75rem' }}>
-            <FontAwesomeIcon icon={faArrowRight} style={{ color: 'rgba(245,242,236,0.2)', width: '16px' }} />
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: isMobile ? 'center' : undefined, paddingBottom: isMobile ? 0 : '0.75rem' }}>
+            <FontAwesomeIcon icon={faArrowRight} style={{ color: 'rgba(245,242,236,0.2)', width: '16px', transform: isMobile ? 'rotate(90deg)' : undefined }} />
           </div>
 
           <div>

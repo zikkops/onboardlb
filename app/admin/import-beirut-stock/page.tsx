@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { collection, getDocs, doc, updateDoc } from 'firebase/firestore'
 import { db } from '../../lib/firebase'
 import { useRequireRole } from '../../lib/adminAuth'
+import { useIsMobile } from '../../lib/useIsMobile'
 import { normalizeStock } from '../../lib/branches'
 
 const IMPORT_LIST: { name: string; qty: number }[] = [
@@ -255,6 +256,7 @@ const inp: React.CSSProperties = {
 
 export default function ImportBeirutStockPage() {
   useRequireRole(['admin'])
+  const isMobile = useIsMobile()
 
   const [games, setGames]         = useState<FGame[]>([])
   const [rows, setRows]           = useState<Row[]>([])
@@ -340,7 +342,9 @@ export default function ImportBeirutStockPage() {
     setPhase('done')
   }
 
-  const base: React.CSSProperties = { minHeight: '100vh', background: '#0a0a0a', color: '#F5F2EC', padding: '2rem', fontFamily: 'var(--font-inter)' }
+  const base: React.CSSProperties = { minHeight: '100vh', background: '#0a0a0a', color: '#F5F2EC', padding: isMobile ? '1.25rem 1rem' : '2rem', fontFamily: 'var(--font-inter)' }
+  const rowGridCols = '2fr 50px 180px 1fr 36px'
+  const rowGridMinWidth = '680px'
   const card: React.CSSProperties = { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '6px', padding: '1.25rem', marginBottom: '1rem' }
 
   if (loading) return (
@@ -398,80 +402,84 @@ export default function ImportBeirutStockPage() {
         style={{ ...inp, maxWidth: '360px', marginBottom: '1rem', padding: '0.5rem 0.75rem', fontSize: '0.85rem' }}
       />
 
-      {/* Table header */}
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 50px 180px 1fr 36px', gap: '0.5rem', padding: '0.4rem 0.75rem', borderBottom: '1px solid rgba(255,255,255,0.08)', fontSize: '0.7rem', opacity: 0.4, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '0.25rem' }}>
-        <span>Import Name</span>
-        <span style={{ textAlign: 'center' }}>Qty</span>
-        <span>Search Games</span>
-        <span>Matched Game</span>
-        <span />
-      </div>
+      {/* Rows — horizontal scroll on narrow screens so columns stay usable */}
+      <div style={{ overflowX: 'auto', marginBottom: '1.5rem' }}>
+        <div style={{ minWidth: rowGridMinWidth }}>
+          {/* Table header */}
+          <div style={{ display: 'grid', gridTemplateColumns: rowGridCols, gap: '0.5rem', padding: '0.4rem 0.75rem', borderBottom: '1px solid rgba(255,255,255,0.08)', fontSize: '0.7rem', opacity: 0.4, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '0.25rem' }}>
+            <span>Import Name</span>
+            <span style={{ textAlign: 'center' }}>Qty</span>
+            <span>Search Games</span>
+            <span>Matched Game</span>
+            <span />
+          </div>
 
-      {/* Rows */}
-      <div style={{ maxHeight: '65vh', overflowY: 'auto', marginBottom: '1.5rem' }}>
-        {visibleRows.map(({ r, i }) => {
-          const opts = filteredGames(r.rowSearch)
-          const matched = !!r.gameId
-          const matchedGame = matched ? games.find(g => g.id === r.gameId) : null
-          return (
-            <div
-              key={i}
-              style={{
-                display: 'grid',
-                gridTemplateColumns: '2fr 50px 180px 1fr 36px',
-                gap: '0.5rem',
-                padding: '0.45rem 0.75rem',
-                borderBottom: '1px solid rgba(255,255,255,0.04)',
-                alignItems: 'center',
-                background: !matched ? 'rgba(228,51,41,0.04)' : duplicateGameIds.has(r.gameId) ? 'rgba(106,106,183,0.06)' : 'transparent',
-              }}
-            >
-              {/* Import name */}
-              <span style={{ fontSize: '0.8rem', opacity: 0.85, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.importName}>
-                {r.importName}
-              </span>
+          <div style={{ maxHeight: '65vh', overflowY: 'auto' }}>
+            {visibleRows.map(({ r, i }) => {
+              const opts = filteredGames(r.rowSearch)
+              const matched = !!r.gameId
+              const matchedGame = matched ? games.find(g => g.id === r.gameId) : null
+              return (
+                <div
+                  key={i}
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: rowGridCols,
+                    gap: '0.5rem',
+                    padding: '0.45rem 0.75rem',
+                    borderBottom: '1px solid rgba(255,255,255,0.04)',
+                    alignItems: 'center',
+                    background: !matched ? 'rgba(228,51,41,0.04)' : duplicateGameIds.has(r.gameId) ? 'rgba(106,106,183,0.06)' : 'transparent',
+                  }}
+                >
+                  {/* Import name */}
+                  <span style={{ fontSize: '0.8rem', opacity: 0.85, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.importName}>
+                    {r.importName}
+                  </span>
 
-              {/* Qty */}
-              <span style={{ fontSize: '0.85rem', fontWeight: 600, textAlign: 'center', color: r.qty === 0 ? 'rgba(245,242,236,0.3)' : '#C9962C' }}>
-                {r.qty}
-              </span>
+                  {/* Qty */}
+                  <span style={{ fontSize: '0.85rem', fontWeight: 600, textAlign: 'center', color: r.qty === 0 ? 'rgba(245,242,236,0.3)' : '#C9962C' }}>
+                    {r.qty}
+                  </span>
 
-              {/* Per-row game search */}
-              <input
-                type="search"
-                placeholder="Search games…"
-                value={r.rowSearch}
-                onChange={e => setRow(i, { rowSearch: e.target.value })}
-                style={inp}
-              />
+                  {/* Per-row game search */}
+                  <input
+                    type="search"
+                    placeholder="Search games…"
+                    value={r.rowSearch}
+                    onChange={e => setRow(i, { rowSearch: e.target.value })}
+                    style={inp}
+                  />
 
-              {/* Dropdown */}
-              <select
-                value={r.gameId}
-                onChange={e => setRow(i, { gameId: e.target.value })}
-                style={sel}
-              >
-                <option value="" style={{ background: '#1c1c1c', color: '#F5F2EC' }}>— no match —</option>
-                {/* Show currently selected game even if it's not in filtered list */}
-                {matchedGame && !opts.find(g => g.id === matchedGame.id) && (
-                  <option key={matchedGame.id} value={matchedGame.id} style={{ background: '#1c1c1c', color: '#F5F2EC' }}>
-                    {matchedGame.name}
-                  </option>
-                )}
-                {opts.map(g => (
-                  <option key={g.id} value={g.id} style={{ background: '#1c1c1c', color: '#F5F2EC' }}>
-                    {g.name}
-                  </option>
-                ))}
-              </select>
+                  {/* Dropdown */}
+                  <select
+                    value={r.gameId}
+                    onChange={e => setRow(i, { gameId: e.target.value })}
+                    style={sel}
+                  >
+                    <option value="" style={{ background: '#1c1c1c', color: '#F5F2EC' }}>— no match —</option>
+                    {/* Show currently selected game even if it's not in filtered list */}
+                    {matchedGame && !opts.find(g => g.id === matchedGame.id) && (
+                      <option key={matchedGame.id} value={matchedGame.id} style={{ background: '#1c1c1c', color: '#F5F2EC' }}>
+                        {matchedGame.name}
+                      </option>
+                    )}
+                    {opts.map(g => (
+                      <option key={g.id} value={g.id} style={{ background: '#1c1c1c', color: '#F5F2EC' }}>
+                        {g.name}
+                      </option>
+                    ))}
+                  </select>
 
-              {/* Status */}
-              <span style={{ textAlign: 'center', fontSize: '0.9rem' }} title={duplicateGameIds.has(r.gameId) ? 'Merged with another row' : undefined}>
-                {!matched ? '?' : duplicateGameIds.has(r.gameId) ? '⊕' : '✓'}
-              </span>
-            </div>
-          )
-        })}
+                  {/* Status */}
+                  <span style={{ textAlign: 'center', fontSize: '0.9rem' }} title={duplicateGameIds.has(r.gameId) ? 'Merged with another row' : undefined}>
+                    {!matched ? '?' : duplicateGameIds.has(r.gameId) ? '⊕' : '✓'}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
       </div>
 
       {/* Unmatched summary */}
@@ -499,7 +507,7 @@ export default function ImportBeirutStockPage() {
           Set Beirut Stock ({matchedCount} games)
         </button>
       ) : (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
           <p style={{ color: '#E43329', fontSize: '0.85rem', fontWeight: 600 }}>
             This will overwrite stock.Beirut for {matchedCount} games. Confirm?
           </p>

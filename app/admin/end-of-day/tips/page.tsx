@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { useIsMobile } from '../../../lib/useIsMobile'
 import { useRequireRole, SECTION_ACCESS } from '../../../lib/adminAuth'
 import { BRANCHES } from '../../../lib/branches'
 import { listEndOfDayReports, formatUsd, type EndOfDayReport } from '../../../lib/endOfDay'
@@ -67,6 +68,7 @@ function buildPeriod(label: string, dateRange: string, reports: EndOfDayReport[]
 // ─── page ─────────────────────────────────────────────────────────────────────
 
 export default function TipsCalculatorPage() {
+  const isMobile = useIsMobile()
   const { checking, role, branchIds } = useRequireRole(SECTION_ACCESS.endOfDay)
 
   const branchOptions = role === 'admin' ? [...BRANCHES] : branchIds
@@ -115,7 +117,7 @@ export default function TipsCalculatorPage() {
   const hasTipsData = monthReports.some(r => (r.tipsUsd || 0) > 0)
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: 'var(--black)', padding: '2rem 1.5rem 4rem' }}>
+    <div style={{ minHeight: '100vh', backgroundColor: 'var(--black)', padding: isMobile ? '1.25rem 1rem 3rem' : '2rem 1.5rem 4rem' }}>
       <div style={{ maxWidth: '900px', margin: '0 auto' }}>
 
         {/* Header */}
@@ -134,7 +136,7 @@ export default function TipsCalculatorPage() {
         </div>
 
         {/* Controls */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '2.5rem', maxWidth: '480px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '1.5rem', marginBottom: '2.5rem', maxWidth: '480px' }}>
           <div>
             <label style={labelStyle}>Branch</label>
             {branchOptions.length === 1 ? (
@@ -199,7 +201,9 @@ export default function TipsCalculatorPage() {
 // ─── PeriodCard ───────────────────────────────────────────────────────────────
 
 function PeriodCard({ period }: { period: PeriodResult }) {
+  const isMobile = useIsMobile()
   const hasData = period.totalTipsUsd > 0 || period.staff.length > 0
+  const staffGridCols = isMobile ? '1fr auto' : '1fr 110px 80px 110px'
 
   return (
     <div style={{
@@ -254,7 +258,7 @@ function PeriodCard({ period }: { period: PeriodResult }) {
         <div>
           {/* Table header */}
           <div style={{
-            display: 'grid', gridTemplateColumns: '1fr 110px 80px 110px',
+            display: 'grid', gridTemplateColumns: staffGridCols,
             padding: '0.55rem 1.25rem',
             fontFamily: 'var(--font-inter)', fontSize: '0.62rem',
             letterSpacing: '0.1em', textTransform: 'uppercase',
@@ -262,8 +266,8 @@ function PeriodCard({ period }: { period: PeriodResult }) {
             borderBottom: '1px solid rgba(255,255,255,0.04)',
           }}>
             <span>Staff member</span>
-            <span style={{ textAlign: 'center' }}>AM/PM shifts</span>
-            <span style={{ textAlign: 'center' }}>Points</span>
+            {!isMobile && <span style={{ textAlign: 'center' }}>AM/PM shifts</span>}
+            {!isMobile && <span style={{ textAlign: 'center' }}>Points</span>}
             <span style={{ textAlign: 'right' }}>Tips earned</span>
           </div>
 
@@ -272,23 +276,32 @@ function PeriodCard({ period }: { period: PeriodResult }) {
             // but we only store aggregate points here — show points breakdown simply.
             return (
               <div key={s.name} style={{
-                display: 'grid', gridTemplateColumns: '1fr 110px 80px 110px',
+                display: 'grid', gridTemplateColumns: staffGridCols,
                 padding: '0.75rem 1.25rem', alignItems: 'center',
                 borderTop: idx > 0 ? '1px solid rgba(255,255,255,0.04)' : 'none',
               }}>
                 <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.88rem', color: 'var(--offwhite)' }}>
                   {s.name}
+                  {isMobile && (
+                    <span style={{ display: 'block', fontFamily: 'var(--font-inter)', fontSize: '0.72rem', color: 'rgba(245,242,236,0.4)', marginTop: '0.15rem' }}>
+                      {s.shiftPoints} pt{s.shiftPoints !== 1 ? 's' : ''}
+                    </span>
+                  )}
                 </span>
-                <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.82rem', color: 'rgba(245,242,236,0.4)', textAlign: 'center' }}>
-                  {/* Points ÷ 2 floors double shifts; remainder = singles */}
-                  {s.shiftPoints} pt{s.shiftPoints !== 1 ? 's' : ''}
-                </span>
-                <span style={{
-                  fontFamily: 'var(--font-inter)', fontSize: '0.88rem', fontWeight: 600,
-                  color: '#C9962C', textAlign: 'center',
-                }}>
-                  {s.shiftPoints}
-                </span>
+                {!isMobile && (
+                  <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.82rem', color: 'rgba(245,242,236,0.4)', textAlign: 'center' }}>
+                    {/* Points ÷ 2 floors double shifts; remainder = singles */}
+                    {s.shiftPoints} pt{s.shiftPoints !== 1 ? 's' : ''}
+                  </span>
+                )}
+                {!isMobile && (
+                  <span style={{
+                    fontFamily: 'var(--font-inter)', fontSize: '0.88rem', fontWeight: 600,
+                    color: '#C9962C', textAlign: 'center',
+                  }}>
+                    {s.shiftPoints}
+                  </span>
+                )}
                 <span style={{
                   fontFamily: 'var(--font-inter)', fontSize: '0.95rem', fontWeight: 700,
                   color: 'var(--teal)', textAlign: 'right',
@@ -301,7 +314,7 @@ function PeriodCard({ period }: { period: PeriodResult }) {
 
           {/* Total row */}
           <div style={{
-            display: 'grid', gridTemplateColumns: '1fr 110px 80px 110px',
+            display: 'grid', gridTemplateColumns: staffGridCols,
             padding: '0.75rem 1.25rem',
             borderTop: '1px solid rgba(255,255,255,0.1)',
             background: 'rgba(255,255,255,0.02)',
@@ -309,10 +322,14 @@ function PeriodCard({ period }: { period: PeriodResult }) {
             <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.72rem', letterSpacing: '0.05em', textTransform: 'uppercase', color: 'rgba(245,242,236,0.35)' }}>
               Total
             </span>
-            <span />
-            <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.88rem', fontWeight: 600, color: '#C9962C', textAlign: 'center' }}>
-              {period.totalShiftPoints}
-            </span>
+            {!isMobile && (
+              <>
+                <span />
+                <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.88rem', fontWeight: 600, color: '#C9962C', textAlign: 'center' }}>
+                  {period.totalShiftPoints}
+                </span>
+              </>
+            )}
             <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.95rem', fontWeight: 700, color: 'var(--teal)', textAlign: 'right' }}>
               {formatUsd(period.netTipsUsd)}
             </span>

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { useIsMobile } from '../../../lib/useIsMobile'
 import { useRequireRole } from '../../../lib/adminAuth'
 import {
   listTemplateItems, addTemplateItem, updateTemplateItem, deleteTemplateItem,
@@ -55,6 +56,7 @@ function AddItemForm({ providers, onSave }: {
   const [unit,       setUnit]       = useState<OrderUnit>('box')
   const [saving,     setSaving]     = useState(false)
   const [err,        setErr]        = useState('')
+  const isMobile = useIsMobile()
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -80,7 +82,7 @@ function AddItemForm({ providers, onSave }: {
       borderRadius: '4px', padding: '1.1rem 1.4rem', marginBottom: '2rem',
     }}>
       <p style={{ fontFamily: 'var(--font-cinzel)', fontSize: '0.75rem', color: 'rgba(245,242,236,0.5)', marginBottom: '0.9rem', letterSpacing: '0.12em' }}>ADD ITEM</p>
-      <div style={{ display: 'grid', gridTemplateColumns: 'auto 1.5fr 2fr auto auto', gap: '0.65rem', alignItems: 'end' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'auto 1.5fr 2fr auto auto', gap: '0.65rem', alignItems: 'end' }}>
 
         <div>
           <label style={{ display: 'block', fontSize: '0.68rem', color: 'rgba(245,242,236,0.3)', letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: '0.3rem', fontFamily: 'var(--font-inter)' }}>Section</label>
@@ -109,7 +111,7 @@ function AddItemForm({ providers, onSave }: {
           </select>
         </div>
 
-        <button type="submit" disabled={saving} style={{ ...btnPrimary, opacity: saving ? 0.6 : 1 }}>
+        <button type="submit" disabled={saving} style={{ ...btnPrimary, opacity: saving ? 0.6 : 1, justifySelf: isMobile ? 'start' : undefined }}>
           {saving ? '…' : '+ Add'}
         </button>
       </div>
@@ -138,6 +140,7 @@ function ItemRow({ item, providers, onUpdated, onDeleted }: {
   const [deleting,    setDeleting]    = useState(false)
   const [translating, setTranslating] = useState(false)
   const [transErr,    setTransErr]    = useState('')
+  const isMobile = useIsMobile()
 
   // Reset category when provider changes — old category may not exist on new provider
   useEffect(() => { setCategory('') }, [providerId])
@@ -174,7 +177,7 @@ function ItemRow({ item, providers, onUpdated, onDeleted }: {
     return (
       <div style={basePad}>
         {/* Row 1: Name | Arabic+🌐 | Unit | Section | Provider */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1.4fr auto auto 1.8fr', gap: '0.55rem', alignItems: 'center', marginBottom: '0.5rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1.6fr 1.4fr auto auto 1.8fr', gap: '0.55rem', alignItems: 'center', marginBottom: '0.5rem' }}>
           <input value={name} onChange={e => setName(e.target.value)} style={{ ...inp, width: '100%' }} />
 
           <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
@@ -216,7 +219,7 @@ function ItemRow({ item, providers, onUpdated, onDeleted }: {
               <select
                 value={category}
                 onChange={e => setCategory(e.target.value)}
-                style={{ ...inp, cursor: 'pointer', width: '220px' }}
+                style={{ ...inp, cursor: 'pointer', width: isMobile ? '100%' : '220px' }}
               >
                 <option value="">— None —</option>
                 {provCats.map(c => <option key={c} value={c}>{c}</option>)}
@@ -226,7 +229,7 @@ function ItemRow({ item, providers, onUpdated, onDeleted }: {
         })()}
 
         {/* Row 3: Pack size */}
-        <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', marginBottom: '0.6rem' }}>
+        <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', marginBottom: '0.6rem', flexWrap: 'wrap' }}>
           <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.68rem', color: 'rgba(245,242,236,0.3)', letterSpacing: '0.1em', textTransform: 'uppercase', minWidth: '60px' }}>Pack size</span>
           <input
             type="number" min="1" value={packSize} onChange={e => setPackSize(e.target.value)}
@@ -237,7 +240,7 @@ function ItemRow({ item, providers, onUpdated, onDeleted }: {
           <input
             value={packUnit} onChange={e => setPackUnit(e.target.value)}
             placeholder="e.g. bottles / pieces"
-            style={{ ...inp, width: '180px' }}
+            style={{ ...inp, width: isMobile ? '100%' : '180px' }}
           />
           <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.75rem', color: 'rgba(245,242,236,0.2)' }}>each (optional)</span>
         </div>
@@ -261,14 +264,31 @@ function ItemRow({ item, providers, onUpdated, onDeleted }: {
   }
 
   return (
-    <div style={{ ...basePad, display: 'grid', gridTemplateColumns: '2fr 1.4fr auto auto', alignItems: 'center', gap: '0.6rem' }}>
-      <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.88rem', color: 'var(--offwhite)', fontWeight: 500 }}>{item.name}</span>
-      <span dir="rtl" style={{ fontFamily: 'var(--font-inter)', fontSize: '0.85rem', color: item.nameAr ? 'rgba(201,150,44,0.9)' : 'rgba(245,242,236,0.2)', textAlign: 'right' }}>
-        {item.nameAr || '—'}
+    <div style={{
+      ...basePad,
+      display: 'grid',
+      gridTemplateColumns: isMobile ? '1fr auto' : '2fr 1.4fr auto auto',
+      alignItems: 'center', gap: '0.6rem',
+    }}>
+      <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.88rem', color: 'var(--offwhite)', fontWeight: 500 }}>
+        {item.name}
+        {isMobile && (
+          <span style={{ display: 'block', fontFamily: 'var(--font-inter)', fontSize: '0.75rem', color: 'rgba(245,242,236,0.4)', marginTop: '0.15rem' }}>
+            {packLabel(item.unit, item.packSize, item.packUnit)}
+            {item.nameAr && <span dir="rtl" style={{ marginLeft: '0.5rem', color: 'rgba(201,150,44,0.9)' }}>{item.nameAr}</span>}
+          </span>
+        )}
       </span>
-      <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.8rem', color: 'rgba(245,242,236,0.4)', whiteSpace: 'nowrap' }}>
-        {packLabel(item.unit, item.packSize, item.packUnit)}
-      </span>
+      {!isMobile && (
+        <span dir="rtl" style={{ fontFamily: 'var(--font-inter)', fontSize: '0.85rem', color: item.nameAr ? 'rgba(201,150,44,0.9)' : 'rgba(245,242,236,0.2)', textAlign: 'right' }}>
+          {item.nameAr || '—'}
+        </span>
+      )}
+      {!isMobile && (
+        <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.8rem', color: 'rgba(245,242,236,0.4)', whiteSpace: 'nowrap' }}>
+          {packLabel(item.unit, item.packSize, item.packUnit)}
+        </span>
+      )}
       <div style={{ display: 'flex', gap: '0.4rem' }}>
         <button onClick={() => setEditing(true)} style={{ ...btnGhost, padding: '0.3rem 0.6rem' }}>Edit</button>
         <button onClick={remove} disabled={deleting} style={{ ...btnDanger, opacity: deleting ? 0.5 : 1 }}>{deleting ? '…' : 'Del'}</button>
@@ -279,6 +299,7 @@ function ItemRow({ item, providers, onUpdated, onDeleted }: {
 
 // ---- Main page ----
 export default function OrderTemplatePage() {
+  const isMobile = useIsMobile()
   const { checking } = useRequireRole(['admin'])
   const [items,         setItems]        = useState<OrderTemplateItem[]>([])
   const [providers,     setProviders]    = useState<OrderProvider[]>([])
@@ -371,7 +392,7 @@ export default function OrderTemplatePage() {
   if (checking) return null
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: 'var(--black)', padding: '3rem' }}>
+    <div style={{ minHeight: '100vh', backgroundColor: 'var(--black)', padding: isMobile ? '1.25rem 1rem' : '3rem' }}>
       <div style={{ maxWidth: '960px', margin: '0 auto' }}>
 
         {/* Header */}
@@ -467,8 +488,8 @@ export default function OrderTemplatePage() {
                   {searchResults.length} result{searchResults.length !== 1 ? 's' : ''}
                 </span>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.4fr auto auto', gap: '0.6rem', padding: '0.4rem 1rem', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                {['English Name', 'Arabic / عربي', 'Unit / Pack', ''].map((h, i) => (
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr auto' : '2fr 1.4fr auto auto', gap: '0.6rem', padding: '0.4rem 1rem', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                {(isMobile ? ['English Name', ''] : ['English Name', 'Arabic / عربي', 'Unit / Pack', '']).map((h, i) => (
                   <span key={i} style={{ fontFamily: 'var(--font-inter)', fontSize: '0.65rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(245,242,236,0.25)' }}>{h}</span>
                 ))}
               </div>

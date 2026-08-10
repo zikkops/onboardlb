@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore'
 import { db } from '../../lib/firebase'
 import { useRequireRole } from '../../lib/adminAuth'
+import { useIsMobile } from '../../lib/useIsMobile'
 
 const GAMES = [
   {
@@ -73,6 +74,7 @@ const GAMES = [
 
 export default function ImportNewGamesPage() {
   useRequireRole(['admin'])
+  const isMobile = useIsMobile()
 
   const [phase, setPhase]     = useState<'preview' | 'running' | 'done'>('preview')
   const [confirm, setConfirm] = useState(false)
@@ -99,7 +101,7 @@ export default function ImportNewGamesPage() {
 
   const base: React.CSSProperties = {
     minHeight: '100vh', background: '#0a0a0a', color: '#F5F2EC',
-    padding: '2rem', fontFamily: 'var(--font-inter)',
+    padding: isMobile ? '1.25rem 1rem' : '2rem', fontFamily: 'var(--font-inter)',
   }
 
   if (phase === 'running') return (
@@ -153,7 +155,7 @@ export default function ImportNewGamesPage() {
           Add {GAMES.length} Games to Firestore
         </button>
       ) : (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
           <p style={{ color: '#E43329', fontSize: '0.85rem', fontWeight: 600 }}>
             This will create {GAMES.length} new game documents. Confirm?
           </p>

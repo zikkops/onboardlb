@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
+import { useIsMobile } from '../../../lib/useIsMobile'
 import { useRequireRole, SECTION_ACCESS } from '../../../lib/adminAuth'
 import { BRANCHES } from '../../../lib/branches'
 import {
@@ -43,6 +44,7 @@ function Row({ label, value, color, sub }: { label: string; value: string; color
 
 function EndOfDaySummaryInner() {
   const params = useSearchParams()
+  const isMobile = useIsMobile()
   const { checking, role, branchIds, user } = useRequireRole(SECTION_ACCESS.endOfDayHistory)
 
   const branchOptions = role === 'admin' ? [...BRANCHES] : branchIds
@@ -134,7 +136,7 @@ function EndOfDaySummaryInner() {
         </div>
 
         {/* Branch + Date */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
           <div>
             <label style={{
               display: 'block', fontSize: '0.65rem', letterSpacing: '0.12em',

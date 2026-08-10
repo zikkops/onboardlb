@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic'
 
 import React, { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
+import { useIsMobile } from '../../lib/useIsMobile'
 import { useRequireRole, SECTION_ACCESS } from '../../lib/adminAuth'
 import { BRANCHES } from '../../lib/branches'
 import {
@@ -72,6 +73,7 @@ function cashToStr(vals: Record<string, number>): Record<string, string> {
 
 function EndOfDayInner() {
   const params = useSearchParams()
+  const isMobile = useIsMobile()
   const { checking, role, branchIds, user } = useRequireRole(SECTION_ACCESS.endOfDay)
 
   const branchOptions = role === 'admin' ? [...BRANCHES] : branchIds
@@ -245,7 +247,7 @@ function EndOfDayInner() {
   const diffUsdColor  = totals.differenceUsd  === 0 ? 'var(--teal)' : totals.differenceUsd  > 0 ? 'var(--red)' : '#C9962C'
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: 'var(--black)', padding: '2rem 1.5rem 4rem' }}>
+    <div style={{ minHeight: '100vh', backgroundColor: 'var(--black)', padding: isMobile ? '1.25rem 1rem 3rem' : '2rem 1.5rem 4rem' }}>
       <div style={{ maxWidth: '900px', margin: '0 auto' }}>
 
         {/* Header */}
@@ -275,7 +277,7 @@ function EndOfDayInner() {
         <form onSubmit={handleSave}>
 
           {/* Branch + Date */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '2rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '1.5rem', marginBottom: '2rem' }}>
             <div>
               <label style={labelStyle}>Branch</label>
               {branchOptions.length === 1 ? (
@@ -323,7 +325,7 @@ function EndOfDayInner() {
             {/* ── Cash Count ───────────────────────────────────────────────── */}
             <div style={{ marginBottom: '2.5rem' }}>
               <SectionTitle label="CASH COUNT" color="var(--teal)" />
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '1.5rem' }}>
 
                 {/* LBP */}
                 <div>
@@ -529,7 +531,7 @@ function EndOfDayInner() {
               padding: '1.25rem 1.5rem',
             }}>
               <SectionTitle label="DIFFERENCE" color={diffLbpColor} />
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '1.5rem' }}>
                 <DiffBlock label="Difference LBP" value={formatLbp(totals.differenceLbp)} color={diffLbpColor} />
                 <DiffBlock label="Difference USD"  value={formatUsd(totals.differenceUsd)}  color={diffUsdColor} />
               </div>
@@ -908,6 +910,7 @@ function LineItemList({
   totalUsd: number
   color: string
 }) {
+  const isMobile = useIsMobile()
   const inp2: React.CSSProperties = {
     backgroundColor: 'rgba(255,255,255,0.04)',
     border: '1px solid rgba(255,255,255,0.1)',
@@ -925,7 +928,7 @@ function LineItemList({
         <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '4px', overflow: 'hidden', marginBottom: '0.75rem' }}>
           {items.map((item, idx) => (
             <div key={idx} style={{
-              display: 'grid', gridTemplateColumns: '1fr 130px auto',
+              display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr auto',
               gap: '0.6rem', alignItems: 'center',
               padding: '0.65rem 1rem',
               borderTop: idx > 0 ? '1px solid rgba(255,255,255,0.04)' : 'none',
@@ -937,20 +940,22 @@ function LineItemList({
                 onChange={e => updateLine(idx, 'name', e.target.value)}
                 style={{ ...inp2, width: '100%' }}
               />
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                <span style={{ color: 'rgba(245,242,236,0.3)', fontFamily: 'var(--font-inter)', fontSize: '0.85rem' }}>$</span>
-                <input
-                  type="number" min="0" step="0.01"
-                  placeholder="0.00"
-                  value={item.amountUsd}
-                  onChange={e => updateLine(idx, 'amountUsd', e.target.value)}
-                  style={{ ...inp2, textAlign: 'right', width: '100%' }}
-                />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', width: isMobile ? '100%' : '110px', flex: isMobile ? 1 : 'initial' }}>
+                  <span style={{ color: 'rgba(245,242,236,0.3)', fontFamily: 'var(--font-inter)', fontSize: '0.85rem' }}>$</span>
+                  <input
+                    type="number" min="0" step="0.01"
+                    placeholder="0.00"
+                    value={item.amountUsd}
+                    onChange={e => updateLine(idx, 'amountUsd', e.target.value)}
+                    style={{ ...inp2, textAlign: 'right', width: '100%' }}
+                  />
+                </div>
+                <button
+                  type="button" onClick={() => removeLine(idx)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(245,242,236,0.25)', fontSize: '1rem', padding: '0.2rem 0.4rem', flexShrink: 0 }}
+                >×</button>
               </div>
-              <button
-                type="button" onClick={() => removeLine(idx)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(245,242,236,0.25)', fontSize: '1rem', padding: '0.2rem 0.4rem' }}
-              >×</button>
             </div>
           ))}
           <div style={{

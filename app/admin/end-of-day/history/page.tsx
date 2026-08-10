@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useIsMobile } from '../../../lib/useIsMobile'
 import { useRequireRole, SECTION_ACCESS } from '../../../lib/adminAuth'
 import { BRANCHES } from '../../../lib/branches'
 import {
@@ -9,6 +10,7 @@ import {
 } from '../../../lib/endOfDay'
 
 export default function EndOfDayHistoryPage() {
+  const isMobile = useIsMobile()
   const { checking, role, branchIds } = useRequireRole(SECTION_ACCESS.endOfDayHistory)
 
   const branchOptions = role === 'admin' ? ['all', ...BRANCHES] : branchIds
@@ -35,7 +37,7 @@ export default function EndOfDayHistoryPage() {
   if (checking) return null
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: 'var(--black)', padding: '2rem 1.5rem 4rem' }}>
+    <div style={{ minHeight: '100vh', backgroundColor: 'var(--black)', padding: isMobile ? '1.25rem 1rem 3rem' : '2rem 1.5rem 4rem' }}>
       <div style={{ maxWidth: '900px', margin: '0 auto' }}>
 
         <div style={{ marginBottom: '2rem' }}>
@@ -87,7 +89,62 @@ export default function EndOfDayHistoryPage() {
           </div>
         )}
 
-        {!loading && reports.length > 0 && (
+        {!loading && reports.length > 0 && isMobile && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+            {reports.map(r => {
+              const t = computeTotals(
+                r.cashLbp, r.cashUsd,
+                r.systemLbp, r.systemUsd,
+                r.expenses, r.income,
+              )
+              const diffLbpColor = t.differenceLbp === 0 ? 'var(--teal)' : t.differenceLbp > 0 ? 'var(--red)' : '#C9962C'
+              const diffUsdColor = t.differenceUsd  === 0 ? 'var(--teal)' : t.differenceUsd  > 0 ? 'var(--red)' : '#C9962C'
+              return (
+                <div key={r.id} style={{
+                  background: 'rgba(255,255,255,0.02)',
+                  border: '1px solid rgba(255,255,255,0.07)',
+                  borderRadius: '4px',
+                  padding: '0.9rem 1.1rem',
+                  display: 'flex', flexDirection: 'column', gap: '0.5rem',
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
+                    <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.85rem', color: 'var(--offwhite)', fontWeight: 500 }}>
+                      {r.date}
+                    </span>
+                    <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.75rem', color: 'rgba(245,242,236,0.5)' }}>
+                      {r.branch}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', gap: '1.5rem' }}>
+                    <div>
+                      <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.6rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(245,242,236,0.3)', marginBottom: '0.2rem' }}>Diff LBP</p>
+                      <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.82rem', color: diffLbpColor, fontWeight: 600 }}>{formatLbp(t.differenceLbp)}</p>
+                    </div>
+                    <div>
+                      <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.6rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(245,242,236,0.3)', marginBottom: '0.2rem' }}>Diff USD</p>
+                      <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.82rem', color: diffUsdColor, fontWeight: 600 }}>{formatUsd(t.differenceUsd)}</p>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem', paddingTop: '0.4rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                    <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.72rem', color: 'rgba(245,242,236,0.35)' }}>
+                      {r.submittedByEmail}
+                    </span>
+                    <a
+                      href={`/admin/end-of-day?branch=${encodeURIComponent(r.branch)}&date=${r.date}`}
+                      style={{
+                        fontSize: '0.72rem', color: '#C9962C',
+                        textDecoration: 'none', fontFamily: 'var(--font-inter)',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >Edit →</a>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        {!loading && reports.length > 0 && !isMobile && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
             {/* Table header */}
             <div style={{
