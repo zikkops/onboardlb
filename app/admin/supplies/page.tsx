@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore'
 import { db } from '../../lib/firebase'
 import { useRequireRole, SECTION_ACCESS } from '../../lib/adminAuth'
-import { listTemplateItems, listProviders, UNIT_LABELS } from '../../lib/weeklyOrders'
+import { listTemplateItems, listProviders, UNIT_LABELS, translateToArabic } from '../../lib/weeklyOrders'
 
 type Category = 'Kitchen' | 'Bar' | 'Cleaning' | 'Other'
 
@@ -16,6 +16,7 @@ type BranchQtys = Record<SupplyBranch, number>
 interface Supply {
   id: string
   name: string
+  nameAr?: string
   quantity: BranchQtys
   unit: string
   threshold: number
@@ -53,7 +54,7 @@ const S_BG     = { ok: 'rgba(0,160,152,0.06)',   low: 'rgba(201,150,44,0.08)',  
 const S_BORDER = { ok: 'rgba(0,160,152,0.18)',   low: 'rgba(201,150,44,0.26)',  out: 'rgba(228,51,41,0.32)'  }
 const S_LABEL  = { ok: 'OK', low: 'Low', out: 'Out' }
 
-const EMPTY_FORM = { name: '', category: 'Kitchen' as Category, unit: 'pieces', threshold: 5, provider: '' }
+const EMPTY_FORM = { name: '', nameAr: '', category: 'Kitchen' as Category, unit: 'pieces', threshold: 5, provider: '' }
 
 const inp: React.CSSProperties = {
   background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)',
@@ -76,6 +77,7 @@ export default function SuppliesPage() {
   const [form, setForm]             = useState(EMPTY_FORM)
   const [formQty, setFormQty]       = useState<BranchQtys>(EMPTY_QTY)
   const [saving, setSaving]         = useState(false)
+  const [translating, setTranslating] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [seeding, setSeeding]       = useState(false)
 
@@ -106,16 +108,25 @@ export default function SuppliesPage() {
 
   function openAdd() { setForm(EMPTY_FORM); setFormQty(EMPTY_QTY); setEditing(null); setModal('add') }
   function openEdit(s: Supply) {
-    setForm({ name: s.name, category: s.category, unit: s.unit, threshold: s.threshold, provider: s.provider ?? '' })
+    setForm({ name: s.name, nameAr: s.nameAr ?? '', category: s.category, unit: s.unit, threshold: s.threshold, provider: s.provider ?? '' })
     setFormQty({ ...EMPTY_QTY, ...s.quantity })
     setEditing(s); setModal('edit')
+  }
+
+  async function autoTranslate() {
+    setTranslating(true)
+    try {
+      const ar = await translateToArabic(form.name)
+      setForm(f => ({ ...f, nameAr: ar }))
+    } catch { /* leave field as-is on failure — user can type it manually */ }
+    finally { setTranslating(false) }
   }
 
   async function save() {
     if (!form.name.trim()) return
     setSaving(true)
     const data = {
-      name: form.name, category: form.category, unit: form.unit, threshold: form.threshold,
+      name: form.name, nameAr: form.nameAr.trim() || null, category: form.category, unit: form.unit, threshold: form.threshold,
       provider: form.provider.trim() || null, updatedAt: serverTimestamp(),
     }
     if (editing) {
@@ -144,15 +155,26 @@ export default function SuppliesPage() {
     setThrEditId(null); setThrVal('')
   }
 
+  // Imports items that don't exist yet, and — for items that already do —
+  // backfills the Arabic name from the matching Weekly Orders template item
+  // whenever the supply doesn't already have one of its own. Never
+  // overwrites an Arabic name someone already set here by hand.
   async function seedFromTemplates() {
     setSeeding(true)
     const [templates, providers] = await Promise.all([listTemplateItems(), listProviders()])
     const providerMap = new Map(providers.map(p => [p.id, p.name]))
-    const existingNames = new Set(supplies.map(s => s.name.toLowerCase()))
-    const toAdd = templates.filter(t => !existingNames.has(t.name.toLowerCase()))
-    for (const t of toAdd) {
+    const byName = new Map(supplies.map(s => [s.name.toLowerCase(), s]))
+
+    for (const t of templates) {
+      const existing = byName.get(t.name.toLowerCase())
+      if (existing) {
+        if (t.nameAr && !existing.nameAr) {
+          await updateDoc(doc(db, 'supplies', existing.id), { nameAr: t.nameAr, updatedAt: serverTimestamp() })
+        }
+        continue
+      }
       await addDoc(collection(db, 'supplies'), {
-        name: t.name, category: t.department,
+        name: t.name, nameAr: t.nameAr || null, category: t.department,
         quantity: { Beirut: 0, Zouk: 0, Broummana: 0 },
         unit: UNIT_LABELS[t.unit], threshold: 1,
         provider: t.providerId ? (providerMap.get(t.providerId) ?? null) : null,
@@ -216,8 +238,8 @@ export default function SuppliesPage() {
             <a href="/admin/supplies/daily" style={{ background: 'transparent', color: '#6A9E5A', border: '1px solid rgba(106,158,90,0.35)', borderRadius: '4px', padding: '0.65rem 1.2rem', fontSize: '0.78rem', letterSpacing: '0.08em', textTransform: 'uppercase', textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>
               Daily Inventory Count
             </a>
-            <button onClick={seedFromTemplates} disabled={seeding} style={{ background: 'transparent', color: 'rgba(245,242,236,0.5)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '4px', padding: '0.65rem 1.2rem', fontSize: '0.78rem', letterSpacing: '0.08em', textTransform: 'uppercase', cursor: seeding ? 'not-allowed' : 'pointer', opacity: seeding ? 0.5 : 1 }}>
-              {seeding ? 'Importing…' : 'Import from Weekly Orders'}
+            <button onClick={seedFromTemplates} disabled={seeding} title="Adds new items from Weekly Orders and fills in Arabic names for existing items that don't have one yet" style={{ background: 'transparent', color: 'rgba(245,242,236,0.5)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '4px', padding: '0.65rem 1.2rem', fontSize: '0.78rem', letterSpacing: '0.08em', textTransform: 'uppercase', cursor: seeding ? 'not-allowed' : 'pointer', opacity: seeding ? 0.5 : 1 }}>
+              {seeding ? 'Syncing…' : 'Import & Sync from Weekly Orders'}
             </button>
             <button onClick={openAdd} style={{ background: '#00A098', color: '#000', border: 'none', borderRadius: '4px', padding: '0.65rem 1.4rem', fontSize: '0.78rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', cursor: 'pointer' }}>
               + Add Item
@@ -288,6 +310,9 @@ export default function SuppliesPage() {
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem' }}>
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <p style={{ fontFamily: 'var(--font-cinzel)', fontSize: '0.85rem', lineHeight: 1.3 }}>{s.name}</p>
+                            {s.nameAr && (
+                              <p dir="rtl" style={{ fontFamily: 'var(--font-inter)', fontSize: '0.75rem', color: 'rgba(201,150,44,0.8)', marginTop: '0.15rem' }}>{s.nameAr}</p>
+                            )}
                             <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.2rem', flexWrap: 'wrap' }}>
                               {groupBy !== 'category' && <span style={{ fontSize: '0.6rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: CAT_COLOR[s.category] }}>{s.category}</span>}
                               {groupBy !== 'provider' && s.provider && <span style={{ fontSize: '0.6rem', color: 'rgba(245,242,236,0.28)' }}>{s.provider}</span>}
@@ -353,6 +378,23 @@ export default function SuppliesPage() {
               <div>
                 <label style={lbl}>Item Name</label>
                 <input style={inp} value={form.name} placeholder="e.g. Bread" onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+              </div>
+              <div>
+                <label style={lbl}>Arabic Name</label>
+                <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                  <input
+                    style={{ ...inp, textAlign: 'right' }} dir="rtl" placeholder="عربي"
+                    value={form.nameAr} onChange={e => setForm(f => ({ ...f, nameAr: e.target.value }))}
+                  />
+                  <button
+                    type="button" onClick={autoTranslate} disabled={translating || !form.name.trim()} title="Auto-translate from Item Name"
+                    style={{
+                      background: 'rgba(201,150,44,0.12)', border: '1px solid rgba(201,150,44,0.3)',
+                      color: '#C9962C', padding: '0.55rem 0.7rem', borderRadius: '4px', fontSize: '0.8rem',
+                      cursor: translating || !form.name.trim() ? 'not-allowed' : 'pointer', flexShrink: 0,
+                    }}
+                  >{translating ? '…' : '🌐'}</button>
+                </div>
               </div>
               <div>
                 <label style={lbl}>Provider / Supplier</label>

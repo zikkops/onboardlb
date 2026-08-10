@@ -54,7 +54,8 @@ export const SECTION_LABELS: Record<string, string> = {
   gameTransfers:     'Transfer Stock',
   weeklyOrders:      'Weekly Order Reports',
   endOfDay:          'End of Day Reports',
-  dailyInventory:    'Daily Inventory Count',
+  dailyInventory:        'Daily Inventory Count',
+  dailyInventoryHistory: 'Daily Inventory History',
 }
 
 export const SECTION_ACCESS = {
@@ -86,6 +87,10 @@ export const SECTION_ACCESS = {
   // Anyone else (e.g. a gamer or social hire helping out) can be granted
   // this section individually from Manage Users → sectionGrants.
   dailyInventory:     ['admin', 'manager', 'kitchen_crew', 'barista'] as Role[],
+  // Deliberately narrower than endOfDayHistory above — reviewing inventory
+  // counts across every department/branch is a management-only concern here,
+  // not something every floor role needs visibility into.
+  dailyInventoryHistory: ['admin', 'manager'] as Role[],
 }
 
 // Reads either shape — the new `branchIds` array, or the older singular

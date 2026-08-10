@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { Suspense, useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { useRequireRole, SECTION_ACCESS } from '../../../lib/adminAuth'
 import { useIsMobile } from '../../../lib/useIsMobile'
 import {
@@ -29,7 +30,8 @@ const inp: React.CSSProperties = {
   fontFamily: 'var(--font-inter)',
 }
 
-export default function DailyInventoryPage() {
+function DailyInventoryInner() {
+  const params = useSearchParams()
   const { checking, role, branchIds, orderDepts, user } = useRequireRole(SECTION_ACCESS.dailyInventory)
   const isMobile = useIsMobile()
 
@@ -79,6 +81,18 @@ export default function DailyInventoryPage() {
     if (departmentOptions.length === 1) setDepartment(departmentOptions[0])
   }, [departmentOptions])
 
+  // Prefill from URL params (e.g. an "Open in Daily Count →" link from the
+  // history sheet) — only allow a branch the user actually has access to.
+  useEffect(() => {
+    if (checking) return
+    const pb = params.get('branch')
+    const pdept = params.get('department')
+    const pd = params.get('date')
+    if (pb && branchOptions.includes(pb)) setBranch(pb)
+    if (pdept && departmentOptions.includes(pdept)) setDepartment(pdept)
+    if (pd) setDate(pd)
+  }, [params, checking, branchOptions, departmentOptions])
+
   useEffect(() => {
     listSuppliesForCount().then(s => { setSupplies(s); setLoadingSupplies(false) })
   }, [])
@@ -123,7 +137,7 @@ export default function DailyInventoryPage() {
       const v = counts[s.id]
       const n = v === '' || v === undefined ? null : Number(v)
       return {
-        supplyId: s.id, name: s.name, category: s.category, unit: s.unit,
+        supplyId: s.id, name: s.name, nameAr: s.nameAr, category: s.category, unit: s.unit,
         previousQty: s.quantity[branch] ?? 0,
         countedQty: n == null || isNaN(n) ? null : n,
       }
@@ -300,28 +314,66 @@ export default function DailyInventoryPage() {
                       borderRadius: '6px', padding: '0.8rem 0.9rem',
                       display: 'flex', flexDirection: 'column', gap: '0.5rem',
                     }}>
-                      <p style={{ fontFamily: 'var(--font-cinzel)', fontSize: '0.82rem', color: 'var(--offwhite)', lineHeight: 1.3 }}>{s.name}</p>
-                      <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.68rem', color: 'rgba(245,242,236,0.3)' }}>
-                        Last count: {prev} {s.unit}
-                      </p>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <input
-                          type="number" min="0" inputMode="decimal"
-                          value={val}
-                          onChange={e => setCounts(prev2 => ({ ...prev2, [s.id]: e.target.value }))}
-                          placeholder="Count"
-                          style={{ ...inp, width: '90px', textAlign: 'center', fontWeight: 600, color: counted ? 'var(--teal)' : '#F5F2EC' }}
-                        />
-                        <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.72rem', color: 'rgba(245,242,236,0.35)' }}>{s.unit}</span>
-                        {counted && delta !== 0 && (
-                          <span style={{
-                            marginLeft: 'auto', fontFamily: 'var(--font-inter)', fontSize: '0.68rem', fontWeight: 700,
-                            color: delta < 0 ? 'var(--red)' : 'var(--teal)',
-                          }}>
-                            {delta > 0 ? '+' : ''}{delta}
-                          </span>
+                      <div>
+                        <p style={{ fontFamily: 'var(--font-cinzel)', fontSize: '0.82rem', color: 'var(--offwhite)', lineHeight: 1.3 }}>{s.name}</p>
+                        {s.nameAr && (
+                          <p dir="rtl" style={{ fontFamily: 'var(--font-inter)', fontSize: '0.72rem', color: 'rgba(201,150,44,0.8)', marginTop: '0.1rem' }}>{s.nameAr}</p>
                         )}
                       </div>
+                      {isMobile ? (
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
+                          <div>
+                            <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.62rem', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(245,242,236,0.3)', marginBottom: '0.15rem' }}>Last count</p>
+                            <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.9rem', color: 'rgba(245,242,236,0.5)', fontWeight: 600 }}>
+                              {prev} <span style={{ fontSize: '0.68rem', fontWeight: 400 }}>{s.unit}</span>
+                            </p>
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.25rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                              <input
+                                type="number" min="0" inputMode="decimal"
+                                value={val}
+                                onChange={e => setCounts(prev2 => ({ ...prev2, [s.id]: e.target.value }))}
+                                placeholder="Count"
+                                style={{ ...inp, width: '90px', textAlign: 'center', fontWeight: 600, color: counted ? 'var(--teal)' : '#F5F2EC' }}
+                              />
+                              <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.72rem', color: 'rgba(245,242,236,0.35)' }}>{s.unit}</span>
+                            </div>
+                            {counted && delta !== 0 && (
+                              <span style={{
+                                fontFamily: 'var(--font-inter)', fontSize: '0.68rem', fontWeight: 700,
+                                color: delta < 0 ? 'var(--red)' : 'var(--teal)',
+                              }}>
+                                {delta > 0 ? '+' : ''}{delta}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.68rem', color: 'rgba(245,242,236,0.3)' }}>
+                            Last count: {prev} {s.unit}
+                          </p>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <input
+                              type="number" min="0" inputMode="decimal"
+                              value={val}
+                              onChange={e => setCounts(prev2 => ({ ...prev2, [s.id]: e.target.value }))}
+                              placeholder="Count"
+                              style={{ ...inp, width: '90px', textAlign: 'center', fontWeight: 600, color: counted ? 'var(--teal)' : '#F5F2EC' }}
+                            />
+                            <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.72rem', color: 'rgba(245,242,236,0.35)' }}>{s.unit}</span>
+                            {counted && delta !== 0 && (
+                              <span style={{
+                                marginLeft: 'auto', fontFamily: 'var(--font-inter)', fontSize: '0.68rem', fontWeight: 700,
+                                color: delta < 0 ? 'var(--red)' : 'var(--teal)',
+                              }}>
+                                {delta > 0 ? '+' : ''}{delta}
+                              </span>
+                            )}
+                          </div>
+                        </>
+                      )}
                     </div>
                   )
                 })}
@@ -369,14 +421,20 @@ export default function DailyInventoryPage() {
             {/* Recent submissions — admin/manager only */}
             {canReview && (
               <div>
-                <button
-                  onClick={() => setShowHistory(v => !v)}
-                  style={{
-                    background: 'none', border: 'none', cursor: 'pointer', padding: 0,
-                    fontFamily: 'var(--font-inter)', fontSize: '0.72rem', letterSpacing: '0.1em',
-                    textTransform: 'uppercase', color: 'rgba(245,242,236,0.35)',
-                  }}
-                >{showHistory ? '▾' : '▸'} Recent Submissions — {branch}</button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                  <button
+                    onClick={() => setShowHistory(v => !v)}
+                    style={{
+                      background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+                      fontFamily: 'var(--font-inter)', fontSize: '0.72rem', letterSpacing: '0.1em',
+                      textTransform: 'uppercase', color: 'rgba(245,242,236,0.35)',
+                    }}
+                  >{showHistory ? '▾' : '▸'} Recent Submissions — {branch}</button>
+                  <a href="/admin/supplies/daily/history" style={{
+                    fontFamily: 'var(--font-inter)', fontSize: '0.72rem', letterSpacing: '0.05em',
+                    color: '#6A9E5A', textDecoration: 'none',
+                  }}>View full history sheet →</a>
+                </div>
 
                 {showHistory && (
                   <div style={{ marginTop: '0.85rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
@@ -414,5 +472,13 @@ export default function DailyInventoryPage() {
         )}
       </div>
     </div>
+  )
+}
+
+export default function DailyInventoryPage() {
+  return (
+    <Suspense fallback={null}>
+      <DailyInventoryInner />
+    </Suspense>
   )
 }

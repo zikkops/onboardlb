@@ -19,6 +19,7 @@ export type Department = typeof DEPARTMENTS[number]
 export interface InventoryLine {
   supplyId:    string
   name:        string
+  nameAr?:     string
   category:    string
   unit:        string
   previousQty: number
@@ -52,6 +53,7 @@ export function todayDateStr() {
 export interface SupplyForCount {
   id:       string
   name:     string
+  nameAr?:  string
   category: string
   unit:     string
   quantity: Record<string, number>
@@ -69,6 +71,7 @@ export async function listSuppliesForCount(): Promise<SupplyForCount[]> {
     return {
       id: d.id,
       name: (data.name as string) ?? '',
+      nameAr: (data.nameAr as string | undefined) || undefined,
       category: (data.category as string) ?? 'Other',
       unit: (data.unit as string) ?? 'pieces',
       quantity,
@@ -90,6 +93,7 @@ export function emptyInventoryReport(
       .map(s => ({
         supplyId: s.id,
         name: s.name,
+        nameAr: s.nameAr,
         category: s.category,
         unit: s.unit,
         previousQty: s.quantity[branch] ?? 0,

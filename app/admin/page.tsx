@@ -205,6 +205,7 @@ export default function AdminPage() {
       cards: [
         { label: 'Inventory Management', icon: faClipboard, daily: true, desc: 'Track consumable stock levels across Kitchen, Bar, and Cleaning — color alerts when items run low', href: '/admin/supplies', access: SECTION_ACCESS.games },
         { label: 'Daily Inventory Count', icon: faClipboardCheck, daily: true, desc: 'Count today\'s stock at your branch and submit — updates live inventory levels', href: '/admin/supplies/daily', access: SECTION_ACCESS.dailyInventory },
+        { label: 'Daily Inventory History', icon: faClockRotateLeft, daily: true, desc: 'Review every submitted and in-progress count by branch and department', href: '/admin/supplies/daily/history', access: SECTION_ACCESS.dailyInventoryHistory },
       ],
     },
     {
