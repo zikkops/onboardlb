@@ -159,3 +159,10 @@ export async function listDailyInventories(branch: string | 'all', limitCount = 
   const snap = await getDocs(q)
   return snap.docs.map(d => ({ id: d.id, ...d.data() }) as DailyInventoryReport)
 }
+
+// Single equality filter — no composite index needed, unlike a branch+date
+// range query would require. Used by the history calendar's day-detail page.
+export async function listDailyInventoriesForDate(date: string): Promise<DailyInventoryReport[]> {
+  const snap = await getDocs(query(collection(db, 'dailyInventoryCounts'), where('date', '==', date)))
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }) as DailyInventoryReport)
+}
