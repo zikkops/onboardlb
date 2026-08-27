@@ -71,6 +71,15 @@ export interface OrderTemplateItem {
   name: string
   nameAr?: string
   department: Department
+  // The durable link to the supplies/{id} doc whose stock a delivery of this
+  // item moves. Before this existed, order template items and supplies were
+  // connected only by a lowercased name match done at seed time — so renaming
+  // either side silently broke the chain from ordering to stock with no error.
+  //
+  // Backfilled by scripts/link-template-supplies.mjs. Optional because an item
+  // can legitimately be ordered without being stocked and counted; receiving
+  // shows those as unstocked rather than failing.
+  supplyId?: string
   category?: string      // sub-group within a provider, e.g. "Syrups", "Powders"
   providerId?: string
   unit: OrderUnit

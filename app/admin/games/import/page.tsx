@@ -1,27 +1,48 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { collection, getDocs, addDoc, serverTimestamp } from 'firebase/firestore'
+import { collection, getDocs, addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore'
 import { db, auth } from '../../../lib/firebase'
 import { useRequireRole, SECTION_ACCESS } from '../../../lib/adminAuth'
-import { logCreate } from '../../../lib/activityLog'
+import { logCreate, logUpdate } from '../../../lib/activityLog'
 import { BRANCHES, emptyStock } from '../../../lib/branches'
 import { recordMediaUpload } from '../../../lib/media'
 import { parseCSV } from '../../../lib/csv'
 
-type FieldKey = 'name' | 'description' | 'category' | 'price' | 'stock' | 'image' | 'players' | 'duration' | 'age'
+type StaticFieldKey =
+  | 'name' | 'description' | 'category' | 'price' | 'wholesalePrice'
+  | 'stock' | 'image' | 'players' | 'duration' | 'age'
 
-const FIELD_DEFS: { key: FieldKey; label: string; required?: boolean; guesses: string[] }[] = [
-  { key: 'name',        label: 'Game Name',  required: true, guesses: ['name', 'product name', 'title'] },
-  { key: 'description', label: 'Description',                guesses: ['description', 'short description'] },
-  { key: 'category',    label: 'Category',                    guesses: ['categories', 'category'] },
-  { key: 'price',       label: 'Price',                        guesses: ['regular price', 'price', 'sale price'] },
-  { key: 'stock',       label: 'Stock Quantity',                guesses: ['stock', 'quantity', 'in stock?'] },
-  { key: 'image',       label: 'Image URL',                     guesses: ['images', 'image', 'image url'] },
-  { key: 'players',     label: 'Players',                       guesses: ['players', 'number of players'] },
-  { key: 'duration',    label: 'Duration',                       guesses: ['duration', 'play time', 'playing time'] },
-  { key: 'age',         label: 'Min Age',                        guesses: ['min age', 'minimum age', 'age'] },
+// Per-branch stock columns are generated from BRANCHES, so adding a branch
+// there gives it an import column for free.
+type FieldKey = StaticFieldKey | `stock:${string}`
+
+const stockKey = (branch: string) => `stock:${branch}` as FieldKey
+
+interface FieldDef { key: FieldKey; label: string; required?: boolean; guesses: string[] }
+
+// Guesses include the exact headers "Export Full CSV" writes, so an exported
+// file can be edited in a spreadsheet and imported straight back.
+const FIELD_DEFS: FieldDef[] = [
+  { key: 'name',           label: 'Game Name', required: true, guesses: ['name', 'product name', 'title'] },
+  { key: 'description',    label: 'Description',               guesses: ['description', 'short description'] },
+  { key: 'category',       label: 'Category',                  guesses: ['categories', 'category'] },
+  { key: 'price',          label: 'Retail Price',              guesses: ['retail price ($)', 'retail price', 'regular price', 'price', 'sale price'] },
+  { key: 'wholesalePrice', label: 'Wholesale Price',           guesses: ['wholesale price ($)', 'wholesale price', 'wholesale'] },
+  ...BRANCHES.map(b => ({
+    key: stockKey(b),
+    label: 'Stock — ' + b,
+    guesses: ['stock — ' + b.toLowerCase(), 'stock - ' + b.toLowerCase(), 'stock ' + b.toLowerCase(), b.toLowerCase()],
+  })),
+  { key: 'stock',          label: 'Stock (fallback)',          guesses: ['stock', 'quantity', 'in stock?'] },
+  { key: 'image',          label: 'Image URL',                 guesses: ['images', 'image', 'image url'] },
+  { key: 'players',        label: 'Players',                   guesses: ['players', 'number of players'] },
+  { key: 'duration',       label: 'Duration',                  guesses: ['duration', 'play time', 'playing time'] },
+  { key: 'age',            label: 'Min Age',                   guesses: ['min age', 'minimum age', 'age'] },
 ]
+
+// Only used when no per-branch column is mapped — keeps the single-stock-column
+// WooCommerce exports working exactly as before.
 
 const IMPORT_BRANCH = BRANCHES[0]
 const FALLBACK_CATEGORY = 'Uncategorized'
@@ -29,26 +50,41 @@ const FALLBACK_CATEGORY = 'Uncategorized'
 function guessMapping(headers: string[]): Record<FieldKey, string> {
   const lower = headers.map(h => h.toLowerCase().trim())
   const mapping = {} as Record<FieldKey, string>
-  for (const def of FIELD_DEFS) {
-    let found = ''
-    for (const g of def.guesses) {
-      const idx = lower.findIndex(h => h === g)
-      if (idx !== -1) { found = headers[idx]; break }
-    }
-    if (!found) {
+  // A column can only be claimed once. FIELD_DEFS lists the per-branch stock
+  // columns before the generic 'stock' fallback, so "Stock — Beirut" is taken
+  // by Beirut rather than being swallowed by the fallback's 'stock' substring
+  // guess. Exact matches for every field are tried before any fuzzy match, so
+  // an exactly-named column is never stolen by an earlier field's substring.
+  const used = new Set<string>()
+  const claim = (idx: number) => { used.add(headers[idx]); return headers[idx] }
+
+  for (const pass of ['exact', 'fuzzy'] as const) {
+    for (const def of FIELD_DEFS) {
+      if (mapping[def.key]) continue
       for (const g of def.guesses) {
-        const idx = lower.findIndex(h => h.includes(g))
-        if (idx !== -1) { found = headers[idx]; break }
+        const idx = lower.findIndex((h, i) =>
+          !used.has(headers[i]) && (pass === 'exact' ? h === g : h.includes(g)))
+        if (idx !== -1) { mapping[def.key] = claim(idx); break }
       }
     }
-    mapping[def.key] = found
   }
+  for (const def of FIELD_DEFS) mapping[def.key] = mapping[def.key] ?? ''
   return mapping
 }
 
 function parsePrice(raw: string): number {
   const n = parseFloat(raw.replace(/[^0-9.]/g, ''))
   return Number.isFinite(n) ? n : 0
+}
+
+// Blank wholesale cell means "no wholesale price", which is null on the game
+// doc — distinct from 0, which would read as free. Matches how Manage Games
+// stores it.
+function parseOptionalPrice(raw: string): number | null {
+  const trimmed = (raw ?? '').trim()
+  if (!trimmed) return null
+  const n = parseFloat(trimmed.replace(/[^0-9.]/g, ''))
+  return Number.isFinite(n) ? n : null
 }
 
 function parseQty(raw: string): number {
@@ -65,10 +101,16 @@ function normalizeCategory(raw: string): string {
 
 interface Results {
   created: number
-  skippedDuplicate: number
+  updated: number
+  unchanged: number
   skippedNoName: number
   imageFailures: number
   categoriesCreated: string[]
+}
+
+interface ExistingGame {
+  id: string
+  stock: Record<string, number>
 }
 
 function useIsMobile(breakpoint = 768) {
@@ -87,7 +129,9 @@ export default function ImportGamesPage() {
   const isMobile = useIsMobile()
   const fileRef = useRef<HTMLInputElement>(null)
 
-  const [existingNames, setExistingNames]     = useState<Set<string>>(new Set())
+  // Keyed by lowercased name -> doc id + current stock, so a repeat import can
+  // update the existing doc instead of skipping the row.
+  const [existingGames, setExistingGames]     = useState<Map<string, ExistingGame>>(new Map())
   const [existingCategories, setExistingCategories] = useState<Set<string>>(new Set())
   const [loadingExisting, setLoadingExisting] = useState(true)
 
@@ -107,7 +151,13 @@ export default function ImportGamesPage() {
         getDocs(collection(db, 'games')),
         getDocs(collection(db, 'gameCategories')),
       ])
-      setExistingNames(new Set(gamesSnap.docs.map(d => String((d.data() as any).name ?? '').toLowerCase())))
+      setExistingGames(new Map(gamesSnap.docs.map(d => {
+        const data = d.data() as { name?: string; stock?: Record<string, number> | number }
+        const stock = typeof data.stock === 'number'
+          ? { ...emptyStock(), [BRANCHES[0]]: data.stock }
+          : { ...emptyStock(), ...(data.stock ?? {}) }
+        return [String(data.name ?? '').toLowerCase(), { id: d.id, stock }] as const
+      })))
       setExistingCategories(new Set(catSnap.docs.map(d => String((d.data() as any).name ?? ''))))
       setLoadingExisting(false)
     }
@@ -144,10 +194,18 @@ export default function ImportGamesPage() {
     setProgress({ done: 0, total: rows.length })
 
     const idToken = await auth.currentUser?.getIdToken()
-    const names = new Set(existingNames)
+    const games = new Map(existingGames)
     const categories = new Set(existingCategories)
     const categoriesCreated: string[] = []
-    let created = 0, skippedDuplicate = 0, skippedNoName = 0, imageFailures = 0
+    let created = 0, updated = 0, unchanged = 0, skippedNoName = 0, imageFailures = 0
+
+    // A cell only counts if the column is mapped AND non-empty — that's what
+    // makes a blank cell mean "leave this field alone" rather than "clear it".
+    const cell = (row: Record<string, string>, col: string | undefined) => {
+      if (!col) return null
+      const v = (row[col] ?? '').trim()
+      return v === '' ? null : v
+    }
 
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i]
@@ -158,8 +216,60 @@ export default function ImportGamesPage() {
         setProgress({ done: i + 1, total: rows.length })
         continue
       }
-      if (names.has(name.toLowerCase())) {
-        skippedDuplicate++
+      const existing = games.get(name.toLowerCase())
+      if (existing) {
+        const patch: Record<string, unknown> = {}
+
+        const desc = cell(row, mapping.description)
+        if (desc !== null) patch.description = desc
+        const players = cell(row, mapping.players)
+        if (players !== null) patch.players = players
+        const duration = cell(row, mapping.duration)
+        if (duration !== null) patch.duration = duration
+        const age = cell(row, mapping.age)
+        if (age !== null) patch.age = age
+
+        const priceCell = cell(row, mapping.price)
+        if (priceCell !== null) patch.price = parsePrice(priceCell)
+        const wholesaleCell = cell(row, mapping.wholesalePrice)
+        if (wholesaleCell !== null) patch.wholesalePrice = parseOptionalPrice(wholesaleCell)
+
+        // Merge onto the stock the game already has, so a CSV carrying only
+        // Beirut's column can't zero out Zouk, Broummana and Faten.
+        const stockPatch: Record<string, number> = {}
+        for (const b of BRANCHES) {
+          const v = cell(row, mapping[stockKey(b)])
+          if (v !== null) stockPatch[b] = parseQty(v)
+        }
+        if (Object.keys(stockPatch).length === 0) {
+          const fallbackCell = cell(row, mapping.stock)
+          if (fallbackCell !== null) stockPatch[IMPORT_BRANCH] = parseQty(fallbackCell)
+        }
+        if (Object.keys(stockPatch).length > 0) {
+          patch.stock = { ...existing.stock, ...stockPatch }
+        }
+
+        const newCategory = cell(row, mapping.category)
+        if (newCategory !== null) {
+          const normalized = normalizeCategory(newCategory)
+          patch.category = normalized
+          if (!categories.has(normalized)) {
+            await addDoc(collection(db, 'gameCategories'), { name: normalized, createdAt: serverTimestamp() })
+            categories.add(normalized)
+            categoriesCreated.push(normalized)
+          }
+        }
+
+        if (Object.keys(patch).length === 0) {
+          unchanged++
+        } else {
+          await updateDoc(doc(db, 'games', existing.id), { ...patch, updatedAt: serverTimestamp() })
+          await logUpdate('Game', name, {}, patch)
+          if (patch.stock) {
+            games.set(name.toLowerCase(), { ...existing, stock: patch.stock as Record<string, number> })
+          }
+          updated++
+        }
         setProgress({ done: i + 1, total: rows.length })
         continue
       }
@@ -171,8 +281,15 @@ export default function ImportGamesPage() {
         categoriesCreated.push(category)
       }
 
+      // Per-branch columns win; the single fallback column only applies when
+      // none of them are mapped.
       const stock = emptyStock()
-      stock[IMPORT_BRANCH] = parseQty(mapping.stock ? row[mapping.stock] : '')
+      const mappedBranches = BRANCHES.filter(b => mapping[stockKey(b)])
+      if (mappedBranches.length > 0) {
+        for (const b of mappedBranches) stock[b] = parseQty(row[mapping[stockKey(b)]])
+      } else if (mapping.stock) {
+        stock[IMPORT_BRANCH] = parseQty(row[mapping.stock])
+      }
 
       let image = ''
       const firstImageUrl = (mapping.image ? row[mapping.image] : '').split(',')[0]?.trim()
@@ -203,27 +320,32 @@ export default function ImportGamesPage() {
         duration:    mapping.duration ? row[mapping.duration] : '',
         age:         mapping.age ? row[mapping.age] : '',
         price:       parsePrice(mapping.price ? row[mapping.price] : ''),
+        wholesalePrice: mapping.wholesalePrice ? parseOptionalPrice(row[mapping.wholesalePrice]) : null,
         stock,
         image,
       }
 
-      await addDoc(collection(db, 'games'), {
+      const ref = await addDoc(collection(db, 'games'), {
         ...gameData,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       })
       await logCreate('Game', name, gameData)
 
-      names.add(name.toLowerCase())
+      games.set(name.toLowerCase(), { id: ref.id, stock })
       created++
       setProgress({ done: i + 1, total: rows.length })
     }
 
-    setResults({ created, skippedDuplicate, skippedNoName, imageFailures, categoriesCreated })
-    setExistingNames(names)
+    setResults({ created, updated, unchanged, skippedNoName, imageFailures, categoriesCreated })
+    setExistingGames(games)
     setExistingCategories(categories)
     setImporting(false)
   }
+
+  // Drives the preview's fallback hint: with no per-branch column mapped, all
+  // stock lands on the first branch, which is worth showing before importing.
+  const anyBranchMapped = BRANCHES.some(b => mapping[stockKey(b)])
 
   const inputStyle = {
     width: '100%',
@@ -275,7 +397,7 @@ export default function ImportGamesPage() {
             marginTop: '0.5rem',
             lineHeight: 1.6,
           }}>
-            Upload a WooCommerce Products CSV export. Games that already exist (matched by name) are skipped.
+            Upload a CSV — a WooCommerce export, or an Export Full CSV from this panel edited in a spreadsheet. Games that already exist (matched by name) are updated; blank cells are left as they are.
             Imported stock is assigned to the <strong style={{ color: 'var(--teal)' }}>{IMPORT_BRANCH}</strong> branch —
             redistribute across branches afterward in the Game Library. Images are downloaded and re-hosted automatically.
           </p>
@@ -341,6 +463,16 @@ export default function ImportGamesPage() {
                     <option value="">— none —</option>
                     {headers.map(h => <option key={h} value={h}>{h}</option>)}
                   </select>
+                  {def.key === 'stock' && anyBranchMapped && (
+                    <p style={{ marginTop: '0.3rem', fontSize: '0.68rem', color: 'rgba(245,242,236,0.3)', fontFamily: 'var(--font-inter)' }}>
+                      Ignored — per-branch columns are mapped above.
+                    </p>
+                  )}
+                  {def.key === 'stock' && !anyBranchMapped && mapping.stock && (
+                    <p style={{ marginTop: '0.3rem', fontSize: '0.68rem', color: 'rgba(201,150,44,0.9)', fontFamily: 'var(--font-inter)' }}>
+                      All stock will go to {IMPORT_BRANCH}.
+                    </p>
+                  )}
                 </div>
               ))}
             </div>
@@ -375,7 +507,7 @@ export default function ImportGamesPage() {
             <table style={{ width: '100%', minWidth: '600px', borderCollapse: 'collapse', fontFamily: 'var(--font-inter)', fontSize: '0.78rem' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                  {['Name', 'Category', 'Price', 'Stock', 'Image'].map(h => (
+                  {['Name', 'Category', 'Retail', 'Wholesale', ...BRANCHES, 'Image'].map(h => (
                     <th key={h} style={{ textAlign: 'left', padding: '0.5rem 0.8rem', color: 'rgba(245,242,236,0.3)', fontWeight: 400 }}>{h}</th>
                   ))}
                 </tr>
@@ -388,11 +520,24 @@ export default function ImportGamesPage() {
                       {mapping.category ? normalizeCategory(row[mapping.category]) : '—'}
                     </td>
                     <td style={{ padding: '0.5rem 0.8rem', color: 'rgba(245,242,236,0.5)' }}>
-                      {mapping.price ? `$${parsePrice(row[mapping.price])}` : '—'}
+                      {mapping.price ? `${parsePrice(row[mapping.price])}` : '—'}
                     </td>
                     <td style={{ padding: '0.5rem 0.8rem', color: 'rgba(245,242,236,0.5)' }}>
-                      {mapping.stock ? parseQty(row[mapping.stock]) : '—'}
+                      {(() => {
+                        if (!mapping.wholesalePrice) return '—'
+                        const w = parseOptionalPrice(row[mapping.wholesalePrice])
+                        return w == null ? '—' : `${w}`
+                      })()}
                     </td>
+                    {BRANCHES.map(b => {
+                      const col = mapping[stockKey(b)]
+                      const fallback = !anyBranchMapped && b === IMPORT_BRANCH && mapping.stock
+                      return (
+                        <td key={b} style={{ padding: '0.5rem 0.8rem', color: fallback ? 'rgba(201,150,44,0.9)' : 'rgba(245,242,236,0.5)' }}>
+                          {col ? parseQty(row[col]) : fallback ? parseQty(row[mapping.stock]) : '—'}
+                        </td>
+                      )
+                    })}
                     <td style={{ padding: '0.5rem 0.8rem', color: 'rgba(245,242,236,0.5)', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {mapping.image ? (row[mapping.image].split(',')[0]?.trim() || '—') : '—'}
                     </td>
@@ -436,9 +581,14 @@ export default function ImportGamesPage() {
                 <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.85rem', color: 'var(--teal)' }}>
                   ✓ {results.created} game{results.created === 1 ? '' : 's'} imported
                 </p>
-                {results.skippedDuplicate > 0 && (
+                {results.updated > 0 && (
+                  <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.85rem', color: '#C9962C' }}>
+                    ✎ {results.updated} existing game{results.updated === 1 ? '' : 's'} updated
+                  </p>
+                )}
+                {results.unchanged > 0 && (
                   <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.8rem', color: 'rgba(245,242,236,0.5)' }}>
-                    {results.skippedDuplicate} skipped (already exists)
+                    {results.unchanged} already present, no mapped values to change
                   </p>
                 )}
                 {results.skippedNoName > 0 && (

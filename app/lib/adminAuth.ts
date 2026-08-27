@@ -2,18 +2,20 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import {
-  getAuth, onAuthStateChanged, signOut, type User,
-} from 'firebase/auth'
-import {
-  doc, getDoc, setDoc, updateDoc, serverTimestamp,
-} from 'firebase/firestore'
-import { auth, db, firebaseConfig } from './firebase'
-import { logActivity, logUpdate } from './activityLog'
+import { onAuthStateChanged, signOut, type User } from 'firebase/auth'
+import { doc, getDoc } from 'firebase/firestore'
+import { auth, db } from './firebase'
+import { ALL_ROLES, SECTION_ACCESS, hasSectionAccess, type Role, type SectionKey } from './roles'
 
-export type Role = 'admin' | 'manager' | 'social' | 'gamer' | 'dungeonmaster' | 'kitchen_crew' | 'barista'
-
-export const ALL_ROLES: Role[] = ['admin', 'manager', 'social', 'gamer', 'dungeonmaster', 'kitchen_crew', 'barista']
+// Role, ALL_ROLES, SECTION_ACCESS and hasSectionAccess moved to ./roles so the
+// server layer can share one definition with the browser (a route handler
+// importing them from here would drag React and the Firebase client SDK onto
+// the server). Re-exported so every existing import site keeps working.
+//
+// SECTION_ACCESS must be re-exported as the same object, never spread — see
+// the note in ./roles about useRequireRole's reference-equality lookup.
+export { ALL_ROLES, SECTION_ACCESS, hasSectionAccess }
+export type { Role, SectionKey }
 
 export const ROLE_LABELS: Record<Role, string> = {
   admin:         'Admin',
@@ -54,43 +56,11 @@ export const SECTION_LABELS: Record<string, string> = {
   gameTransfers:     'Transfer Stock',
   weeklyOrders:      'Weekly Order Reports',
   endOfDay:          'End of Day Reports',
+  supplies:              'Inventory Management',
   dailyInventory:        'Daily Inventory Count',
   dailyInventoryHistory: 'Daily Inventory History',
-}
-
-export const SECTION_ACCESS = {
-  games:         ['admin', 'manager', 'gamer'] as Role[],
-  menu:          ['admin', 'manager'] as Role[],
-  events:        ['admin', 'manager', 'social'] as Role[],
-  dnd:           ['admin', 'manager', 'dungeonmaster'] as Role[],
-  loyalty:       ['admin', 'manager'] as Role[],
-  // Submission panels (Step 5) — distinct from `dnd`/`events` above, which
-  // gate the public-facing content management sections, not loyalty logging.
-  loyaltyDnd:    ['admin', 'manager', 'dungeonmaster'] as Role[],
-  loyaltyEvents: ['admin', 'manager', 'social'] as Role[],
-  dndReservations: ['admin', 'manager', 'dungeonmaster'] as Role[],
-  dndGroups:       ['admin', 'manager', 'dungeonmaster'] as Role[],
-  // Deliberately DM-only (not admin/manager) — this page edits the signed-in
-  // user's own opening hours, not anyone else's, so admin/manager wouldn't
-  // see anything meaningful here unless they're also DM-flagged, which the
-  // 'dungeonmaster' entry already covers via hasSectionAccess below.
-  dmAvailability: ['dungeonmaster'] as Role[],
-  branchTables:      ['admin', 'manager'] as Role[],
-  tableReservations: ['admin', 'manager'] as Role[],
-  gamePurchases:     ['admin', 'manager', 'gamer'] as Role[],
-  gameTransfers:     ['admin', 'manager', 'gamer'] as Role[],
-  weeklyOrders:       ['admin', 'manager'] as Role[],
-  weeklyOrdersSubmit: ALL_ROLES,
-  endOfDay:           ['admin', 'manager'] as Role[],
-  endOfDayHistory:    ['admin', 'manager', 'social', 'gamer', 'dungeonmaster', 'barista'] as Role[],
-  // Floor staff who'd actually be doing a physical stock count day-to-day.
-  // Anyone else (e.g. a gamer or social hire helping out) can be granted
-  // this section individually from Manage Users → sectionGrants.
-  dailyInventory:     ['admin', 'manager', 'kitchen_crew', 'barista'] as Role[],
-  // Deliberately narrower than endOfDayHistory above — reviewing inventory
-  // counts across every department/branch is a management-only concern here,
-  // not something every floor role needs visibility into.
-  dailyInventoryHistory: ['admin', 'manager'] as Role[],
+  deliveries:            'Goods Receiving',
+  deliveriesReport:      'Receiving & Cost Reports',
 }
 
 // Reads either shape — the new `branchIds` array, or the older singular
@@ -125,6 +95,37 @@ export function clearAdminSessionCookie() {
   document.cookie = `${ADMIN_SESSION_COOKIE}=; path=/; max-age=0; SameSite=Lax`
 }
 
+// A staff member's role, branches and superadmin flag now live in their
+// Firebase ID token as custom claims, because Firestore rules can read a claim
+// for free but pay a billed document read for anything else. That buys the
+// granular rules the audit called for — and costs one thing: the token is a
+// snapshot, refreshed at most hourly, so an access change made by an admin
+// wouldn't otherwise reach this browser until the token happened to rotate.
+//
+// The server stamps `claimsUpdatedAt` on the document every time it writes
+// claims (see app/lib/server/claims.ts). If that stamp is newer than the token
+// in hand, the token is stale by definition — force a refresh and the new
+// claims arrive in seconds instead of up to an hour.
+async function refreshStaleClaims(u: User, data: Record<string, unknown> | null) {
+  const stamp = data?.claimsUpdatedAt as { toMillis?: () => number } | undefined
+  const claimsAt = typeof stamp?.toMillis === 'function' ? stamp.toMillis() : 0
+  if (!claimsAt) return
+
+  try {
+    const result = await u.getIdTokenResult()
+    const issuedAt = new Date(result.issuedAtTime).getTime()
+    if (claimsAt > issuedAt) {
+      await u.getIdToken(true)
+    }
+  } catch {
+    // getIdToken(true) throws when the refresh token has been revoked — which
+    // is exactly what a deliberate lock-out does. Swallow it here: the Firebase
+    // SDK signs the user out on its own, onAuthStateChanged fires again with
+    // null, and useRequireRole sends them to the login page. Rethrowing would
+    // only strand the hook in a permanent loading state.
+  }
+}
+
 export function useAdminUser() {
   const [user, setUser]             = useState<User | null>(null)
   const [role, setRole]             = useState<Role | null>(null)
@@ -157,6 +158,7 @@ export function useAdminUser() {
       setUser(u)
       const snap = await getDoc(doc(db, 'users', u.uid))
       const data = snap.exists() ? snap.data() : null
+      await refreshStaleClaims(u, data)
       if (data?.isStaff === true) {
         const roleVal = (data.role as Role) ?? null
         setRole(roleVal)
@@ -218,27 +220,9 @@ export function useIsStaff(): boolean {
   return isStaff
 }
 
-// A section whose access list includes 'dungeonmaster' is treated as
-// "DM-gated" — anyone with the isDungeonMaster flag gets in too, regardless
-// of their primary role (e.g. an admin or a gamer who also runs sessions).
-// Shared by useRequireRole below and by dashboard card visibility filters,
-// so the two never drift out of sync.
-export function hasSectionAccess(
-  role: Role | null,
-  isDungeonMaster: boolean,
-  allowed: Role[],
-  sectionGrants?: string[],
-  sectionKey?: string,
-  sectionRevocations?: string[],
-): boolean {
-  if (!role) return false
-  // Explicit revocation always wins — overrides role-based access and grants
-  if (sectionKey && sectionRevocations?.includes(sectionKey)) return false
-  if (allowed.includes(role)) return true
-  if (isDungeonMaster && allowed.includes('dungeonmaster')) return true
-  if (sectionKey && sectionGrants?.includes(sectionKey)) return true
-  return false
-}
+// hasSectionAccess() now lives in ./roles (re-exported at the top of this
+// file) so the server guard in app/lib/server/auth.ts evaluates access with
+// the exact same predicate this hook does.
 
 export function useRequireRole(allowed: Role[]) {
   const router = useRouter()
@@ -269,117 +253,101 @@ export function useRequireRole(allowed: Role[]) {
 }
 
 // Staff accounts live in the same `users` collection as customers — they just
-// have isStaff: true plus role/branchIds/isDungeonMaster fields. Creating one
-// has two steps:
-//   1. Admin writes a transient adminInvitations/{uid} doc (isStaff() reads
-//      users, writes adminInvitations — different collections, no conflict).
-//   2. The new user creates their own users/{uid} doc using their own idToken
-//      (the rule checks adminInvitations exists — different collection, no
-//      conflict; isStaff() is not called at all in the users create rule).
-export async function createAccount(email: string, password: string, role: Role, branchIds?: string[], isDungeonMaster?: boolean) {
-  const adminUser = auth.currentUser
-  if (!adminUser) throw new Error('Session expired — please sign in again.')
-  const adminToken = await adminUser.getIdToken(true)
+// have isStaff: true plus role/branchIds/isDungeonMaster fields.
+//
+// Both functions below are now thin callers of /api/admin/accounts. What used
+// to be here — a four-step REST sequence that minted the Auth user, wrote a
+// throwaway adminInvitations doc so a rule had something to check, had the NEW
+// user write their own profile with their own token (retried three times
+// against a replication race), then cleaned the invitation up — is gone. It
+// existed only because the browser had no privileged path to create a user,
+// and it could strand an Auth account with no profile if it failed midway.
+//
+// Authorization, validation, audit logging and rollback all live in the route
+// now. These functions just pass the caller's ID token and surface the error.
 
-  const apiKey    = process.env.NEXT_PUBLIC_FIREBASE_API_KEY
-  const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID
+// Every call into the server layer carries the caller's Firebase ID token; the
+// route verifies it with the Admin SDK and derives permissions from its claims.
+async function authedFetch(path: string, method: string, body: unknown): Promise<Response> {
+  const user = auth.currentUser
+  if (!user) throw new Error('Session expired — please sign in again.')
+  const token = await user.getIdToken()
 
-  // Step 1: create the Firebase Auth account and capture the new user's token.
-  // This token is used in step 3 so the new user creates their own doc
-  // (request.auth.uid == userId in the rule). Never injected into the SDK —
-  // the admin's own session is untouched.
-  const res = await fetch(
-    `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${apiKey}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
-    }
-  )
+  return fetch(path, {
+    method,
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify(body),
+  })
+}
+
+// The route returns { error } with a message already written for a human, so
+// pass it straight through rather than inventing a second set of copy.
+async function unwrap(res: Response): Promise<Record<string, unknown>> {
+  const data = await res.json().catch(() => ({}))
   if (!res.ok) {
-    const body = await res.json().catch(() => ({}))
-    const code: string = body?.error?.message ?? 'UNKNOWN_ERROR'
-    if (code.startsWith('EMAIL_EXISTS'))        throw new Error('An account with this email already exists.')
-    if (code.startsWith('WEAK_PASSWORD'))       throw new Error('Password must be at least 6 characters.')
-    if (code === 'INVALID_EMAIL')               throw new Error('Invalid email address.')
-    if (code === 'OPERATION_NOT_ALLOWED')       throw new Error('Email/password sign-in is disabled in Firebase. Enable it in the console.')
-    if (code === 'TOO_MANY_ATTEMPTS_TRY_LATER') throw new Error('Too many attempts. Please try again in a few minutes.')
-    throw new Error(`Account creation failed: ${code}`)
-  }
-  const { localId: uid, idToken: newUserToken } = await res.json()
-
-  // Step 2: admin writes the invitation (isStaff() reads users, writes
-  // adminInvitations — different collections, no same-collection conflict)
-  const inviteRes = await fetch(
-    `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/adminInvitations/${uid}`,
-    {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
-      body: JSON.stringify({ fields: {
-        createdBy: { stringValue: adminUser.uid },
-        createdAt: { timestampValue: new Date().toISOString() },
-      } }),
-    }
-  )
-  if (!inviteRes.ok) {
-    const body = await inviteRes.json().catch(() => ({}))
-    throw new Error(body?.error?.message ?? 'Failed to write invitation — check that your account still has staff access.')
-  }
-
-  // Step 3: new user creates their own users/{uid} doc using their own token.
-  // Rule: request.auth.uid == userId && exists(adminInvitations/${userId})
-  // — different collection read, no conflict. Retry with backoff in case
-  // the exists() check races against Firestore's replication of the invitation.
-  const userDocBody = JSON.stringify({ fields: {
-    email:           { stringValue: email },
-    isStaff:         { booleanValue: true },
-    role:            { stringValue: role },
-    branchIds:       { arrayValue: { values: (branchIds ?? []).map(b => ({ stringValue: b })) } },
-    isDungeonMaster: { booleanValue: isDungeonMaster ?? false },
-    xp:              { integerValue: '0' },
-    obCoins:         { integerValue: '0' },
-    createdAt:       { timestampValue: new Date().toISOString() },
-  } })
-  let docRes!: Response
-  for (let attempt = 0; attempt < 3; attempt++) {
-    if (attempt > 0) await new Promise(r => setTimeout(r, 600 * attempt))
-    docRes = await fetch(
-      `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${uid}`,
-      {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${newUserToken}` },
-        body: userDocBody,
-      }
+    throw new Error(
+      typeof data?.error === 'string' ? data.error : 'Something went wrong. Please try again.'
     )
-    if (docRes.ok) break
-    const errBody = await docRes.clone().json().catch(() => ({}))
-    if (errBody?.error?.status !== 'PERMISSION_DENIED') break
   }
+  return data
+}
 
-  // Step 4: clean up the invitation regardless of outcome
-  fetch(
-    `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/adminInvitations/${uid}`,
-    { method: 'DELETE', headers: { Authorization: `Bearer ${adminToken}` } }
-  )
-
-  if (!docRes.ok) {
-    const body = await docRes.json().catch(() => ({}))
-    throw new Error(body?.error?.message ?? 'Failed to save account record.')
-  }
-
-  await logActivity('create', 'User Account', `${email} (${role})`)
-  return uid as string
+export async function createAccount(
+  email: string,
+  password: string,
+  role: Role,
+  branchIds?: string[],
+  isDungeonMaster?: boolean,
+): Promise<string> {
+  const res = await authedFetch('/api/admin/accounts', 'POST', {
+    email, password, role, branchIds: branchIds ?? [], isDungeonMaster: isDungeonMaster ?? false,
+  })
+  const data = await unwrap(res)
+  return data.uid as string
 }
 
 // Lets an admin change an existing account's role/branches without
 // recreating it — recreating would mint a new Firebase Auth UID and break
 // that person's login entirely.
+//
+// `_before` is no longer read here: the route diffs against the CURRENT
+// document for the activity log, which is authoritative in a way a browser's
+// copy of it is not (two admins on the page at once used to produce a diff
+// against whichever stale copy happened to submit). It stays in the signature
+// so no caller has to change.
 export async function updateAccountAccess(
   uid: string,
   email: string,
-  before: { role: Role; branchIds: string[]; isDungeonMaster: boolean },
-  after: { role: Role; branchIds: string[]; isDungeonMaster: boolean }
-) {
-  await updateDoc(doc(db, 'users', uid), { role: after.role, branchIds: after.branchIds, isDungeonMaster: after.isDungeonMaster })
-  await logUpdate('User Account', email, before, after)
+  _before: { role: Role; branchIds: string[]; isDungeonMaster: boolean },
+  after: { role: Role; branchIds: string[]; isDungeonMaster: boolean },
+): Promise<void> {
+  const res = await authedFetch('/api/admin/accounts', 'PATCH', {
+    uid,
+    // Only a label fallback for the audit entry if the document has no email.
+    email,
+    role: after.role,
+    branchIds: after.branchIds,
+    isDungeonMaster: after.isDungeonMaster,
+  })
+  await unwrap(res)
+}
+
+// Removes a person's staff standing while leaving their customer identity —
+// XP, coins, bookings, history — completely intact. Their login still works.
+//
+// This used to be a client `updateDoc` deleting isStaff/role/branchIds. It had
+// to move: with custom claims in play, clearing the document alone leaves the
+// revoked account's token asserting `staff: true` forever, because claims only
+// change when something calls setCustomUserClaims. Document and claims have to
+// be cleared together, which means server-side.
+export async function revokeAccountAccess(uid: string): Promise<void> {
+  const user = auth.currentUser
+  if (!user) throw new Error('Session expired — please sign in again.')
+  const token = await user.getIdToken()
+
+  const res = await fetch(`/api/admin/accounts?uid=${encodeURIComponent(uid)}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  await unwrap(res)
 }

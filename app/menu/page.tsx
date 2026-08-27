@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Image from 'next/image'
 import { collection, getDocs } from 'firebase/firestore'
 import { db } from '../lib/firebase'
+import { categoryImage } from '../lib/menuCategoryImages'
 import Navbar from '../components/layout/Navbar'
 import Footer from '../components/layout/Footer'
 import Skeleton from '../components/Skeleton'
@@ -364,9 +365,9 @@ export default function MenuPage() {
                               pointerEvents: 'none',
                             }} />
 
-                            {cat.image && (
+                            {categoryImage(cat.name, cat.image) && (
                               <Image
-                                src={cat.image}
+                                src={categoryImage(cat.name, cat.image)}
                                 alt={cat.name}
                                 width={24}
                                 height={24}
@@ -437,9 +438,9 @@ export default function MenuPage() {
                               gap: '1rem',
                               marginBottom: '1.5rem',
                             }}>
-                              {cat.image && (
+                              {categoryImage(cat.name, cat.image) && (
                                 <Image
-                                  src={cat.image}
+                                  src={categoryImage(cat.name, cat.image)}
                                   alt={cat.name}
                                   width={50}
                                   height={50}

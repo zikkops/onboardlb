@@ -69,7 +69,7 @@ const lbl: React.CSSProperties = {
 }
 
 export default function SuppliesPage() {
-  const { checking } = useRequireRole(SECTION_ACCESS.games)
+  const { checking } = useRequireRole(SECTION_ACCESS.supplies)
   const [supplies, setSupplies]     = useState<Supply[]>([])
   const [loading, setLoading]       = useState(true)
   const [modal, setModal]           = useState<'add' | 'edit' | null>(null)

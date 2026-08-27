@@ -3,13 +3,12 @@
 import { useEffect, useState } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faEye, faEyeSlash } from '@fortawesome/free-solid-svg-icons'
-import { collection, getDocs, updateDoc, doc, query, where, deleteField } from 'firebase/firestore'
+import { collection, getDocs, updateDoc, doc, query, where } from 'firebase/firestore'
 import { db } from '../../lib/firebase'
 import {
-  useRequireRole, createAccount, updateAccountAccess,
+  useRequireRole, createAccount, updateAccountAccess, revokeAccountAccess,
   ROLE_LABELS, ROLE_COLORS, SECTION_ACCESS, SECTION_LABELS, type Role,
 } from '../../lib/adminAuth'
-import { logActivity } from '../../lib/activityLog'
 import { BRANCHES, resolveBranchName } from '../../lib/branches'
 
 interface Account {
@@ -129,13 +128,18 @@ export default function AdminUsersPage() {
 
   async function handleRevoke(account: Account) {
     if (!confirm(`Revoke admin panel access for ${account.email}? This removes their staff tag — any customer data (XP, coins) stays intact.`)) return
-    await updateDoc(doc(db, 'users', account.id), {
-      isStaff: deleteField(),
-      role: deleteField(),
-      branchIds: deleteField(),
-      isDungeonMaster: deleteField(),
-    })
-    await logActivity('delete', 'User Account', `${account.email} (${account.role})`)
+    // Goes through the server route, not a client updateDoc. Clearing the
+    // document alone would leave this account's custom claims asserting
+    // `staff: true` indefinitely — claims only change when something calls
+    // setCustomUserClaims, and the browser can't. The route clears both and
+    // revokes their sessions; it also writes the activity log entry, which is
+    // why there's no logActivity() call left here.
+    try {
+      await revokeAccountAccess(account.id)
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Could not revoke access.')
+      return
+    }
     loadAccounts()
   }
 

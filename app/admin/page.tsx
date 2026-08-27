@@ -17,7 +17,7 @@ import {
   faCashRegister, faReceipt, faDice, faUtensils, faCalendar, faCalendarCheck,
   faCalendarDay, faDiceD20, faDragon, faUsers, faUser, faClock, faMap,
   faClipboard, faThumbsUp, faGift, faTag, faTrophy, faUserShield,
-  faFile, faPaperPlane, faTruck, faList, faImage, faScroll,
+  faFile, faPaperPlane, faTruck, faList, faImage, faScroll, faHandshake, faStore,
   faClockRotateLeft, faChair, faThumbtack, faGear, faXmark, faMoneyBill,
   faClipboardCheck,
   type IconDefinition,
@@ -200,10 +200,18 @@ export default function AdminPage() {
       ],
     },
     {
+      title: 'Wholesale',
+      color: '#6A6AB7',
+      cards: [
+        { label: 'Wholesale Orders',   icon: faHandshake, daily: true,  desc: 'Approve or reject trade orders from shops, then email them on', href: '/admin/wholesale/orders',   access: SECTION_ACCESS.games },
+        { label: 'Wholesale Accounts', icon: faStore,     daily: false, desc: 'Create and deactivate the shop logins that can see trade pricing', href: '/admin/wholesale/accounts', access: ['admin'] as Role[] },
+      ],
+    },
+    {
       title: 'Inventory Management',
       color: '#6A9E5A',
       cards: [
-        { label: 'Inventory Management', icon: faClipboard, daily: true, desc: 'Track consumable stock levels across Kitchen, Bar, and Cleaning — color alerts when items run low', href: '/admin/supplies', access: SECTION_ACCESS.games },
+        { label: 'Inventory Management', icon: faClipboard, daily: true, desc: 'Track consumable stock levels across Kitchen, Bar, and Cleaning — color alerts when items run low', href: '/admin/supplies', access: SECTION_ACCESS.supplies },
         { label: 'Daily Inventory Count', icon: faClipboardCheck, daily: true, desc: 'Count today\'s stock at your branch and submit — updates live inventory levels', href: '/admin/supplies/daily', access: SECTION_ACCESS.dailyInventory },
         { label: 'Daily Inventory History', icon: faClockRotateLeft, daily: true, desc: 'Review every submitted and in-progress count by branch and department', href: '/admin/supplies/daily/history', access: SECTION_ACCESS.dailyInventoryHistory },
       ],

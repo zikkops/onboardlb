@@ -42,11 +42,23 @@ Before considering any change done:
 npx tsc --noEmit -p .
 npm run build
 ```
+
+If you touched anything under `app/lib/server/**` or `app/api/**`, `.env.local` needs `FIREBASE_SERVICE_ACCOUNT` set or those routes will fail at request time with a clear error — see [docs/server-setup.md](./docs/server-setup.md).
 Then start the dev server and hit the routes you touched (`curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/<route>` is enough to catch a server-side crash; for anything visual, actually look at it in a browser — type-checking and a successful build verify the code compiles, not that the feature looks or behaves right).
 
 ## Firestore rules
 
-If you add a new collection, or a new field that staff need to write to that customers don't (or vice versa), you need to **manually update the rules in the Firebase Console** — there's no rules file in this repo to edit. Write out the exact rule snippet for whoever's deploying it; see [ARCHITECTURE.md](./ARCHITECTURE.md#firestore-rules) for the shape every existing rule follows.
+**Correction to an earlier version of this file: there *is* a rules file in this repo.** `firestore.rules` at the project root is version-controlled and is the source of truth for what's deployed. Edit it there and deploy with the Firebase CLI:
+
+```bash
+firebase deploy --only firestore:rules
+```
+
+Never paste into the Console UI — that's how the repo and the live project drifted apart before.
+
+If you add a new collection, add its rule. Firestore denies anything unmatched, so a *missing* rule fails closed and you'll notice immediately; a rule that's merely too permissive fails open and nothing automated will catch it. See [ARCHITECTURE.md](./ARCHITECTURE.md#firestore-rules) for the shape every existing rule follows and the patterns worth reusing.
+
+A rules deploy has **no gradual rollout**. A wrong rule breaks that collection for every user at once. Change one collection at a time and verify before the next.
 
 ## Image uploads
 
@@ -56,7 +68,41 @@ The one exception is the bulk WooCommerce import wizard (`app/admin/games/import
 
 ## Adding a new server route (API route handler)
 
-If a new feature needs a Route Handler under `app/api/`, it almost certainly needs to check who's calling before doing anything — see [ARCHITECTURE.md § Authorization in API Routes](./ARCHITECTURE.md#authorization-in-api-routes-no-admin-sdk) for the established pattern (`app/lib/serverAuth.ts`) before writing a new one. The one mistake to avoid: don't call the Firestore client SDK's `getDoc`/`getDocs` bare from inside a route handler to check a role or field — there's no signed-in session on the server, so it runs as an unauthenticated read and either silently fails against real rules or (worse) requires loosening a rule to "anyone can read this" just to make the check possible. Use the Firestore REST API with the caller's own idToken as the Bearer auth instead, exactly like `isStaffToken()`/`getOwnAvatarDeleteUrl()` do.
+This project has a Firebase Admin SDK server layer as of Phase 00 — see [ARCHITECTURE.md § The Server Layer](./ARCHITECTURE.md#the-server-layer) and [docs/server-setup.md](./docs/server-setup.md). If you're working from an older copy of this file that says there's no Admin SDK, that's out of date.
+
+A new route handler under `app/api/` looks like this:
+
+```ts
+import { requireRole, toResponse, HttpError } from '@/app/lib/server/auth'
+import { adminDb } from '@/app/lib/server/firebaseAdmin'
+import { logCreate } from '@/app/lib/server/activityLog'
+
+export const runtime = 'nodejs'   // the Admin SDK cannot run on edge
+
+export async function POST(request: Request): Promise<Response> {
+  try {
+    const actor = await requireRole(request, ['admin', 'manager'])
+    // ... validate the body, do the work with adminDb() ...
+    await logCreate(actor, 'Section Name', label, snapshot)
+    return Response.json({ ok: true })
+  } catch (err) {
+    return toResponse(err)   // HttpError → its message; anything else → generic 500
+  }
+}
+```
+
+Four rules that are easy to get wrong:
+
+1. **Never import `app/lib/server/**` from a client component.** Those modules read a service-account private key. They may be imported from `app/api/**` and `scripts/**`, nowhere else. `firebase-admin` is in `serverExternalPackages`, so a mistake fails the build rather than shipping quietly — don't rely on that as your only check.
+2. **Validate every input server-side**, even ones the UI constrains. The route is now the boundary; a `<select>` is not.
+3. **Keep the audit log.** A mutation moving from the browser to a route handler silently drops out of `/admin/logs` unless you swap `app/lib/activityLog` for `app/lib/server/activityLog` — the client logger reads `auth.currentUser`, which doesn't exist on the server. An audit trail with a hole in it is worse than one you know is incomplete.
+4. **Roll back partial writes.** If you create an Auth user and the follow-up Firestore write fails, delete the Auth user. See `app/api/admin/accounts/route.ts` — orphaned Auth accounts with no profile were the old flow's worst failure mode, because the email is then taken and the admin can't simply retry.
+
+**Authorization:** `requireStaff()` for any staff member, `requireRole(request, [...])` to match a page's `useRequireRole`, `requireSection(request, key)` when per-user `sectionGrants`/`sectionRevocations` should apply (costs one document read per call — see the comment on it), `requireSuperadmin()` for the rest.
+
+**Reads stay client-side.** Live `onSnapshot` listeners are the part of Firestore worth keeping; don't move reads onto the server for consistency's sake. It's *writes* that belong behind routes — and the rule from here is no new client SDK writes.
+
+**The older pattern:** `app/lib/serverAuth.ts` still backs the two image routes. It verifies a token over REST and does authorization reads as the calling user, so it can only confirm facts the caller could already read for themselves. Leave it; don't extend it. The mistake it exists to prevent is still worth knowing: don't call the Firestore *client* SDK's `getDoc`/`getDocs` bare inside a route handler to check a role — there's no signed-in session on the server, so it runs as an unauthenticated read and either fails against real rules or pressures you into loosening one to anonymous-readable just to make the check possible.
 
 ## Commit style
 

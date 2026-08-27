@@ -1,6 +1,17 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // firebase-admin must not be bundled. It resolves optional native/gRPC
+  // dependencies at runtime and reads a PEM private key — bundling it produces
+  // either a build-time resolution error or a runtime failure that only shows
+  // up on the deployed function, never locally. Listing it here tells Next.js
+  // to leave it as a plain require() from node_modules on the server.
+  //
+  // This is also a load-bearing guard: it applies to SERVER bundles only, so
+  // if firebase-admin ever gets imported from a client component by mistake,
+  // the build fails loudly instead of quietly shipping the Admin SDK — and the
+  // credential handling around it — to a browser.
+  serverExternalPackages: ['firebase-admin'],
   images: {
     remotePatterns: [
       {

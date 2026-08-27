@@ -5,6 +5,7 @@ import {
   serverTimestamp, query, orderBy, limit, Timestamp,
 } from 'firebase/firestore'
 import { db } from './firebase'
+import { nextFormattedInvoiceNumber } from './invoiceNumber'
 import { logActivity } from './activityLog'
 import { uploadImage } from './media'
 import { BRANCHES, normalizeStock } from './branches'
@@ -35,21 +36,13 @@ export interface GamePurchaseOrder {
   refundNote: string | null
 }
 
-// Atomic sequential invoice number — increments a counter doc inside a
-// Firestore transaction so two simultaneous orders can't receive the same
-// number. Gaps are possible (if the main purchase transaction later fails),
-// which is standard and acceptable in accounting systems.
-async function nextInvoiceNumber(): Promise<string> {
-  const counterRef = doc(db, 'appSettings', 'invoiceCounter')
-  const year = new Date().getFullYear()
-  let num = 1
-  await runTransaction(db, async (tx) => {
-    const snap = await tx.get(counterRef)
-    const data = snap.data() ?? {}
-    num = data.year === year ? (data.nextNumber ?? 0) + 1 : 1
-    tx.set(counterRef, { year, nextNumber: num })
-  })
-  return `INV-${year}-${String(num).padStart(4, '0')}`
+// Invoice numbers now come from app/lib/invoiceNumber.ts in the OB-Q1-012026-0001
+// format, shared with wholesale so the business has one series. The counter doc
+// and its transaction are unchanged — only the rendered string differs, so
+// invoices issued before this keep their INV-2026-0001 numbers, which is
+// correct: an issued invoice number is a record, not a computed value.
+export async function nextInvoiceNumber(): Promise<string> {
+  return nextFormattedInvoiceNumber()
 }
 
 function truncate(ctx: CanvasRenderingContext2D, text: string, maxW: number): string {
