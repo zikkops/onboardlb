@@ -5,12 +5,30 @@
 // signing in here should never be told whether an email belongs to a staff
 // member or a customer.
 
-import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { Suspense, useEffect, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Image from 'next/image'
 import { signInWithEmailAndPassword, signOut } from 'firebase/auth'
 import { auth } from '../../lib/firebase'
 import { useWholesaleAccount } from '../../lib/wholesale'
+
+// Where a successful sign-in lands, chosen by ?next= on the login URL, so one
+// form can serve several entry points (/fullcatalogue/login sends people here
+// with next=/fullcatalogue).
+//
+// An ALLOWLIST, not a "starts with /" check: anything taken from the URL and
+// handed to router.replace() is an open-redirect waiting to happen, and
+// "//evil.example" passes a naive same-origin test. Unknown values silently
+// fall back to the catalogue rather than erroring — a mistyped link should
+// still log someone in.
+const LOGIN_DESTINATIONS = ['/wholesale', '/fullcatalogue', '/wholesale/orders'] as const
+const DEFAULT_DESTINATION = '/wholesale'
+
+function resolveDestination(next: string | null): string {
+  return LOGIN_DESTINATIONS.includes((next ?? '') as typeof LOGIN_DESTINATIONS[number])
+    ? (next as string)
+    : DEFAULT_DESTINATION
+}
 
 function useIsMobile(breakpoint = 768) {
   const [isMobile, setIsMobile] = useState(false)
@@ -23,10 +41,11 @@ function useIsMobile(breakpoint = 768) {
   return isMobile
 }
 
-export default function WholesaleLoginPage() {
+function WholesaleLoginForm() {
   const router = useRouter()
   const isMobile = useIsMobile()
   const { account, loading } = useWholesaleAccount()
+  const destination = resolveDestination(useSearchParams().get('next'))
 
   const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
@@ -34,8 +53,8 @@ export default function WholesaleLoginPage() {
   const [error, setError]       = useState('')
 
   useEffect(() => {
-    if (!loading && account) router.replace('/wholesale')
-  }, [loading, account, router])
+    if (!loading && account) router.replace(destination)
+  }, [loading, account, router, destination])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -79,7 +98,7 @@ export default function WholesaleLoginPage() {
       console.warn('Wholesale login: token refresh failed, continuing.', err)
     }
 
-    router.replace('/wholesale')
+    router.replace(destination)
   }
 
   const inp: React.CSSProperties = {
@@ -150,5 +169,17 @@ export default function WholesaleLoginPage() {
         </p>
       </div>
     </div>
+  )
+}
+
+// useSearchParams() opts a route into client-side rendering and Next refuses to
+// prerender it without a boundary, so the form is wrapped rather than losing
+// the static shell. The fallback is the page's own background, so a viewer
+// sees the same dark panel rather than a flash of white.
+export default function WholesaleLoginPage() {
+  return (
+    <Suspense fallback={<div style={{ minHeight: '100vh', backgroundColor: 'var(--black, #0a0a0a)' }} />}>
+      <WholesaleLoginForm />
+    </Suspense>
   )
 }
