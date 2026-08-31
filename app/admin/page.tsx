@@ -17,7 +17,7 @@ import {
   faCashRegister, faReceipt, faDice, faUtensils, faCalendar, faCalendarCheck,
   faCalendarDay, faDiceD20, faDragon, faUsers, faUser, faClock, faMap,
   faClipboard, faThumbsUp, faGift, faTag, faTrophy, faUserShield,
-  faFile, faPaperPlane, faTruck, faList, faImage, faScroll, faHandshake, faStore,
+  faFile, faPaperPlane, faTruck, faList, faImage, faScroll, faHandshake, faStore, faBook,
   faClockRotateLeft, faChair, faThumbtack, faGear, faXmark, faMoneyBill,
   faClipboardCheck,
   type IconDefinition,
@@ -41,7 +41,7 @@ function useIsMobile(breakpoint = 768) {
 
 export default function AdminPage() {
   const router  = useRouter()
-  const { checking, role, branchIds, sectionGrants, isDungeonMaster, user } = useRequireRole(ALL_ROLES)
+  const { checking, role, branchIds, sectionGrants, isDungeonMaster, superadmin, user } = useRequireRole(ALL_ROLES)
   const isMobile = useIsMobile()
 
   // Memoized — usePendingTransactions/usePendingRedemptions re-subscribe
@@ -205,6 +205,16 @@ export default function AdminPage() {
       cards: [
         { label: 'Wholesale Orders',   icon: faHandshake, daily: true,  desc: 'Approve or reject trade orders from shops, then email them on', href: '/admin/wholesale/orders',   access: SECTION_ACCESS.games },
         { label: 'Wholesale Accounts', icon: faStore,     daily: false, desc: 'Create and deactivate the shop logins that can see trade pricing', href: '/admin/wholesale/accounts', access: ['admin'] as Role[] },
+        // Lives outside /admin — it's the page the shops themselves see, and
+        // of the staff only a superadmin can open it. Spread in conditionally
+        // rather than carrying a `superadminOnly` flag through the filter:
+        // superadmin isn't a Role, so it can't live in `access`, and an extra
+        // key on one card breaks the inferred union the `badge` reads rely on.
+        // Hidden rather than shown-and-refused — a card that leads to a "trade
+        // access only" wall is worse than no card.
+        ...(superadmin ? [
+          { label: 'Full Catalogue',   icon: faBook,      daily: false, desc: 'Every game with retail and trade pricing side by side, as the shops see it', href: '/fullcatalogue', access: ['admin'] as Role[] },
+        ] : []),
       ],
     },
     {
