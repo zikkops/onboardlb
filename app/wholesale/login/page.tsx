@@ -41,21 +41,45 @@ export default function WholesaleLoginPage() {
     e.preventDefault()
     setBusy(true)
     setError('')
+
+    // Only the credential check may sign the user out on failure. This used to
+    // be one try/catch around everything, which meant ANY later failure — a
+    // token refresh, a network blip — signed a correctly-authenticated shop
+    // straight back out and told them their password was wrong. From the shop's
+    // side that looks like "it logs me in for a second, then logs me out".
+    let cred
     try {
-      const cred = await signInWithEmailAndPassword(auth, email.trim(), password)
-      // Force a token refresh so the `wholesale` claim is present before the
-      // next page tries to read prices — a token minted a moment before the
-      // claim was set would fail the rule and look like "no prices exist".
-      await cred.user.getIdToken(true)
-      router.replace('/wholesale')
-    } catch {
-      // Deliberately one message for every failure. Distinguishing "no such
-      // account" from "wrong password" would let anyone enumerate which shops
-      // and staff have logins here.
-      setError('Email or password is incorrect.')
+      cred = await signInWithEmailAndPassword(auth, email.trim(), password)
+    } catch (err) {
+      const code = (err as { code?: string })?.code ?? ''
+      // Deliberately one message for every credential failure. Distinguishing
+      // "no such account" from "wrong password" would let anyone enumerate
+      // which shops and staff have logins here. A network failure is not a
+      // credential failure, though, and saying so saves a support call.
+      setError(
+        code === 'auth/network-request-failed'
+          ? 'Could not reach the server. Check your connection and try again.'
+          : 'Email or password is incorrect.',
+      )
       await signOut(auth).catch(() => {})
       setBusy(false)
+      return
     }
+
+    // Past this point the credentials were ACCEPTED — never sign the user out
+    // for anything that happens next.
+    //
+    // The refresh is best-effort: it front-loads the `wholesale` claim so the
+    // catalogue's first price read has it. If it fails the session is still
+    // valid, and the claim arrives on the next natural token rotation, so
+    // continuing is strictly better than throwing the login away.
+    try {
+      await cred.user.getIdToken(true)
+    } catch (err) {
+      console.warn('Wholesale login: token refresh failed, continuing.', err)
+    }
+
+    router.replace('/wholesale')
   }
 
   const inp: React.CSSProperties = {
