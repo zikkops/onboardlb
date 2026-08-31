@@ -12,10 +12,10 @@
 // matched against a supplier invoice; deleting one leaves stock that was moved
 // by a document that no longer exists. Mark it 'disputed' instead.
 
-import { requireSection, toResponse, HttpError, type Caller } from '@/app/lib/server/auth'
-import { parseDelivery, postDelivery } from '@/app/lib/server/deliveries'
-import { logActivity, logCreate } from '@/app/lib/server/activityLog'
-import { deliveryDocLabel } from '@/app/lib/deliveries'
+import { requireSection, toResponse, HttpError, type Caller } from '../../../lib/server/auth'
+import { parseDelivery, postDelivery } from '../../../lib/server/deliveries'
+import { logActivity, logCreate } from '../../../lib/server/activityLog'
+import { deliveryDocLabel } from '../../../lib/deliveries'
 
 export const runtime = 'nodejs'
 

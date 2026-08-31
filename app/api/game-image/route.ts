@@ -16,8 +16,8 @@
 // This is the same "a Node fetch has no CORS restriction" trick that
 // app/api/import-image/route.ts already relies on, pointed the other way.
 
-import { adminAuth, adminDb } from '@/app/lib/server/firebaseAdmin'
-import { toResponse, HttpError, bearerToken } from '@/app/lib/server/auth'
+import { adminAuth, adminDb } from '../../lib/server/firebaseAdmin'
+import { toResponse, HttpError, bearerToken } from '../../lib/server/auth'
 
 export const runtime = 'nodejs'
 

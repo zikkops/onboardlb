@@ -15,9 +15,9 @@
 // Gaps are possible and accepted: a number is spent when it is issued, and the
 // create that follows may still fail. Same contract as invoice numbering.
 
-import { requireSection, toResponse, HttpError } from '@/app/lib/server/auth'
-import { adminDb } from '@/app/lib/server/firebaseAdmin'
-import { formatSku } from '@/app/lib/skuFormat'
+import { requireSection, toResponse, HttpError } from '../../../lib/server/auth'
+import { adminDb } from '../../../lib/server/firebaseAdmin'
+import { formatSku } from '../../../lib/skuFormat'
 
 export const runtime = 'nodejs'
 

@@ -7,10 +7,10 @@
 // any of that fails. The claim (`wholesale: true`) is what makes the Firestore
 // rules on gameWholesale and wholesaleOrders free to evaluate.
 
-import { adminAuth, adminDb } from '@/app/lib/server/firebaseAdmin'
-import { requireRole, toResponse, HttpError, type Caller } from '@/app/lib/server/auth'
-import { syncClaims } from '@/app/lib/server/claims'
-import { logCreate, logUpdate } from '@/app/lib/server/activityLog'
+import { adminAuth, adminDb } from '../../../lib/server/firebaseAdmin'
+import { requireRole, toResponse, HttpError, type Caller } from '../../../lib/server/auth'
+import { syncClaims } from '../../../lib/server/claims'
+import { logCreate, logUpdate } from '../../../lib/server/activityLog'
 
 export const runtime = 'nodejs'
 

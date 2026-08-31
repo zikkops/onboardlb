@@ -8,11 +8,11 @@
 // Prices are re-read from Firestore rather than trusted from the request, so a
 // shop can't submit an order priced at $0.01 by editing what the browser sends.
 
-import { adminAuth, adminDb } from '@/app/lib/server/firebaseAdmin'
-import { toResponse, HttpError, bearerToken, requireSection } from '@/app/lib/server/auth'
-import { sendEmail, emailConfigured } from '@/app/lib/server/email'
+import { adminAuth, adminDb } from '../../../lib/server/firebaseAdmin'
+import { toResponse, HttpError, bearerToken, requireSection } from '../../../lib/server/auth'
+import { sendEmail, emailConfigured } from '../../../lib/server/email'
 import { FieldValue } from 'firebase-admin/firestore'
-import { formatInvoiceNumber, INVOICE_NUMBER_PATTERN } from '@/app/lib/invoiceFormat'
+import { formatInvoiceNumber, INVOICE_NUMBER_PATTERN } from '../../../lib/invoiceFormat'
 
 export const runtime = 'nodejs'
 

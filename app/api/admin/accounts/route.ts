@@ -23,12 +23,12 @@
 // real rollback. adminInvitations and its rule can be deleted once no client
 // calls the old path — see docs/server-setup.md § Cleanup.
 
-import { adminAuth, adminDb } from '@/app/lib/server/firebaseAdmin'
-import { requireRole, toResponse, HttpError, type Caller } from '@/app/lib/server/auth'
-import { syncClaims } from '@/app/lib/server/claims'
-import { logActivity, logUpdate } from '@/app/lib/server/activityLog'
-import { isRole, type Role } from '@/app/lib/roles'
-import { BRANCHES } from '@/app/lib/branches'
+import { adminAuth, adminDb } from '../../../lib/server/firebaseAdmin'
+import { requireRole, toResponse, HttpError, type Caller } from '../../../lib/server/auth'
+import { syncClaims } from '../../../lib/server/claims'
+import { logActivity, logUpdate } from '../../../lib/server/activityLog'
+import { isRole, type Role } from '../../../lib/roles'
+import { BRANCHES } from '../../../lib/branches'
 import { FieldValue } from 'firebase-admin/firestore'
 
 // The Admin SDK opens gRPC connections and reads a PEM private key — neither
