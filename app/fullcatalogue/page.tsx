@@ -116,7 +116,7 @@ function GameCard({
           {/* Retail always; wholesale only when the game has one. */}
           <div style={{ position: 'absolute', top: '0.6rem', right: '0.6rem', display: 'flex', flexDirection: 'column', gap: '0.3rem', alignItems: 'flex-end' }}>
             {hasTrade ? (
-              <div style={{ background: '#6A6AB7', color: '#fff', padding: '0.22rem 0.55rem', borderRadius: '3px', fontSize: '0.75rem', fontWeight: 700, fontFamily: 'var(--font-inter)', whiteSpace: 'nowrap' }}>
+              <div style={{ background: '#C9962C', color: '#000', padding: '0.22rem 0.55rem', borderRadius: '3px', fontSize: '0.75rem', fontWeight: 700, fontFamily: 'var(--font-inter)', whiteSpace: 'nowrap' }}>
                 WS ${game.wholesalePrice.toFixed(2)}
               </div>
             ) : (
@@ -125,7 +125,7 @@ function GameCard({
               </div>
             )}
             {game.retailPrice > 0 && (
-              <div style={{ background: '#C9962C', color: '#000', padding: '0.22rem 0.55rem', borderRadius: '3px', fontSize: '0.75rem', fontWeight: 700, fontFamily: 'var(--font-inter)', whiteSpace: 'nowrap' }}>
+              <div style={{ background: '#6A6AB7', color: '#fff', padding: '0.22rem 0.55rem', borderRadius: '3px', fontSize: '0.75rem', fontWeight: 700, fontFamily: 'var(--font-inter)', whiteSpace: 'nowrap' }}>
                 RP ${game.retailPrice.toFixed(2)}
               </div>
             )}
@@ -531,11 +531,11 @@ export default function FullCataloguePage() {
           {/* Two prices on one card needs saying once. */}
           <div style={{ display: 'flex', gap: '1.2rem', flexWrap: 'wrap', alignItems: 'center', marginBottom: '2rem' }}>
             <span style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontFamily: 'var(--font-inter)', fontSize: '0.72rem', color: 'rgba(245,242,236,0.45)' }}>
-              <span style={{ display: 'inline-block', width: '10px', height: '10px', borderRadius: '2px', background: '#6A6AB7' }} />
+              <span style={{ display: 'inline-block', width: '10px', height: '10px', borderRadius: '2px', background: '#C9962C' }} />
               WS — your trade price
             </span>
             <span style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontFamily: 'var(--font-inter)', fontSize: '0.72rem', color: 'rgba(245,242,236,0.45)' }}>
-              <span style={{ display: 'inline-block', width: '10px', height: '10px', borderRadius: '2px', background: '#C9962C' }} />
+              <span style={{ display: 'inline-block', width: '10px', height: '10px', borderRadius: '2px', background: '#6A6AB7' }} />
               RP — retail price
             </span>
           </div>
