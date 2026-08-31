@@ -9,8 +9,9 @@ import Footer from '../components/layout/Footer'
 import Skeleton from '../components/Skeleton'
 import Link from 'next/link'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { faUsers, faClock, faCakeCandles, faSearch, faXmark } from '@fortawesome/free-solid-svg-icons'
+import { faUsers, faClock, faCakeCandles, faSearch, faXmark, faDownload } from '@fortawesome/free-solid-svg-icons'
 import { totalStock } from '../lib/branches'
+import { downloadImage } from '../lib/media'
 import {
   useWholesaleAccount, submitWholesaleOrder,
   orderTotal, orderItemCount, type WholesaleOrderItem,
@@ -52,8 +53,22 @@ function GameCard({
   onQty: (next: number) => void
 }) {
   const [hovered, setHovered] = useState(false)
+  const [downloading, setDownloading] = useState(false)
+  const [downloadError, setDownloadError] = useState('')
   const stock = totalStock(game.stock)
   const inStock = stock > 0
+
+  async function handleDownload() {
+    setDownloading(true)
+    setDownloadError('')
+    try {
+      await downloadImage(game.image, game.name)
+    } catch (err) {
+      setDownloadError(err instanceof Error ? err.message : 'Could not download that image.')
+    } finally {
+      setDownloading(false)
+    }
+  }
 
   return (
     <div
@@ -191,6 +206,34 @@ function GameCard({
             </span>
           )}
         </div>
+
+        {/* Outside the <Link> that wraps the image, for the same reason the
+            stepper is — nested in it, a click would navigate instead of save. */}
+        {game.image && (
+          <>
+            <button
+              onClick={handleDownload}
+              disabled={downloading}
+              style={{
+                marginTop: '0.6rem', width: '100%',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem',
+                padding: '0.45rem', borderRadius: '4px', cursor: downloading ? 'wait' : 'pointer',
+                background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.12)',
+                color: downloading ? 'rgba(245,242,236,0.3)' : 'rgba(245,242,236,0.55)',
+                fontFamily: 'var(--font-inter)', fontSize: '0.7rem',
+                letterSpacing: '0.08em', textTransform: 'uppercase',
+              }}
+            >
+              <FontAwesomeIcon icon={faDownload} style={{ width: '11px' }} />
+              {downloading ? 'Saving…' : 'Image'}
+            </button>
+            {downloadError && (
+              <p style={{ marginTop: '0.35rem', fontFamily: 'var(--font-inter)', fontSize: '0.68rem', color: 'var(--red)', textAlign: 'center' }}>
+                {downloadError}
+              </p>
+            )}
+          </>
+        )}
       </div>
     </div>
   )

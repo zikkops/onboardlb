@@ -48,6 +48,43 @@ export async function uploadImage(file: File): Promise<UploadResult> {
   return { url: data.url, deleteUrl: data.deleteUrl ?? null, fileName: data.fileName ?? null }
 }
 
+// Saves a hosted game image to the visitor's disk. The counterpart to
+// uploadImage(), and it goes through a route for much the same reason:
+// linking straight at imgbb doesn't work. The download attribute is ignored
+// on a cross-origin href — the browser opens the image instead of saving it —
+// and fetching i.ibb.co from page JS is blocked by the CSP in proxy.ts, which
+// permits connect-src 'self'. /api/game-image re-serves the bytes from our
+// own origin, where both work. Throws with a message fit for display.
+export async function downloadImage(url: string, name: string): Promise<void> {
+  if (!url) throw new Error('This item has no image.')
+
+  const idToken = await auth.currentUser?.getIdToken()
+  const res = await fetch(
+    `/api/game-image?url=${encodeURIComponent(url)}&name=${encodeURIComponent(name)}`,
+    { headers: idToken ? { Authorization: `Bearer ${idToken}` } : {} },
+  )
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}))
+    throw new Error(data.error ?? 'Could not download that image.')
+  }
+
+  // A blob: URL carries no headers, so the filename the route put in
+  // Content-Disposition has to be lifted out and re-applied here.
+  const disposition = res.headers.get('content-disposition') ?? ''
+  const filename = disposition.match(/filename="([^"]+)"/)?.[1] || 'game-image.jpg'
+
+  const objectUrl = URL.createObjectURL(await res.blob())
+  const a = document.createElement('a')
+  a.href = objectUrl
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  // Revoking synchronously cancels the save in some browsers — the click only
+  // queues the download, it doesn't finish it.
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 10000)
+}
+
 export interface MediaItem {
   id: string
   url: string
