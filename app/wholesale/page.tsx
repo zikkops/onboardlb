@@ -28,6 +28,7 @@ interface Game {
   retailPrice: number
   stock: Record<string, number> | number
   image: string
+  sku?: string
 }
 
 function useIsMobile(breakpoint = 768) {
@@ -234,6 +235,7 @@ export default function WholesalePage() {
           retailPrice: (data.price as number) ?? 0,
           stock:       data.stock,
           image:       (data.image as string) ?? '',
+          sku:         (data.sku as string) ?? undefined,
         } as Game
       })
       setGames(all.filter(g => g.wholesalePrice > 0))
@@ -257,7 +259,7 @@ export default function WholesalePage() {
   const cartItems: WholesaleOrderItem[] = useMemo(
     () => games
       .filter(g => (cart[g.id] ?? 0) > 0)
-      .map(g => ({ gameId: g.id, name: g.name, unitPrice: g.wholesalePrice, quantity: cart[g.id] })),
+      .map(g => ({ gameId: g.id, name: g.name, unitPrice: g.wholesalePrice, quantity: cart[g.id], sku: g.sku })),
     [games, cart],
   )
 
@@ -441,7 +443,12 @@ export default function WholesalePage() {
                 Signed in as <span style={{ color: 'var(--teal)' }}>{account.shopName || account.email}</span>
               </p>
             </div>
-            <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', flexWrap: 'wrap' }}>
+              <Link href="/fullcatalogue" style={{
+                fontFamily: 'var(--font-inter)', fontSize: '0.75rem', letterSpacing: '0.06em',
+                color: 'rgba(245,242,236,0.5)', textDecoration: 'none',
+                border: '1px solid rgba(255,255,255,0.12)', borderRadius: '3px', padding: '0.5rem 1rem',
+              }}>Full Catalogue</Link>
               <Link href="/wholesale/orders" style={{
                 fontFamily: 'var(--font-inter)', fontSize: '0.75rem', letterSpacing: '0.06em',
                 color: 'rgba(245,242,236,0.5)', textDecoration: 'none',

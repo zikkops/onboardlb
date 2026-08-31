@@ -46,6 +46,9 @@ export interface WholesaleOrderItem {
   name:      string
   unitPrice: number
   quantity:  number
+  // Stamped on the order line at checkout so the invoice can print it without
+  // re-reading the game. Optional: orders placed before SKUs existed have none.
+  sku?:      string
 }
 
 export interface WholesaleOrder {
@@ -121,6 +124,65 @@ export function useWholesaleAccount() {
   }, [])
 
   return { user, account, loading }
+}
+
+// Who may look at the full catalogue (/fullcatalogue): an approved trade
+// account, or a superadmin.
+//
+// Superadmins are included because they're the people who set the trade prices
+// in the first place — being locked out of the page that shows them next to
+// retail is nothing but an obstacle. They are NOT given a cart: ordering goes
+// through /api/wholesale/orders, which requires a `wholesale` claim a staff
+// token doesn't carry, and an order has to belong to a shop. The page reflects
+// that by rendering read-only for them rather than letting them fill a cart
+// that would 403 on submit.
+//
+// One users/{uid} read decides both, rather than pairing useWholesaleAccount()
+// with useAdminUser() — that hook also sets the admin_session cookie as a side
+// effect, which has no business being set from a customer-facing page.
+export interface TradeViewer {
+  account:    WholesaleAccount | null
+  superadmin: boolean
+}
+
+export function useTradeCatalogueViewer() {
+  const [viewer, setViewer]   = useState<TradeViewer>({ account: null, superadmin: false })
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, async u => {
+      if (!u) { setViewer({ account: null, superadmin: false }); setLoading(false); return }
+      try {
+        const snap = await getDoc(doc(db, 'users', u.uid))
+        const data = snap.exists() ? snap.data() : null
+        if (data?.isWholesale === true && data?.wholesaleActive !== false) {
+          setViewer({
+            account: {
+              uid:         u.uid,
+              email:       (data.email as string) ?? u.email ?? '',
+              shopName:    (data.shopName as string) ?? '',
+              contactName: (data.contactName as string) ?? '',
+              phone:       (data.phone as string) ?? '',
+              active:      data.wholesaleActive !== false,
+            },
+            superadmin: false,
+          })
+        } else if (data?.isStaff === true && data?.superadmin === true) {
+          setViewer({ account: null, superadmin: true })
+        } else {
+          setViewer({ account: null, superadmin: false })
+        }
+      } catch {
+        // A permission error here means "not entitled" as far as the UI is
+        // concerned — fail closed rather than showing prices.
+        setViewer({ account: null, superadmin: false })
+      }
+      setLoading(false)
+    })
+    return unsub
+  }, [])
+
+  return { ...viewer, loading }
 }
 
 // NOTE ON WHERE PRICES LIVE

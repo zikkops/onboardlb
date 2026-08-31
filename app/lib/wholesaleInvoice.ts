@@ -58,6 +58,7 @@ export async function generateInvoiceForCart(input: {
       unitPrice: i.unitPrice,
       priceType: 'wholesale' as const,
       subtotal:  Math.round(i.unitPrice * i.quantity * 100) / 100,
+      sku:       i.sku,
     })),
     input.totalUsd,
     input.issuedByEmail,
@@ -82,6 +83,7 @@ function toPurchaseItems(order: WholesaleOrder): PurchaseItem[] {
     unitPrice: i.unitPrice,
     priceType: 'wholesale' as const,
     subtotal:  Math.round(i.unitPrice * i.quantity * 100) / 100,
+    sku:       i.sku,
   }))
 }
 

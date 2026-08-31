@@ -17,6 +17,11 @@ export interface PurchaseItem {
   unitPrice: number
   priceType: 'retail' | 'wholesale'
   subtotal: number
+  // Copied onto the order at checkout, not looked up when the invoice is
+  // drawn: an issued invoice is a record and must keep rendering the same way
+  // even if the game is later renamed or removed. Optional — orders placed
+  // before SKUs existed have none, and simply show no SKU line.
+  sku?: string
 }
 
 export interface GamePurchaseOrder {
@@ -64,7 +69,10 @@ export function drawInvoiceCanvas(
 ): HTMLCanvasElement {
   const W = 794
   const PAD = 48
-  const ROW_H = 32
+  // Two lines per item — name, then SKU beneath it. ITEMS_H and therefore the
+  // canvas height are derived from this, so the taller row grows the invoice
+  // rather than overflowing the footer.
+  const ROW_H = 42
   const HEADER_H = 100
   const TABLE_HDR_H = 38
   const ITEMS_H = items.length * ROW_H
@@ -160,14 +168,20 @@ export function drawInvoiceCanvas(
     }
     ctx.textAlign = 'left'
     ctx.fillStyle = '#222222'
-    ctx.fillText(truncate(ctx, item.gameName, C_QTY - PAD - 30), PAD + 10, y + 21)
+    ctx.fillText(truncate(ctx, item.gameName, C_QTY - PAD - 30), PAD + 10, y + 18)
+    if (item.sku) {
+      ctx.font = '10px Arial, sans-serif'
+      ctx.fillStyle = '#777777'
+      ctx.fillText(item.sku, PAD + 10, y + 32)
+      ctx.font = '13px Arial, sans-serif'
+    }
     ctx.textAlign = 'right'
     ctx.fillStyle = '#555555'
-    ctx.fillText(String(item.quantity), C_QTY, y + 21)
-    ctx.fillText(`$${item.unitPrice.toFixed(2)}`, C_PRICE, y + 21)
+    ctx.fillText(String(item.quantity), C_QTY, y + 18)
+    ctx.fillText(`$${item.unitPrice.toFixed(2)}`, C_PRICE, y + 18)
     ctx.fillStyle = '#222222'
     ctx.font = '13px Arial, sans-serif'
-    ctx.fillText(`$${item.subtotal.toFixed(2)}`, C_TOTAL, y + 21)
+    ctx.fillText(`$${item.subtotal.toFixed(2)}`, C_TOTAL, y + 18)
     y += ROW_H
   }
 
@@ -399,11 +413,15 @@ export function exportGamesCSV(
     price: number
     wholesalePrice?: number | null
     stock?: Record<string, number> | number
+    sku?: string
   }>,
   includeWholesale: boolean,
 ): void {
+  // SKU leads because it is the identity column on the way back in: the
+  // importer matches on it, so a round-trip can rename a game without the
+  // import mistaking it for a new one.
   const headers = [
-    'Name', 'Category', 'Retail Price ($)',
+    'SKU', 'Name', 'Category', 'Retail Price ($)',
     ...(includeWholesale ? ['Wholesale Price ($)'] : []),
     ...BRANCHES.map(b => `Stock — ${b}`),
     'Total Stock',
@@ -415,6 +433,7 @@ export function exportGamesCSV(
         : { ...(g.stock ?? {}) }
     const total = BRANCHES.reduce((s, b) => s + (stockMap[b] ?? 0), 0)
     return [
+      `"${(g.sku ?? '').replace(/"/g, '""')}"`,
       `"${g.name.replace(/"/g, '""')}"`,
       `"${(g.category ?? '').replace(/"/g, '""')}"`,
       g.price > 0 ? g.price.toFixed(2) : '',

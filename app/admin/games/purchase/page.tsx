@@ -15,6 +15,7 @@ interface Game {
   wholesalePrice?: number | null
   stock: Record<string, number>
   image?: string
+  sku?: string
 }
 
 interface CartLine {
@@ -134,6 +135,7 @@ export default function RecordSalePage() {
         unitPrice: lineUnitPrice(l),
         priceType: l.priceType,
         subtotal: lineTotal(l),
+        sku: l.game.sku,
       }))
       const { orderId, invoiceUrl } = await createPurchaseOrder({
         customerName: customerName.trim(),

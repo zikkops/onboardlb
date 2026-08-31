@@ -8,6 +8,7 @@ import { logActivity, logCreate, logUpdate, logDelete } from '../../lib/activity
 import { BRANCHES, emptyStock, normalizeStock, totalStock } from '../../lib/branches'
 import { recordMediaUpload, uploadImage } from '../../lib/media'
 import { exportGamesCSV } from '../../lib/gamePurchases'
+import { nextSku } from '../../lib/sku'
 import MediaPickerModal from '../../components/admin/MediaPickerModal'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faSearch } from '@fortawesome/free-solid-svg-icons'
@@ -24,6 +25,9 @@ interface Game {
   wholesalePrice?: number | null
   stock: Record<string, number>
   image: string
+  // Issued once on create and never rewritten — see app/lib/skuFormat.ts.
+  // Optional because games that predate the backfill may not carry one.
+  sku?: string
 }
 
 const EMPTY = {
@@ -158,19 +162,32 @@ export default function AdminGamesPage() {
   async function handleSave(e: React.FormEvent) {
     e.preventDefault()
     setSaving(true)
-    if (editing) {
-      await updateDoc(doc(db, 'games', editing.id), {
-        ...form,
-        updatedAt: serverTimestamp(),
-      })
-      await logUpdate('Game', form.name, editing, form)
-    } else {
-      await addDoc(collection(db, 'games'), {
-        ...form,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-      await logCreate('Game', form.name, form)
+    try {
+      if (editing) {
+        // The SKU is never part of `form`, so an edit cannot rewrite it —
+        // renaming a game keeps the SKU already printed on labels and past
+        // invoices. Existing docs keep whatever they have.
+        await updateDoc(doc(db, 'games', editing.id), {
+          ...form,
+          updatedAt: serverTimestamp(),
+        })
+        await logUpdate('Game', form.name, editing, form)
+      } else {
+        // Allocated before the write: a game without a SKU is the thing worth
+        // avoiding, and a spent-but-unused number is not (gaps are expected).
+        const sku = await nextSku(form.name)
+        await addDoc(collection(db, 'games'), {
+          ...form,
+          sku,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        })
+        await logCreate('Game', form.name, { ...form, sku })
+      }
+    } catch (err) {
+      setSaving(false)
+      alert(err instanceof Error ? err.message : 'Could not save the game.')
+      return
     }
     setSaving(false)
     setOpen(false)
@@ -493,6 +510,11 @@ export default function AdminGamesPage() {
                   )}
                   <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
                     <p style={{ fontFamily: 'var(--font-cinzel)', fontSize: '0.95rem', color: 'var(--offwhite)' }}>{game.name}</p>
+                    {game.sku && (
+                      <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.7rem', letterSpacing: '0.08em', color: 'rgba(201,150,44,0.85)' }}>
+                        {game.sku}
+                      </p>
+                    )}
                     <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.78rem', color: 'rgba(245,242,236,0.5)' }}>
                       {game.category} · {game.players}
                     </p>
@@ -575,7 +597,14 @@ export default function AdminGamesPage() {
                         }} />
                       )}
                     </td>
-                    <td style={{ padding: '1rem 1.2rem', fontFamily: 'var(--font-cinzel)', fontSize: '0.9rem', color: 'var(--offwhite)' }}>{game.name}</td>
+                    <td style={{ padding: '1rem 1.2rem', fontFamily: 'var(--font-cinzel)', fontSize: '0.9rem', color: 'var(--offwhite)' }}>
+                      {game.name}
+                      {game.sku && (
+                        <span style={{ display: 'block', fontFamily: 'var(--font-inter)', fontSize: '0.68rem', letterSpacing: '0.08em', color: 'rgba(201,150,44,0.8)', marginTop: '0.15rem' }}>
+                          {game.sku}
+                        </span>
+                      )}
+                    </td>
                     <td style={{ padding: '1rem 1.2rem', fontFamily: 'var(--font-inter)', fontSize: '0.82rem', color: 'rgba(245,242,236,0.5)' }}>{game.category}</td>
                     <td style={{ padding: '1rem 1.2rem', fontFamily: 'var(--font-inter)', fontSize: '0.82rem', color: 'rgba(245,242,236,0.5)' }}>{game.players}</td>
                     <td style={{ padding: '1rem 1.2rem', fontFamily: 'var(--font-inter)', fontSize: '0.82rem', color: 'var(--teal)' }}>

@@ -39,8 +39,20 @@ service cloud.firestore {
 
     // True only when this token actually carries claims. Every helper below
     // branches on it, so the fallback path is never taken for a modern token.
+    // Probe the claim with .get(), NOT `request.auth.token.staff`. No token
+    // carries claims until the backfill has run, and a bare property access
+    // for a claim that isn't on the token FAILS rather than returning false.
+    //
+    // That failure is invisible in isStaff(), because `hasClaims() || (...)`
+    // still reaches the document fallback on the right-hand side. But every
+    // other helper uses hasClaims() as a TERNARY CONDITION, and a ternary
+    // whose condition fails takes neither branch — so staffRole() and isDm()
+    // never returned anything, and every hasRole()/can() gate in the file
+    // denied for every staff account while the isStaff() ones kept working.
+    // That is the exact signature of the outage: /admin pages loaded (reads
+    // are isStaff()) but no save anywhere in the panel succeeded.
     function hasClaims() {
-      return isSignedIn() && request.auth.token.staff == true;
+      return isSignedIn() && request.auth.token.get('staff', false) == true;
     }
 
     // FALLBACK — one billed read, pre-backfill tokens only.
@@ -52,13 +64,15 @@ service cloud.firestore {
       return hasClaims() || (isSignedIn() && userDoc().get('isStaff', false) == true);
     }
 
+    // Same .get() rule as hasClaims() above: never touch a claim by bare
+    // property access, or the helper fails outright for a claimless token.
     function staffRole() {
-      return hasClaims() ? request.auth.token.role : userDoc().get('role', '');
+      return hasClaims() ? request.auth.token.get('role', '') : userDoc().get('role', '');
     }
 
     function isDm() {
       return hasClaims()
-        ? request.auth.token.dm == true
+        ? request.auth.token.get('dm', false) == true
         : (isSignedIn() && userDoc().get('isDungeonMaster', false) == true);
     }
 
@@ -104,7 +118,7 @@ service cloud.firestore {
     // nothing. A deactivated account loses this claim (see claims.ts), so
     // deactivating is enough — the login doesn't have to be deleted.
     function isWholesale() {
-      return request.auth != null && request.auth.token.wholesale == true;
+      return request.auth != null && request.auth.token.get('wholesale', false) == true;
     }
 
     function can(section, roles) {
@@ -150,6 +164,21 @@ service cloud.firestore {
     // narrows, from "any staff" to "the roles that own this section".
     match /games/{id}          { allow read: if true; allow write: if canGames(); }
     match /gameCategories/{id} { allow read: if true; allow write: if canGames(); }
+
+    // ---- Wholesale pricing ----
+    // Deliberately NOT a field on games/{id}. That doc is world-readable so
+    // the storefront works signed-out, which means any field on it is public
+    // no matter what the UI shows — wholesale cost and therefore retail margin
+    // included. Splitting it into its own collection is what makes the price
+    // gateable at all. Doc id == the game id.
+    match /gameWholesale/{id} {
+      // isWholesale() first: it is a free token check, while isStaff() falls
+      // back to a billed get() for any token without staff claims — which is
+      // every wholesale account. Reversed, each price read would cost a read.
+      allow read:  if isWholesale() || isStaff();
+      allow write: if canGames();
+    }
+
     match /menuCategories/{id} { allow read: if true; allow write: if canMenu(); }
     match /menuItems/{id}      { allow read: if true; allow write: if canMenu(); }
     match /events/{id}         { allow read: if true; allow write: if canEvents(); }

@@ -8,9 +8,10 @@ import { logCreate, logUpdate } from '../../../lib/activityLog'
 import { BRANCHES, emptyStock } from '../../../lib/branches'
 import { recordMediaUpload } from '../../../lib/media'
 import { parseCSV } from '../../../lib/csv'
+import { nextSku } from '../../../lib/sku'
 
 type StaticFieldKey =
-  | 'name' | 'description' | 'category' | 'price' | 'wholesalePrice'
+  | 'sku' | 'name' | 'description' | 'category' | 'price' | 'wholesalePrice'
   | 'stock' | 'image' | 'players' | 'duration' | 'age'
 
 // Per-branch stock columns are generated from BRANCHES, so adding a branch
@@ -24,6 +25,9 @@ interface FieldDef { key: FieldKey; label: string; required?: boolean; guesses: 
 // Guesses include the exact headers "Export Full CSV" writes, so an exported
 // file can be edited in a spreadsheet and imported straight back.
 const FIELD_DEFS: FieldDef[] = [
+  // Mapped first because it is the identity column: a row carrying a known SKU
+  // updates that game even if its name changed in the spreadsheet.
+  { key: 'sku',            label: 'SKU',                       guesses: ['sku', 'item sku', 'product sku', 'code'] },
   { key: 'name',           label: 'Game Name', required: true, guesses: ['name', 'product name', 'title'] },
   { key: 'description',    label: 'Description',               guesses: ['description', 'short description'] },
   { key: 'category',       label: 'Category',                  guesses: ['categories', 'category'] },
@@ -104,6 +108,9 @@ interface Results {
   updated: number
   unchanged: number
   skippedNoName: number
+  // Rows naming a SKU no game owns. Not created and not silently renumbered:
+  // a typo'd SKU that quietly became a new game would be worse than a skip.
+  skippedUnknownSku: string[]
   imageFailures: number
   categoriesCreated: string[]
 }
@@ -111,6 +118,8 @@ interface Results {
 interface ExistingGame {
   id: string
   stock: Record<string, number>
+  sku?: string
+  name: string
 }
 
 function useIsMobile(breakpoint = 768) {
@@ -152,11 +161,12 @@ export default function ImportGamesPage() {
         getDocs(collection(db, 'gameCategories')),
       ])
       setExistingGames(new Map(gamesSnap.docs.map(d => {
-        const data = d.data() as { name?: string; stock?: Record<string, number> | number }
+        const data = d.data() as { name?: string; stock?: Record<string, number> | number; sku?: string }
         const stock = typeof data.stock === 'number'
           ? { ...emptyStock(), [BRANCHES[0]]: data.stock }
           : { ...emptyStock(), ...(data.stock ?? {}) }
-        return [String(data.name ?? '').toLowerCase(), { id: d.id, stock }] as const
+        const name = String(data.name ?? '')
+        return [name.toLowerCase(), { id: d.id, stock, sku: data.sku, name }] as const
       })))
       setExistingCategories(new Set(catSnap.docs.map(d => String((d.data() as any).name ?? ''))))
       setLoadingExisting(false)
@@ -197,7 +207,16 @@ export default function ImportGamesPage() {
     const games = new Map(existingGames)
     const categories = new Set(existingCategories)
     const categoriesCreated: string[] = []
+    const skippedUnknownSku: string[] = []
     let created = 0, updated = 0, unchanged = 0, skippedNoName = 0, imageFailures = 0
+
+    // Second index over the same games, keyed by SKU. Rebuilt from `games` on
+    // each lookup would be O(n) per row; built once here and kept in step as
+    // rows are created below.
+    const bySku = new Map<string, ExistingGame>()
+    for (const g of games.values()) {
+      if (g.sku) bySku.set(g.sku.toLowerCase(), g)
+    }
 
     // A cell only counts if the column is mapped AND non-empty — that's what
     // makes a blank cell mean "leave this field alone" rather than "clear it".
@@ -216,9 +235,29 @@ export default function ImportGamesPage() {
         setProgress({ done: i + 1, total: rows.length })
         continue
       }
-      const existing = games.get(name.toLowerCase())
+
+      // SKU wins over name when present. That is the whole point of exporting
+      // it: the spreadsheet can rename a game and the import still knows which
+      // document it means, instead of creating a duplicate under the new name.
+      const rowSku = (mapping.sku ? row[mapping.sku] : '').trim()
+      let existing: ExistingGame | undefined
+      if (rowSku) {
+        existing = bySku.get(rowSku.toLowerCase())
+        if (!existing) {
+          skippedUnknownSku.push(`${rowSku} (${name})`)
+          setProgress({ done: i + 1, total: rows.length })
+          continue
+        }
+      } else {
+        existing = games.get(name.toLowerCase())
+      }
+
       if (existing) {
         const patch: Record<string, unknown> = {}
+
+        // Only when matched by SKU — a name match cannot have a name change,
+        // and `sku` is never patched, so an import can't reassign one.
+        if (rowSku && name !== existing.name) patch.name = name
 
         const desc = cell(row, mapping.description)
         if (desc !== null) patch.description = desc
@@ -266,7 +305,7 @@ export default function ImportGamesPage() {
           await updateDoc(doc(db, 'games', existing.id), { ...patch, updatedAt: serverTimestamp() })
           await logUpdate('Game', name, {}, patch)
           if (patch.stock) {
-            games.set(name.toLowerCase(), { ...existing, stock: patch.stock as Record<string, number> })
+            games.set(name.toLowerCase(), { ...existing, stock: patch.stock as Record<string, number>, name })
           }
           updated++
         }
@@ -325,19 +364,27 @@ export default function ImportGamesPage() {
         image,
       }
 
+      // One allocation per created row rather than a block up front: the loop
+      // only decides create-vs-update as it goes, so a pre-allocated block
+      // would have to guess how many it needs and burn the remainder.
+      const sku = await nextSku(name)
+
       const ref = await addDoc(collection(db, 'games'), {
         ...gameData,
+        sku,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       })
-      await logCreate('Game', name, gameData)
+      await logCreate('Game', name, { ...gameData, sku })
 
-      games.set(name.toLowerCase(), { id: ref.id, stock })
+      const createdGame: ExistingGame = { id: ref.id, stock, sku, name }
+      games.set(name.toLowerCase(), createdGame)
+      bySku.set(sku.toLowerCase(), createdGame)
       created++
       setProgress({ done: i + 1, total: rows.length })
     }
 
-    setResults({ created, updated, unchanged, skippedNoName, imageFailures, categoriesCreated })
+    setResults({ created, updated, unchanged, skippedNoName, skippedUnknownSku, imageFailures, categoriesCreated })
     setExistingGames(games)
     setExistingCategories(categories)
     setImporting(false)
@@ -594,6 +641,14 @@ export default function ImportGamesPage() {
                 {results.skippedNoName > 0 && (
                   <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.8rem', color: 'rgba(245,242,236,0.5)' }}>
                     {results.skippedNoName} skipped (no name)
+                  </p>
+                )}
+                {results.skippedUnknownSku.length > 0 && (
+                  <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.8rem', color: 'var(--red)' }}>
+                    {results.skippedUnknownSku.length} row{results.skippedUnknownSku.length === 1 ? '' : 's'} skipped — the SKU matches no existing game, so nothing was created or renamed:{' '}
+                    {results.skippedUnknownSku.slice(0, 8).join(', ')}
+                    {results.skippedUnknownSku.length > 8 ? `, and ${results.skippedUnknownSku.length - 8} more` : ''}.
+                    {' '}Clear the SKU cell to import these as new games.
                   </p>
                 )}
                 {results.imageFailures > 0 && (
