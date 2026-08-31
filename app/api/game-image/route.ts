@@ -16,7 +16,7 @@
 // This is the same "a Node fetch has no CORS restriction" trick that
 // app/api/import-image/route.ts already relies on, pointed the other way.
 
-import { adminAuth } from '@/app/lib/server/firebaseAdmin'
+import { adminAuth, adminDb } from '@/app/lib/server/firebaseAdmin'
 import { toResponse, HttpError, bearerToken } from '@/app/lib/server/auth'
 
 export const runtime = 'nodejs'
@@ -49,9 +49,16 @@ async function requireCatalogueViewer(request: Request): Promise<void> {
     throw new HttpError(401, 'Session expired — please sign in again.')
   }
 
-  if (decoded.wholesale !== true && decoded.superadmin !== true) {
-    throw new HttpError(403, 'Not a trade account.')
-  }
+  if (decoded.wholesale === true || decoded.superadmin === true) return
+
+  // TRANSITIONAL, and the same fallback getCaller() carries: a token minted
+  // before the claims backfill ran has neither claim, so the claim check alone
+  // would refuse an account every other part of the app admits. One read, only
+  // on the path that would otherwise be a 403.
+  const data = (await adminDb().doc(`users/${decoded.uid}`).get()).data()
+  const isTrade = data?.isWholesale === true && data?.wholesaleActive !== false
+  const isSuperadmin = data?.isStaff === true && data?.superadmin === true
+  if (!isTrade && !isSuperadmin) throw new HttpError(403, 'Not a trade account.')
 }
 
 // The game name is used verbatim in a header, so everything that isn't a
