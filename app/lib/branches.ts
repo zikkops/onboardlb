@@ -28,6 +28,19 @@ export function totalStock(stock: unknown): number {
   return 0
 }
 
+// What a wholesale shop may actually order: everything on the shelves minus
+// whatever is already spoken for by a pending order.
+//
+// `reservedQty` is a single number rather than a per-branch map on purpose.
+// Nothing is ever deducted from a branch by a wholesale order — a hold is
+// released whole when staff approve or reject — so splitting it across
+// branches would invent a decision (which branch ships it) that this flow
+// never has to make.
+export function availableStock(stock: unknown, reservedQty: unknown): number {
+  const reserved = Math.max(0, Number(reservedQty) || 0)
+  return Math.max(0, totalStock(stock) - reserved)
+}
+
 // Branch ids are just the branch name itself (no separate branches
 // collection) — this just normalizes casing and falls back to the raw value
 // for anything unrecognized instead of showing blank.

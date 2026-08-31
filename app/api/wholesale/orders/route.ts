@@ -13,6 +13,7 @@ import { toResponse, HttpError, bearerToken, requireSection } from '../../../lib
 import { sendEmail, emailConfigured } from '../../../lib/server/email'
 import { FieldValue } from 'firebase-admin/firestore'
 import { formatInvoiceNumber, INVOICE_NUMBER_PATTERN } from '../../../lib/invoiceFormat'
+import { availableStock } from '../../../lib/branches'
 
 export const runtime = 'nodejs'
 
@@ -65,15 +66,19 @@ function parseLines(body: Record<string, unknown>): LineInput[] {
   if (!Array.isArray(raw) || raw.length === 0) throw new HttpError(400, 'The order is empty.')
   if (raw.length > 200) throw new HttpError(400, 'Too many lines in one order.')
 
-  const lines: LineInput[] = []
+  // Merged by gameId, not just collected. Two lines naming the same game would
+  // otherwise be stock-checked independently — each seeing the full available
+  // quantity — and could reserve twice what exists.
+  const byGame = new Map<string, number>()
   for (const r of raw) {
     if (!r || typeof r !== 'object') continue
     const gameId = (r as { gameId?: unknown }).gameId
     const quantity = Number((r as { quantity?: unknown }).quantity)
     if (typeof gameId !== 'string' || !gameId) continue
     if (!Number.isFinite(quantity) || quantity <= 0) continue
-    lines.push({ gameId, quantity: Math.floor(quantity) })
+    byGame.set(gameId, (byGame.get(gameId) ?? 0) + Math.floor(quantity))
   }
+  const lines: LineInput[] = [...byGame].map(([gameId, quantity]) => ({ gameId, quantity }))
   if (lines.length === 0) throw new HttpError(400, 'The order is empty.')
   return lines
 }
@@ -163,45 +168,82 @@ export async function POST(request: Request): Promise<Response> {
 
     // Re-price server-side. Whatever the browser claimed the price was is
     // ignored entirely.
+    //
+    // Pricing, the stock check and the reservation all happen in ONE
+    // transaction. Checking availability with a plain read and then writing
+    // would leave a window where two shops both pass the check on the last
+    // copy and both reserve it. Firestore retries the transaction when a game
+    // doc changes underneath it, so the loser re-reads and is told the truth.
     const db = adminDb()
     const refs = lines.map(l => db.doc(`games/${l.gameId}`))
-    const snaps = await db.getAll(...refs)
+    const ref = db.collection('wholesaleOrders').doc()
 
-    const items = []
-    for (let i = 0; i < lines.length; i++) {
-      const snap = snaps[i]
-      if (!snap.exists) throw new HttpError(400, 'One of those games no longer exists.')
-      const data = snap.data() ?? {}
-      const unitPrice = Number(data.wholesalePrice)
-      if (!Number.isFinite(unitPrice) || unitPrice <= 0) {
-        throw new HttpError(400, `"${data.name ?? 'A game'}" is not available at wholesale.`)
+    let items: Array<{ gameId: string; name: string; unitPrice: number; quantity: number }> = []
+    let totalUsd = 0
+    let itemCount = 0
+
+    await db.runTransaction(async tx => {
+      const snaps = await tx.getAll(...refs)
+
+      items = []
+      for (let i = 0; i < lines.length; i++) {
+        const snap = snaps[i]
+        if (!snap.exists) throw new HttpError(400, 'One of those games no longer exists.')
+        const data = snap.data() ?? {}
+        const unitPrice = Number(data.wholesalePrice)
+        if (!Number.isFinite(unitPrice) || unitPrice <= 0) {
+          throw new HttpError(400, `"${data.name ?? 'A game'}" is not available at wholesale.`)
+        }
+
+        // Checked HERE as well as in the browser, because the browser's cap is
+        // only a convenience — this route takes gameId and quantity from the
+        // request, so a hand-made POST could ask for a thousand of anything.
+        // `available` nets off stock already held by other pending orders, so
+        // the same copy can't be promised to two shops.
+        const name = (data.name as string) ?? 'A game'
+        const available = availableStock(data.stock, data.reservedQty)
+        if (lines[i].quantity > available) {
+          throw new HttpError(
+            400,
+            available > 0
+              ? `Only ${available} of "${name}" ${available === 1 ? 'is' : 'are'} available. Please reduce the quantity.`
+              : `"${name}" is out of stock or fully reserved by pending orders.`,
+          )
+        }
+
+        items.push({ gameId: lines[i].gameId, name: (data.name as string) ?? '', unitPrice, quantity: lines[i].quantity })
       }
-      items.push({
-        gameId: lines[i].gameId,
-        name: (data.name as string) ?? '',
-        unitPrice,
-        quantity: lines[i].quantity,
+
+      totalUsd = Math.round(items.reduce((s, i) => s + i.unitPrice * i.quantity, 0) * 100) / 100
+      itemCount = items.reduce((s, i) => s + i.quantity, 0)
+
+      // Hold the stock. Nothing is deducted — `stock` itself is untouched, so
+      // the shelves stay truthful; the hold is released whole on approve or
+      // reject (see PATCH).
+      for (let i = 0; i < lines.length; i++) {
+        tx.update(refs[i], { reservedQty: FieldValue.increment(lines[i].quantity) })
+      }
+
+      tx.set(ref, {
+        accountUid:     account.uid,
+        accountEmail:   account.email,
+        shopName:       account.shopName,
+        contactName:    account.contactName,
+        phone:          account.phone,
+        items, totalUsd, itemCount, notes,
+        ...(invoiceNumber ? { invoiceNumber } : {}),
+        ...(invoiceUrl ? { invoiceUrl, invoicedAt: FieldValue.serverTimestamp() } : {}),
+        status:         'pending',
+        // Marks that this order is currently holding stock. PATCH clears it as
+        // it releases, so a second decision on the same order can't release
+        // the same hold twice.
+        stockReserved:  true,
+        createdAt:      FieldValue.serverTimestamp(),
+        decidedBy:      '',
+        decidedByEmail: '',
+        decidedAt:      null,
+        emailedAt:      null,
       })
-    }
-
-    const totalUsd = Math.round(items.reduce((s, i) => s + i.unitPrice * i.quantity, 0) * 100) / 100
-    const itemCount = items.reduce((s, i) => s + i.quantity, 0)
-
-    const ref = await db.collection('wholesaleOrders').add({
-      accountUid:     account.uid,
-      accountEmail:   account.email,
-      shopName:       account.shopName,
-      contactName:    account.contactName,
-      phone:          account.phone,
-      items, totalUsd, itemCount, notes,
-      ...(invoiceNumber ? { invoiceNumber } : {}),
-      ...(invoiceUrl ? { invoiceUrl, invoicedAt: FieldValue.serverTimestamp() } : {}),
-      status:         'pending',
-      createdAt:      FieldValue.serverTimestamp(),
-      decidedBy:      '',
-      decidedByEmail: '',
-      decidedAt:      null,
-      emailedAt:      null,
     })
 
     // The order is saved. From here every failure is a notification failure,
@@ -267,21 +309,45 @@ export async function PATCH(request: Request): Promise<Response> {
 
     const db = adminDb()
     const ref = db.doc(`wholesaleOrders/${orderId}`)
-    const snap = await ref.get()
-    if (!snap.exists) throw new HttpError(404, 'Order not found.')
 
-    const patch: Record<string, unknown> = {
-      status,
-      decidedBy: actor.uid,
-      decidedByEmail: actor.email ?? '',
-      decidedAt: FieldValue.serverTimestamp(),
-    }
-    // The invoice is drawn in the browser (it's a canvas), so the URL arrives
-    // with this request rather than being produced here.
-    if (typeof body.invoiceNumber === 'string' && body.invoiceNumber) patch.invoiceNumber = body.invoiceNumber
-    if (typeof body.invoiceUrl === 'string' && body.invoiceUrl) patch.invoiceUrl = body.invoiceUrl
+    // Deciding an order releases the stock it was holding — on approve just as
+    // much as on reject. Approving is a "seen, being processed" signal, not a
+    // stock movement: the copies leave inventory later, through the branch's
+    // own sale, exactly as they did before reservations existed.
+    //
+    // In a transaction with the status write, and guarded by the order's own
+    // stockReserved flag, so deciding twice (a double-click, a retry) can't
+    // release the same hold twice and drive reservedQty negative.
+    await db.runTransaction(async tx => {
+      const snap = await tx.get(ref)
+      if (!snap.exists) throw new HttpError(404, 'Order not found.')
+      const order = snap.data() ?? {}
 
-    await ref.update(patch)
+      const patch: Record<string, unknown> = {
+        status,
+        decidedBy: actor.uid,
+        decidedByEmail: actor.email ?? '',
+        decidedAt: FieldValue.serverTimestamp(),
+      }
+      // The invoice is drawn in the browser (it's a canvas), so the URL arrives
+      // with this request rather than being produced here.
+      if (typeof body.invoiceNumber === 'string' && body.invoiceNumber) patch.invoiceNumber = body.invoiceNumber
+      if (typeof body.invoiceUrl === 'string' && body.invoiceUrl) patch.invoiceUrl = body.invoiceUrl
+
+      if (order.stockReserved === true) {
+        const orderItems = Array.isArray(order.items) ? order.items : []
+        for (const it of orderItems) {
+          const gameId = (it as { gameId?: unknown }).gameId
+          const qty = Number((it as { quantity?: unknown }).quantity)
+          if (typeof gameId !== 'string' || !gameId || !Number.isFinite(qty) || qty <= 0) continue
+          tx.update(db.doc(`games/${gameId}`), { reservedQty: FieldValue.increment(-qty) })
+        }
+        patch.stockReserved = false
+        patch.stockReleasedAt = FieldValue.serverTimestamp()
+      }
+
+      tx.update(ref, patch)
+    })
 
     return Response.json({ orderId, status })
 

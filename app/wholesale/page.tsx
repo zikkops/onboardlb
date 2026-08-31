@@ -10,7 +10,7 @@ import Skeleton from '../components/Skeleton'
 import Link from 'next/link'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faUsers, faClock, faCakeCandles, faSearch, faXmark, faDownload } from '@fortawesome/free-solid-svg-icons'
-import { totalStock } from '../lib/branches'
+import { availableStock } from '../lib/branches'
 import { downloadImage } from '../lib/media'
 import {
   useWholesaleAccount, submitWholesaleOrder,
@@ -28,6 +28,7 @@ interface Game {
   wholesalePrice: number
   retailPrice: number
   stock: Record<string, number> | number
+  reservedQty?: number
   image: string
   sku?: string
 }
@@ -55,7 +56,9 @@ function GameCard({
   const [hovered, setHovered] = useState(false)
   const [downloading, setDownloading] = useState(false)
   const [downloadError, setDownloadError] = useState('')
-  const stock = totalStock(game.stock)
+  // What this shop may order: shelf stock minus anything held by pending
+  // orders, so the same copies aren't promised twice.
+  const stock = availableStock(game.stock, game.reservedQty)
   const inStock = stock > 0
 
   async function handleDownload() {
@@ -124,7 +127,7 @@ function GameCard({
             fontSize: '0.65rem', fontFamily: 'var(--font-inter)',
             letterSpacing: '0.08em', textTransform: 'uppercase',
           }}>
-            {inStock ? `${stock} in stock` : 'Out of stock'}
+            {inStock ? `${stock} available` : 'Unavailable'}
           </div>
         </div>
       </Link>
@@ -166,9 +169,8 @@ function GameCard({
           )}
         </div>
 
-        {/* Order quantity. Stock is shown but not enforced here — staff confirm
-            availability when they approve, and a hard block would hide demand
-            for titles worth restocking. */}
+        {/* Order quantity, capped at stock. The cap is repeated server-side in
+            app/api/wholesale/orders — this is the convenience, that is the rule. */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.6rem' }}>
           <button
             onClick={() => onQty(Math.max(0, qty - 1))}
@@ -181,23 +183,32 @@ function GameCard({
             }}
           >−</button>
           <input
-            type="number" min={0} value={qty}
-            onChange={e => onQty(Math.max(0, parseInt(e.target.value || '0', 10) || 0))}
+            type="number" min={0} max={stock} value={qty}
+            disabled={!inStock}
+            // Clamped on change rather than only on blur: typing 50 against a
+            // stock of 3 snaps to 3 immediately, so the number in the box is
+            // always one the order can actually be placed for.
+            onChange={e => onQty(Math.min(stock, Math.max(0, parseInt(e.target.value || '0', 10) || 0)))}
             aria-label={`Quantity of ${game.name}`}
             style={{
               width: '56px', textAlign: 'center', padding: '0.35rem',
               background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)',
               borderRadius: '4px', color: qty > 0 ? '#6A6AB7' : 'var(--offwhite)',
               fontWeight: 700, fontFamily: 'var(--font-inter)', fontSize: '0.85rem', outline: 'none',
+              cursor: inStock ? 'auto' : 'not-allowed', opacity: inStock ? 1 : 0.4,
             }}
           />
           <button
-            onClick={() => onQty(qty + 1)}
+            onClick={() => onQty(Math.min(stock, qty + 1))}
+            disabled={qty >= stock}
             aria-label={`Add one ${game.name}`}
+            title={qty >= stock && inStock ? `Only ${stock} available` : undefined}
             style={{
-              width: '30px', height: '30px', borderRadius: '4px', cursor: 'pointer',
-              background: 'rgba(106,106,183,0.18)', border: '1px solid rgba(106,106,183,0.5)',
-              color: '#9B9BD6', fontSize: '1rem', lineHeight: 1,
+              width: '30px', height: '30px', borderRadius: '4px',
+              cursor: qty >= stock ? 'not-allowed' : 'pointer',
+              background: qty >= stock ? 'rgba(255,255,255,0.05)' : 'rgba(106,106,183,0.18)',
+              border: `1px solid ${qty >= stock ? 'rgba(255,255,255,0.12)' : 'rgba(106,106,183,0.5)'}`,
+              color: qty >= stock ? 'rgba(245,242,236,0.2)' : '#9B9BD6', fontSize: '1rem', lineHeight: 1,
             }}
           >+</button>
           {qty > 0 && (
@@ -206,6 +217,14 @@ function GameCard({
             </span>
           )}
         </div>
+
+        {/* Only once they've actually hit the ceiling — a permanent "max 3"
+            label on every card would be noise. */}
+        {inStock && qty >= stock && (
+          <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.68rem', color: 'rgba(201,150,44,0.9)', marginTop: '0.35rem' }}>
+            Maximum available — {stock} left
+          </p>
+        )}
 
         {/* Outside the <Link> that wraps the image, for the same reason the
             stepper is — nested in it, a click would navigate instead of save. */}
@@ -277,6 +296,7 @@ export default function WholesalePage() {
           wholesalePrice: (data.wholesalePrice as number) ?? 0,
           retailPrice: (data.price as number) ?? 0,
           stock:       data.stock,
+          reservedQty: (data.reservedQty as number) ?? 0,
           image:       (data.image as string) ?? '',
           sku:         (data.sku as string) ?? undefined,
         } as Game
@@ -293,7 +313,7 @@ export default function WholesalePage() {
   const filtered = useMemo(() => games.filter(g => {
     const matchCat    = category === 'All' || g.category === category
     const matchSearch = !search || g.name.toLowerCase().includes(search.toLowerCase())
-    const matchStock  = !stockOnly || totalStock(g.stock) > 0
+    const matchStock  = !stockOnly || availableStock(g.stock, g.reservedQty) > 0
     return matchCat && matchSearch && matchStock
   }), [games, search, category, stockOnly])
 

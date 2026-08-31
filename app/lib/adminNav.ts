@@ -27,6 +27,18 @@ export const ADMIN_NAV: AdminNavSection[] = [
     ],
   },
   {
+    // Both pages existed on the /admin dashboard but were missing from this
+    // sidebar entirely, so the only way to reach the order queue was to go
+    // back to the dashboard and hunt for the card. Access matches the
+    // dashboard: the queue is a games-section page, accounts are admin-only.
+    title: 'Wholesale',
+    color: 'var(--teal)',
+    items: [
+      { label: 'Wholesale Orders',   href: '/admin/wholesale/orders',   access: SECTION_ACCESS.games },
+      { label: 'Wholesale Accounts', href: '/admin/wholesale/accounts', access: ['admin'] as Role[] },
+    ],
+  },
+  {
     title: 'Content Management',
     color: 'var(--teal)',
     items: [
