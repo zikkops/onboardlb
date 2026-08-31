@@ -36,13 +36,21 @@ export default function WholesaleOrdersPage() {
   const isMobile = useIsMobile()
   const [orders, setOrders]   = useState<WholesaleOrder[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError]     = useState('')
   const [openId, setOpenId]   = useState<string | null>(null)
 
   useEffect(() => {
     if (!account) { setLoading(false); return }
+    // The failure used to be swallowed, so a denied read and a missing
+    // composite index both rendered as "No orders yet." — indistinguishable
+    // from a shop that genuinely hasn't ordered. Firestore's own message says
+    // which it is (it even includes the index-creation URL), so show it.
     listMyWholesaleOrders(account.uid)
       .then(o => { setOrders(o); setLoading(false) })
-      .catch(() => setLoading(false))
+      .catch((err: unknown) => {
+        setError(err instanceof Error ? err.message : 'Could not load your orders.')
+        setLoading(false)
+      })
   }, [account])
 
   if (authLoading) return null
@@ -73,6 +81,15 @@ export default function WholesaleOrdersPage() {
 
           {loading ? (
             <p style={{ color: 'rgba(245,242,236,0.3)', fontFamily: 'var(--font-inter)' }}>Loading…</p>
+          ) : error ? (
+            <div style={{ border: '1px solid rgba(228,51,41,0.35)', background: 'rgba(228,51,41,0.06)', borderRadius: '6px', padding: '1.5rem', fontFamily: 'var(--font-inter)' }}>
+              <p style={{ fontSize: '0.88rem', color: 'var(--red)', marginBottom: '0.5rem' }}>
+                Your orders couldn&apos;t be loaded.
+              </p>
+              <p style={{ fontSize: '0.76rem', color: 'rgba(245,242,236,0.45)', lineHeight: 1.6, wordBreak: 'break-word' }}>
+                {error}
+              </p>
+            </div>
           ) : orders.length === 0 ? (
             <div style={{ border: '1px dashed rgba(255,255,255,0.08)', borderRadius: '6px', padding: '4rem', textAlign: 'center', color: 'rgba(245,242,236,0.25)', fontFamily: 'var(--font-inter)', fontSize: '0.88rem' }}>
               No orders yet.

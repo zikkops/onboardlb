@@ -1,0 +1,15 @@
+{
+  "//": "Composite indexes. Firestore creates single-field indexes on its own, but a query that combines an equality filter with an orderBy on a DIFFERENT field needs one of these declared, or it fails at runtime with FAILED_PRECONDITION. Deploy with: firebase deploy --only firestore:indexes",
+  "indexes": [
+    {
+      "//": "listMyWholesaleOrders() in app/lib/wholesale.ts: where('accountUid','==',uid) + orderBy('createdAt','desc'). The accountUid filter is not optional — the wholesaleOrders read rule requires it, so this exact shape is the only way a shop can read its own orders.",
+      "collectionGroup": "wholesaleOrders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "accountUid", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}
