@@ -20,7 +20,7 @@ import { db, auth } from '../../../lib/firebase'
 import { useRequireRole, SECTION_ACCESS } from '../../../lib/adminAuth'
 import { generateWholesaleInvoice } from '../../../lib/wholesaleInvoice'
 import {
-  STATUS_COLOR, WHOLESALE_ORDERS_EMAIL, WHOLESALE_ORDER_STATUSES,
+  STATUS_COLOR, WHOLESALE_ORDERS_EMAILS, WHOLESALE_ORDER_STATUSES,
   type WholesaleOrder, type WholesaleOrderStatus,
 } from '../../../lib/wholesale'
 
@@ -125,7 +125,9 @@ export default function WholesaleOrdersAdminPage() {
   async function emailOrder(o: WholesaleOrder) {
     const subject = `Wholesale order ${o.id.slice(0, 8).toUpperCase()} — ${o.shopName}`
     window.location.href =
-      `mailto:${encodeURIComponent(WHOLESALE_ORDERS_EMAIL)}` +
+      // Every recipient, comma-separated — the same people the automatic
+      // notification goes to, so a manual forward doesn't reach fewer.
+      `mailto:${encodeURIComponent(WHOLESALE_ORDERS_EMAILS.join(','))}` +
       `?subject=${encodeURIComponent(subject)}` +
       `&body=${encodeURIComponent(orderAsText(o))}`
 
@@ -315,9 +317,9 @@ export default function WholesaleOrdersAdminPage() {
         )}
 
         <p style={{ marginTop: '2rem', fontSize: '0.72rem', color: 'rgba(245,242,236,0.25)', lineHeight: 1.8 }}>
-          &ldquo;Email Order&rdquo; opens a prefilled message to {WHOLESALE_ORDERS_EMAIL} in your mail
-          client — nothing is sent from a server, so there&apos;s no delivery guarantee. Approving does
-          not deduct stock; confirm availability before you commit to a shop.
+          &ldquo;Email Order&rdquo; opens a prefilled message to {WHOLESALE_ORDERS_EMAILS.join(', ')} in your
+          mail client — nothing is sent from a server, so there&apos;s no delivery guarantee. Approving
+          does not deduct stock; confirm availability before you commit to a shop.
         </p>
       </div>
     </div>

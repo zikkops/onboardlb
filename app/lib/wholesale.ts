@@ -15,12 +15,18 @@ import {
   collection, doc, getDoc, getDocs, query, where, orderBy, type Timestamp,
 } from 'firebase/firestore'
 import { auth, db } from './firebase'
+import { parseOrdersEmails } from './ordersRecipients'
 
-// Where approved wholesale orders are sent. Set
-// NEXT_PUBLIC_WHOLESALE_ORDERS_EMAIL to change it without touching code — the
-// fallback is only a starting point, not a permanent address.
-export const WHOLESALE_ORDERS_EMAIL =
-  process.env.NEXT_PUBLIC_WHOLESALE_ORDERS_EMAIL || 'markzakkak@gmail.com'
+// Where new wholesale orders are announced. Set
+// NEXT_PUBLIC_WHOLESALE_ORDERS_EMAIL (comma-separated) to change the list
+// without touching code. The list itself lives in ordersRecipients.ts so the
+// order route sends to exactly who this page says it does.
+export const WHOLESALE_ORDERS_EMAILS =
+  parseOrdersEmails(process.env.NEXT_PUBLIC_WHOLESALE_ORDERS_EMAIL)
+
+// First recipient only, for anywhere a single address reads better than a
+// list. Prefer WHOLESALE_ORDERS_EMAILS.
+export const WHOLESALE_ORDERS_EMAIL = WHOLESALE_ORDERS_EMAILS[0]
 
 export const WHOLESALE_ORDER_STATUSES = ['pending', 'approved', 'rejected', 'fulfilled'] as const
 export type WholesaleOrderStatus = typeof WHOLESALE_ORDER_STATUSES[number]

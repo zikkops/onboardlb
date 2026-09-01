@@ -14,11 +14,14 @@ import { sendEmail, emailConfigured } from '../../../lib/server/email'
 import { FieldValue } from 'firebase-admin/firestore'
 import { formatInvoiceNumber, INVOICE_NUMBER_PATTERN } from '../../../lib/invoiceFormat'
 import { availableStock } from '../../../lib/branches'
+import { parseOrdersEmails } from '../../../lib/ordersRecipients'
 
 export const runtime = 'nodejs'
 
-const ORDERS_EMAIL =
-  process.env.NEXT_PUBLIC_WHOLESALE_ORDERS_EMAIL || 'markzakkak@gmail.com'
+// Everyone who should hear about a new order. One send with several
+// recipients, not one send each: a single Resend call means the notification
+// either reaches the team or doesn't, instead of half-arriving.
+const ORDERS_EMAILS = parseOrdersEmails(process.env.NEXT_PUBLIC_WHOLESALE_ORDERS_EMAIL)
 
 interface LineInput { gameId: string; quantity: number }
 
@@ -249,8 +252,7 @@ export async function POST(request: Request): Promise<Response> {
     // The order is saved. From here every failure is a notification failure,
     // never an order failure — the shop is told their order went through
     // regardless, because it did.
-    const email = await sendEmail({
-      to: ORDERS_EMAIL,
+    const message = {
       subject: `New wholesale order — ${account.shopName} — ${totalUsd.toFixed(2)}`,
       text: orderText({ id: ref.id, ...account, items, totalUsd, itemCount, notes, invoiceNumber, invoiceUrl }),
       // Replying goes straight to the shop that ordered.
@@ -258,7 +260,33 @@ export async function POST(request: Request): Promise<Response> {
       ...(invoiceUrl ? {
         attachments: [{ path: invoiceUrl, filename: `${invoiceNumber || 'invoice'}.png` }],
       } : {}),
-    })
+    }
+
+    let email = await sendEmail({ to: ORDERS_EMAILS, ...message })
+
+    // Until a domain is verified in Resend, RESEND_FROM is unset and the sender
+    // is the shared onboarding@resend.dev, which refuses to deliver to anyone
+    // but the Resend account's own address — and it refuses the WHOLE request,
+    // not just the addresses it objects to. Without this retry, adding a second
+    // recipient would silently stop the notification that used to work.
+    //
+    // So: fall back to the first recipient alone rather than nobody. Delete
+    // this once RESEND_FROM points at a verified domain and all recipients
+    // genuinely receive mail.
+    if (!email.sent && ORDERS_EMAILS.length > 1) {
+      console.warn(
+        `[wholesale] send to ${ORDERS_EMAILS.length} recipients failed (${email.reason}); ` +
+        `retrying ${ORDERS_EMAILS[0]} alone`,
+      )
+      const retry = await sendEmail({ to: ORDERS_EMAILS[0], ...message })
+      if (retry.sent) {
+        email = {
+          ...retry,
+          reason: `partial: only ${ORDERS_EMAILS[0]} was reachable — verify a domain in Resend and set RESEND_FROM to reach the rest`,
+        }
+        await ref.update({ emailPartial: email.reason }).catch(() => {})
+      }
+    }
 
     if (email.sent) {
       await ref.update({ emailedAt: FieldValue.serverTimestamp() }).catch(() => {})
