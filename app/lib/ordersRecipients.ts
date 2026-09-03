@@ -15,9 +15,12 @@
 // reach the addresses below, verify a domain in Resend and set RESEND_FROM to
 // something on it (e.g. "Onboard <orders@onboard.lb>").
 
+// Elie runs wholesale, so his address is the primary recipient — first in the
+// list is the one anything single-address falls back to. The other two stay on
+// copy; nobody who was being notified has stopped being notified.
 export const DEFAULT_WHOLESALE_ORDERS_EMAILS = [
-  'markzakkak@gmail.com',
   'elie_kesrouany@hotmail.com',
+  'markzakkak@gmail.com',
   'fatenabboud40@gmail.com',
 ]
 

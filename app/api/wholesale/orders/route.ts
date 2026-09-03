@@ -267,24 +267,34 @@ export async function POST(request: Request): Promise<Response> {
     // Until a domain is verified in Resend, RESEND_FROM is unset and the sender
     // is the shared onboarding@resend.dev, which refuses to deliver to anyone
     // but the Resend account's own address — and it refuses the WHOLE request,
-    // not just the addresses it objects to. Without this retry, adding a second
-    // recipient would silently stop the notification that used to work.
+    // not just the addresses it objects to. Without this, adding recipients
+    // would silently stop the notification that used to work.
     //
-    // So: fall back to the first recipient alone rather than nobody. Delete
-    // this once RESEND_FROM points at a verified domain and all recipients
-    // genuinely receive mail.
+    // Retry EACH address on its own rather than just the first: which single
+    // address happens to be deliverable is a property of the Resend account,
+    // not of the order of this list, so falling back to ORDERS_EMAILS[0] would
+    // break the moment someone reorders it. Only runs on the failure path.
+    //
+    // Delete this whole block once RESEND_FROM points at a verified domain.
     if (!email.sent && ORDERS_EMAILS.length > 1) {
       console.warn(
         `[wholesale] send to ${ORDERS_EMAILS.length} recipients failed (${email.reason}); ` +
-        `retrying ${ORDERS_EMAILS[0]} alone`,
+        `retrying each address individually`,
       )
-      const retry = await sendEmail({ to: ORDERS_EMAILS[0], ...message })
-      if (retry.sent) {
+      const reached: string[] = []
+      for (const address of ORDERS_EMAILS) {
+        const one = await sendEmail({ to: address, ...message })
+        if (one.sent) reached.push(address)
+      }
+      if (reached.length > 0) {
+        const missed = ORDERS_EMAILS.filter(a => !reached.includes(a))
         email = {
-          ...retry,
-          reason: `partial: only ${ORDERS_EMAILS[0]} was reachable — verify a domain in Resend and set RESEND_FROM to reach the rest`,
+          sent: true,
+          reason: `partial: reached ${reached.join(', ')}; could not reach ${missed.join(', ')} — ` +
+            `verify a domain in Resend and set RESEND_FROM`,
         }
         await ref.update({ emailPartial: email.reason }).catch(() => {})
+        console.warn('[wholesale] ' + email.reason)
       }
     }
 
