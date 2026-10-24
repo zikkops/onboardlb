@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
+import { CUSTOMER_ACCOUNTS_ENABLED } from './app/lib/features'
 
 const SESSION_COOKIE = 'admin_session'
 
@@ -35,6 +36,15 @@ export function proxy(request: NextRequest) {
   const csp = buildCsp()
 
   const pathname = request.nextUrl.pathname
+
+  // Customer accounts and loyalty are switched off (app/lib/features.ts) —
+  // send old links and bookmarks home instead of to half-working pages.
+  if (!CUSTOMER_ACCOUNTS_ENABLED && (
+    pathname === '/loyalty' || pathname.startsWith('/loyalty/') ||
+    pathname === '/customer' || pathname.startsWith('/customer/')
+  )) {
+    return NextResponse.redirect(new URL('/', request.url))
+  }
 
   // Let the login page through without a session check
   if (pathname === '/admin/login') {

@@ -1,5 +1,17 @@
 export const BRANCHES = ['Beirut', 'Zouk', 'Broummana', 'Faten'] as const
 
+// Customer-facing WhatsApp lines, in wa.me format. Faten has none, so it's
+// left out of anything that reserves through WhatsApp.
+export const BRANCH_WHATSAPP: Record<string, string> = {
+  Beirut:    '96181950042',
+  Zouk:      '96170973242',
+  Broummana: '96176648054',
+}
+
+export function whatsappReserveUrl(branch: string, text: string): string {
+  return `https://wa.me/${BRANCH_WHATSAPP[branch]}?text=${encodeURIComponent(text)}`
+}
+
 export function emptyStock(): Record<string, number> {
   return Object.fromEntries(BRANCHES.map(b => [b, 0]))
 }

@@ -4,6 +4,7 @@ import Image from 'next/image'
 import { useEffect, useState } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faInstagram, faFacebook, faWhatsapp } from '@fortawesome/free-brands-svg-icons'
+import { CUSTOMER_ACCOUNTS_ENABLED } from '../../lib/features'
 
 function useIsMobile(breakpoint = 768) {
   const [isMobile, setIsMobile] = useState(false)
@@ -25,6 +26,22 @@ function FooterLink({ label, href }: { label: string; href: string }) {
       style={{
         fontSize: '0.82rem',
         color: hovered ? 'var(--teal)' : 'rgba(245,242,236,0.5)',
+        textDecoration: 'none',
+        fontFamily: 'var(--font-inter)',
+        transition: 'color 0.2s ease',
+      }}>{label}</a>
+  )
+}
+
+function LegalLink({ label, href, isMobile }: { label: string; href: string; isMobile: boolean }) {
+  const [hovered, setHovered] = useState(false)
+  return (
+    <a href={href}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        fontSize: isMobile ? '0.7rem' : '0.74rem',
+        color: hovered ? 'var(--teal)' : 'rgba(245,242,236,0.35)',
         textDecoration: 'none',
         fontFamily: 'var(--font-inter)',
         transition: 'color 0.2s ease',
@@ -92,7 +109,7 @@ export default function Footer() {
                 { label: 'D&D',          href: '/dnd' },
                 { label: 'Events',       href: '#events' },
                 { label: 'Loyalty',      href: '/loyalty' },
-              ].map(({ label, href }) => (
+              ].filter(l => CUSTOMER_ACCOUNTS_ENABLED || l.href !== '/loyalty').map(({ label, href }) => (
                 <li key={label}>
                   <FooterLink label={label} href={href} />
                 </li>
@@ -210,6 +227,10 @@ export default function Footer() {
           }}>
             © 2026 Onboard — Games & Tales. All rights reserved.
           </p>
+          <div style={{ display: 'flex', gap: '1.25rem' }}>
+            <LegalLink label="Terms & Conditions" href="/terms" isMobile={isMobile} />
+            <LegalLink label="Privacy Policy" href="/privacy" isMobile={isMobile} />
+          </div>
           <p style={{
             fontSize: isMobile ? '0.7rem' : '0.74rem',
             color: 'rgba(245,242,236,0.2)',

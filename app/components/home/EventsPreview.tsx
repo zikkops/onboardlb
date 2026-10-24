@@ -6,6 +6,8 @@ import { collection, getDocs } from 'firebase/firestore'
 import { db } from '../../lib/firebase'
 import Skeleton from '../Skeleton'
 import EventReservationModal from '../events/EventReservationModal'
+import WhatsAppReserveModal from '../WhatsAppReserveModal'
+import { CUSTOMER_ACCOUNTS_ENABLED } from '../../lib/features'
 
 interface GameEvent {
   id: string
@@ -543,7 +545,18 @@ export default function EventsPreview() {
         </div>
       )}
 
-      {reserving && (
+      {reserving && !CUSTOMER_ACCOUNTS_ENABLED && (
+        <WhatsAppReserveModal
+          title="Reserve a Spot"
+          subtitle={`${reserving.title} · 📍 ${reserving.branch}`}
+          details={`${reserving.date} · ${reserving.timeStart}–${reserving.timeEnd}`}
+          branches={[reserving.branch]}
+          message={b => `Hi! I'd like to reserve a spot at "${reserving.title}" on ${reserving.date} (${reserving.timeStart}–${reserving.timeEnd}) at the ${b} branch.`}
+          onClose={() => setReserving(null)}
+        />
+      )}
+
+      {reserving && CUSTOMER_ACCOUNTS_ENABLED && (
         <EventReservationModal
           event={{
             id: reserving.id,

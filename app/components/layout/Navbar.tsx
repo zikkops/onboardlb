@@ -13,6 +13,7 @@ import { useIncomingRequests, acceptFriendRequest, declineFriendRequest, type Fr
 import { useMyNotifications, markNotificationRead, type StatusNotification } from '../../lib/notifications'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faChevronDown, faBell } from '@fortawesome/free-solid-svg-icons'
+import { CUSTOMER_ACCOUNTS_ENABLED } from '../../lib/features'
 
 const INVITE_TYPE_LABELS: Record<ParticipantInvite['reservationType'], string> = {
   dnd: 'D&D Session',
@@ -33,7 +34,7 @@ const LINKS = [
   { href: '/events',  label: 'Events' },
   { href: '/dnd',     label: 'D&D' },
   { href: '/loyalty', label: 'Loyalty' },
-]
+].filter(l => CUSTOMER_ACCOUNTS_ENABLED || l.href !== '/loyalty')
 
 export default function Navbar() {
   const [scrolled, setScrolled]       = useState(false)
@@ -218,7 +219,7 @@ export default function Navbar() {
             </ul>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', justifySelf: 'end' }}>
-              {!customerLoading && customerUser && (
+              {CUSTOMER_ACCOUNTS_ENABLED && !customerLoading && customerUser && (
                 <div
                   style={{ position: 'relative' }}
                   onMouseEnter={() => setNotifOpen(true)}
@@ -366,7 +367,7 @@ export default function Navbar() {
                   </div>
                 </div>
               )}
-              {!customerLoading && (
+              {CUSTOMER_ACCOUNTS_ENABLED && !customerLoading && (
                 customerUser ? (
                   <div
                     style={{ position: 'relative' }}
@@ -594,7 +595,7 @@ export default function Navbar() {
             )
           })}
 
-          {!customerLoading && (
+          {CUSTOMER_ACCOUNTS_ENABLED && !customerLoading && (
             customerUser ? (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
                 {totalNotifCount > 0 && (

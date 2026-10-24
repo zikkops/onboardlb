@@ -7,6 +7,8 @@ import Navbar from '../components/layout/Navbar'
 import Footer from '../components/layout/Footer'
 import Skeleton from '../components/Skeleton'
 import ReservationModal from '../components/dnd/ReservationModal'
+import WhatsAppReserveModal from '../components/WhatsAppReserveModal'
+import { CUSTOMER_ACCOUNTS_ENABLED } from '../lib/features'
 import { useCustomerUser } from '../lib/customerAuth'
 import { useUserLfpEntries, joinLfp, leaveLfp, startLfpParty, type LfpEntry } from '../lib/dndGroups'
 import { fetchCustomerDirectory, type DirectoryUser } from '../lib/friends'
@@ -512,7 +514,9 @@ export default function DndPage() {
                           (campaign.dmBranchIds, snapshotted from the DM's own
                           branches in Manage Users). */}
                       {campaign.locations?.length > 0 && (() => {
-                        const bookableLocations = new Set(campaign.dmUid ? (campaign.dmBranchIds ?? []) : [])
+                        // WhatsApp booking (accounts off) has staff check DM availability by hand,
+                        // so every listed location is bookable.
+                        const bookableLocations = new Set(!CUSTOMER_ACCOUNTS_ENABLED ? campaign.locations : campaign.dmUid ? (campaign.dmBranchIds ?? []) : [])
                         const anyBookable = campaign.locations.some(loc => bookableLocations.has(loc))
                         return (
                           <div style={{ marginTop: 'auto' }}>
@@ -598,7 +602,7 @@ export default function DndPage() {
                           has no date/time at all, unlike the booking flow
                           above; staff sort interested customers into
                           groups from the admin side. */}
-                      {(() => {
+                      {CUSTOMER_ACCOUNTS_ENABLED && (() => {
                         const entry = lfpEntries.find(e => e.campaignId === campaign.id)
                         const busy = lfpBusyId === campaign.id
                         const locations = campaign.locations ?? []
@@ -910,7 +914,18 @@ export default function DndPage() {
       </main>
       <Footer />
 
-      {reserving && reserving.campaign.dmUid && (
+      {reserving && !CUSTOMER_ACCOUNTS_ENABLED && (
+        <WhatsAppReserveModal
+          title="Reserve a Session"
+          subtitle={`${reserving.campaign.title} · 📍 ${reserving.location}`}
+          branches={[reserving.location]}
+          accent={reserving.campaign.color}
+          message={b => `Hi! I'd like to reserve a D&D session for "${reserving.campaign.title}" at the ${b} branch. Preferred date: ___ Time: ___ Number of players: ___`}
+          onClose={() => setReserving(null)}
+        />
+      )}
+
+      {reserving && CUSTOMER_ACCOUNTS_ENABLED && reserving.campaign.dmUid && (
         <ReservationModal
           campaign={{
             id: reserving.campaign.id,

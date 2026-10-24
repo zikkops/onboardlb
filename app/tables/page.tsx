@@ -6,12 +6,17 @@ import Footer from '../components/layout/Footer'
 import BranchTableMap from '../components/tables/BranchTableMap'
 import TableReservationModal from '../components/tables/TableReservationModal'
 import { useIsMobile } from '../lib/useIsMobile'
-import { BRANCHES } from '../lib/branches'
+import { BRANCHES, BRANCH_WHATSAPP } from '../lib/branches'
+import WhatsAppReserveModal from '../components/WhatsAppReserveModal'
+import { CUSTOMER_ACCOUNTS_ENABLED } from '../lib/features'
+
+// While reservations go through WhatsApp, only branches with a WhatsApp line can take one.
+const TABLE_BRANCHES = CUSTOMER_ACCOUNTS_ENABLED ? [...BRANCHES] : BRANCHES.filter(b => BRANCH_WHATSAPP[b])
 import { useBranchTableLayout, adjacentSelectableIds, type TableMarker } from '../lib/branchTableLayouts'
 
 export default function TablesPage() {
   const isMobile = useIsMobile()
-  const [branch, setBranch] = useState<string>(BRANCHES[0])
+  const [branch, setBranch] = useState<string>(TABLE_BRANCHES[0])
   const { layout, loading } = useBranchTableLayout(branch)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [reserving, setReserving] = useState(false)
@@ -38,6 +43,7 @@ export default function TablesPage() {
   // capacityMin is shown alongside it purely as a "recommended for" guide.
   const capacityMin = selectedTables.reduce((sum, t) => sum + t.capacityMin, 0)
   const capacityMax = selectedTables.reduce((sum, t) => sum + t.capacityMax, 0)
+  const tableLabel  = selectedTables.length === 0 ? '' : `Table${selectedTables.length > 1 ? 's' : ''} ${selectedTables.map(t => t.number).join(', ')}`
 
   // Selection rules: first click picks any bookable table; once 1+ are
   // selected, only tables adjacent to an already-selected one are
@@ -80,7 +86,7 @@ export default function TablesPage() {
           </p>
 
           <div style={{ display: 'flex', gap: '0.6rem', marginBottom: '2rem', flexWrap: 'wrap' }}>
-            {BRANCHES.map(b => (
+            {TABLE_BRANCHES.map(b => (
               <button key={b} onClick={() => handleBranchSwitch(b)} style={{
                 backgroundColor: branch === b ? 'var(--teal)' : 'transparent',
                 border: `1px solid ${branch === b ? 'var(--teal)' : 'rgba(255,255,255,0.1)'}`,
@@ -98,6 +104,14 @@ export default function TablesPage() {
               <p style={{ fontFamily: 'var(--font-inter)', fontSize: '0.85rem', color: 'rgba(245,242,236,0.4)' }}>
                 The floor plan for {branch} isn't ready yet — check back soon.
               </p>
+              {!CUSTOMER_ACCOUNTS_ENABLED && (
+                <button onClick={() => setReserving(true)} style={{
+                  marginTop: '1.25rem',
+                  backgroundColor: 'var(--teal)', color: '#fff', border: 'none',
+                  padding: '0.8rem 1.8rem', borderRadius: '2px', fontSize: '0.75rem',
+                  letterSpacing: '0.08em', textTransform: 'uppercase', cursor: 'pointer', fontFamily: 'var(--font-inter)',
+                }}>Reserve on WhatsApp</button>
+              )}
             </div>
           ) : (
             <>
@@ -162,7 +176,19 @@ export default function TablesPage() {
       </main>
       <Footer />
 
-      {reserving && (
+      {reserving && !CUSTOMER_ACCOUNTS_ENABLED && (
+        <WhatsAppReserveModal
+          title={`Reserve ${selectedTables.length > 1 ? 'Tables' : 'a Table'}`}
+          subtitle={`${tableLabel ? `${tableLabel} · ` : ''}📍 ${branch}`}
+          details={tableLabel ? `Seats ${capacityMin === capacityMax ? capacityMax : `${capacityMin}-${capacityMax}`}` : undefined}
+          branches={[branch]}
+          accent="var(--teal)"
+          message={b => `Hi! I'd like to reserve ${tableLabel ? tableLabel.toLowerCase() : 'a table'} at the ${b} branch. Date: ___ Time: ___ Number of people: ___`}
+          onClose={() => setReserving(false)}
+        />
+      )}
+
+      {reserving && CUSTOMER_ACCOUNTS_ENABLED && (
         <TableReservationModal
           branch={branch}
           tableIds={selectedTables.map(t => t.id)}
