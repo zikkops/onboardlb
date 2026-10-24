@@ -18,15 +18,6 @@ export interface AdminNavSection {
 // — if a new admin page is added, add it in both places.
 export const ADMIN_NAV: AdminNavSection[] = [
   {
-    title: 'Game Sales',
-    color: 'var(--teal)',
-    items: [
-      { label: 'Record a Sale',    href: '/admin/games/purchase',  access: SECTION_ACCESS.gamePurchases },
-      { label: 'Sales & Invoices', href: '/admin/games/invoices',  access: SECTION_ACCESS.gamePurchases },
-      { label: 'Transfer Stock',   href: '/admin/games/transfer',  access: SECTION_ACCESS.gameTransfers },
-    ],
-  },
-  {
     // Both pages existed on the /admin dashboard but were missing from this
     // sidebar entirely, so the only way to reach the order queue was to go
     // back to the dashboard and hunt for the card. Access matches the
@@ -36,6 +27,15 @@ export const ADMIN_NAV: AdminNavSection[] = [
     items: [
       { label: 'Wholesale Orders',   href: '/admin/wholesale/orders',   access: SECTION_ACCESS.games },
       { label: 'Wholesale Accounts', href: '/admin/wholesale/accounts', access: ['admin'] as Role[] },
+    ],
+  },
+  {
+    title: 'Game Sales',
+    color: 'var(--teal)',
+    items: [
+      { label: 'Record a Sale',    href: '/admin/games/purchase',  access: SECTION_ACCESS.gamePurchases },
+      { label: 'Sales & Invoices', href: '/admin/games/invoices',  access: SECTION_ACCESS.gamePurchases },
+      { label: 'Transfer Stock',   href: '/admin/games/transfer',  access: SECTION_ACCESS.gameTransfers },
     ],
   },
   {
