@@ -122,6 +122,7 @@ export default function ShopPage() {
   const [mobileSearchHovered, setMobileSearchHovered] = useState(false)
   const [filterTabHovered, setFilterTabHovered] = useState(false)
   const [closeFiltersHovered, setCloseFiltersHovered] = useState(false)
+  const [clearFiltersHovered, setClearFiltersHovered] = useState(false)
   const [collapsedFilters, setCollapsedFilters] = useState<Record<string, boolean>>({
     search: true,
     category: true,
@@ -571,17 +572,20 @@ export default function ShopPage() {
             </div>
           )}
 
-          {/* Mobile filter tab — fixed, vertically centered on the left edge */}
-          {isMobile && !filtersOpen && (
-            <button onClick={() => setFiltersOpen(true)}
+          {/* Mobile filter tab — fixed, vertically centered; rides the panel's edge
+              while open so tapping it again closes the panel */}
+          {isMobile && (
+            <button onClick={() => setFiltersOpen(o => !o)}
+              aria-label={filtersOpen ? 'Close filters' : 'Open filters'}
+              aria-expanded={filtersOpen}
               onMouseEnter={() => setFilterTabHovered(true)}
               onMouseLeave={() => setFilterTabHovered(false)}
               style={{
                 position: 'fixed',
-                left: 0,
+                left: filtersOpen ? '50%' : 0,
                 top: '50%',
                 transform: filterTabHovered ? 'translateY(-50%) translateX(3px)' : 'translateY(-50%)',
-                zIndex: 60,
+                zIndex: 61,
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
@@ -597,9 +601,9 @@ export default function ShopPage() {
                 cursor: 'pointer',
                 fontFamily: 'var(--font-inter)',
                 boxShadow: filterTabHovered ? '6px 0 16px rgba(0,0,0,0.5)' : '4px 0 12px rgba(0,0,0,0.4)',
-                transition: 'all 0.2s ease',
+                transition: 'all 0.2s ease, left 0.3s ease',
               }}>
-              <FontAwesomeIcon icon={faSliders} style={{ width: '13px' }} />
+              <FontAwesomeIcon icon={filtersOpen ? faXmark : faSliders} style={{ width: '13px' }} />
               Filters
             </button>
           )}
@@ -651,6 +655,26 @@ export default function ShopPage() {
                   fontSize: '1rem',
                   color: 'var(--offwhite)',
                 }}>Filters</p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <button onClick={reset}
+                  onMouseEnter={() => setClearFiltersHovered(true)}
+                  onMouseLeave={() => setClearFiltersHovered(false)}
+                  style={{
+                    background: clearFiltersHovered ? 'rgba(255,255,255,0.08)' : 'transparent',
+                    border: `1px solid ${clearFiltersHovered ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.1)'}`,
+                    color: clearFiltersHovered ? 'var(--offwhite)' : 'rgba(245,242,236,0.6)',
+                    height: '32px',
+                    padding: '0 0.5rem',
+                    borderRadius: '16px',
+                    cursor: 'pointer',
+                    fontSize: '0.65rem',
+                    letterSpacing: '0.08em',
+                    textTransform: 'uppercase',
+                    fontFamily: 'var(--font-inter)',
+                    transition: 'all 0.2s ease',
+                  }}>
+                  Clear
+                </button>
                 <button onClick={() => setFiltersOpen(false)} aria-label="Close filters"
                   onMouseEnter={() => setCloseFiltersHovered(true)}
                   onMouseLeave={() => setCloseFiltersHovered(false)}
@@ -672,6 +696,7 @@ export default function ShopPage() {
                   }}>
                   <FontAwesomeIcon icon={faXmark} />
                 </button>
+                </div>
               </div>
 
               {filterFields}
