@@ -10,6 +10,7 @@ import Link from 'next/link'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faUsers, faClock, faCakeCandles, faSearch, faXmark } from '@fortawesome/free-solid-svg-icons'
 import { normalizeStock } from '../lib/branches'
+import { isAccessory, KEYCHAIN_CATEGORY } from '../lib/accessories'
 
 interface Game {
   id: string
@@ -183,8 +184,8 @@ export default function FatenPage() {
           fatenStock:     stock['Faten'] ?? 0,
         } as Game
       })
-      const faten = all.filter(g => g.fatenStock > 0)
-      const cats = catSnap.docs.map(d => (d.data() as { name: string }).name)
+      const faten = all.filter(g => g.fatenStock > 0 && !isAccessory(g))
+      const cats = catSnap.docs.map(d => (d.data() as { name: string }).name).filter(c => c !== KEYCHAIN_CATEGORY)
       setGames(faten)
       setCategories(cats.length > 0 ? cats : ['Strategy', 'Party', 'Family', 'Cooperative', 'Card', 'Trivia', 'RPG', 'Puzzle'])
       setLoading(false)

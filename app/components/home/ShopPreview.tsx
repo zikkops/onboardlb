@@ -6,6 +6,7 @@ import { collection, getDocs, limit, query } from 'firebase/firestore'
 import { db } from '../../lib/firebase'
 import Skeleton from '../Skeleton'
 import { totalStock } from '../../lib/branches'
+import { isAccessory } from '../../lib/accessories'
 
 interface Game {
   id: string
@@ -41,9 +42,10 @@ export default function ShopPreview() {
 
   useEffect(() => {
     async function load() {
-      const q    = query(collection(db, 'games'), limit(3))
+      // Over-fetch: keychains share the collection and are filtered out below.
+      const q    = query(collection(db, 'games'), limit(12))
       const snap = await getDocs(q)
-      setGames(snap.docs.map(d => ({ id: d.id, ...d.data() } as Game)))
+      setGames(snap.docs.filter(d => !isAccessory(d.data())).slice(0, 3).map(d => ({ id: d.id, ...d.data() } as Game)))
       setLoading(false)
     }
     load()

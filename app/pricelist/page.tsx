@@ -10,6 +10,7 @@ import Link from 'next/link'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faUsers, faClock, faCakeCandles, faSearch, faXmark } from '@fortawesome/free-solid-svg-icons'
 import { normalizeStock } from '../lib/branches'
+import { isAccessory } from '../lib/accessories'
 
 // This list is the Faten branch shelf, so stock comes from that one branch
 // rather than the summed total the shop and wholesale pages show.
@@ -166,7 +167,7 @@ export default function PriceListPage() {
         } as Game
       })
       const listed = all
-        .filter(g => g.stock > 0)
+        .filter(g => g.stock > 0 && !isAccessory(g))
         .sort((a, b) => a.name.localeCompare(b.name))
       setGames(listed)
 

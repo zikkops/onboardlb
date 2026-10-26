@@ -11,6 +11,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faUsers, faClock, faCakeCandles, faSearch, faSliders, faXmark } from '@fortawesome/free-solid-svg-icons'
 import type { IconDefinition } from '@fortawesome/fontawesome-svg-core'
 import { totalStock } from '../lib/branches'
+import { isAccessory, KEYCHAIN_CATEGORY } from '../lib/accessories'
 
 interface Game {
   id: string
@@ -141,8 +142,9 @@ export default function ShopPage() {
         getDocs(collection(db, 'gameCategories')),
       ])
 
-      const loadedGames = gamesSnap.docs.map(d => ({ id: d.id, ...d.data() } as Game))
-      const cats        = catSnap.docs.map(d => (d.data() as any).name as string)
+      // Keychains share the games collection but live on /accessories.
+      const loadedGames = gamesSnap.docs.map(d => ({ id: d.id, ...d.data() } as Game)).filter(g => !isAccessory(g))
+      const cats        = catSnap.docs.map(d => (d.data() as any).name as string).filter(c => c !== KEYCHAIN_CATEGORY)
 
       const highestPrice = loadedGames.length > 0
         ? Math.max(...loadedGames.map(g => g.price ?? 0))

@@ -10,6 +10,7 @@ import Link from 'next/link'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faUsers, faClock, faCakeCandles, faSearch, faXmark } from '@fortawesome/free-solid-svg-icons'
 import { totalStock } from '../lib/branches'
+import { isAccessory, KEYCHAIN_CATEGORY } from '../lib/accessories'
 
 interface Game {
   id: string
@@ -168,8 +169,8 @@ export default function RetailPage() {
         getDocs(collection(db, 'gameCategories')),
       ])
       const all = gamesSnap.docs.map(d => ({ id: d.id, ...d.data() } as Game))
-      const retail = all.filter(g => (g.price ?? 0) > 0)
-      const cats = catSnap.docs.map(d => (d.data() as { name: string }).name)
+      const retail = all.filter(g => (g.price ?? 0) > 0 && !isAccessory(g))
+      const cats = catSnap.docs.map(d => (d.data() as { name: string }).name).filter(c => c !== KEYCHAIN_CATEGORY)
       setGames(retail)
       setCategories(cats.length > 0 ? cats : ['Strategy', 'Party', 'Family', 'Cooperative', 'Card', 'Trivia', 'RPG', 'Puzzle'])
       setLoading(false)

@@ -30,6 +30,7 @@ const RESERVATION_TYPE_LABELS: Record<StatusNotification['reservationType'], str
 const LINKS = [
   { href: '/about',   label: 'About Us' },
   { href: '/shop',    label: 'Shop' },
+  { href: '/accessories', label: 'Accessories' },
   { href: '/menu',    label: 'Menu' },
   { href: '/events',  label: 'Events' },
   { href: '/dnd',     label: 'D&D' },

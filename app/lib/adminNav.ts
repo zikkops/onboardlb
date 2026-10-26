@@ -43,6 +43,7 @@ export const ADMIN_NAV: AdminNavSection[] = [
     color: 'var(--teal)',
     items: [
       { label: 'Manage Games',       href: '/admin/games',             access: SECTION_ACCESS.games },
+      { label: 'Manage Accessories', href: '/admin/accessories',       access: SECTION_ACCESS.games },
       { label: 'Manage Menu',        href: '/admin/menu',              access: SECTION_ACCESS.menu },
       { label: 'Manage Events',      href: '/admin/events',            access: SECTION_ACCESS.events },
       { label: 'Event Reservations', href: '/admin/events/reservations', access: SECTION_ACCESS.events },

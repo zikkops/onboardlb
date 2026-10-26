@@ -16,8 +16,26 @@ function useIsMobile(breakpoint = 768) {
   return isMobile
 }
 
-function BranchRow({ branch, accent, href }: { branch: string; accent: string; href: string }) {
+function BranchRow({ branch, accent, href, inStock }: { branch: string; accent: string; href: string; inStock?: number }) {
   const [hovered, setHovered] = useState(false)
+  if (inStock === 0) {
+    return (
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: '0.8rem',
+        padding: '0.95rem 1.1rem',
+        background: 'rgba(255,255,255,0.01)',
+        border: '1px solid rgba(255,255,255,0.05)',
+        borderRadius: '4px',
+        opacity: 0.5,
+      }}>
+        <span style={{ fontFamily: 'var(--font-cinzel)', fontSize: '0.95rem', color: 'var(--offwhite)' }}>📍 {branch}</span>
+        <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.7rem', color: 'var(--red)' }}>Out of stock</span>
+      </div>
+    )
+  }
   return (
     <a href={href} target="_blank" rel="noopener noreferrer"
       onMouseEnter={() => setHovered(true)}
@@ -35,7 +53,12 @@ function BranchRow({ branch, accent, href }: { branch: string; accent: string; h
         transform: hovered ? 'translateX(3px)' : 'none',
         transition: 'all 0.2s ease',
       }}>
-      <span style={{ fontFamily: 'var(--font-cinzel)', fontSize: '0.95rem', color: 'var(--offwhite)' }}>📍 {branch}</span>
+      <span style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
+        <span style={{ fontFamily: 'var(--font-cinzel)', fontSize: '0.95rem', color: 'var(--offwhite)' }}>📍 {branch}</span>
+        {inStock !== undefined && (
+          <span style={{ fontFamily: 'var(--font-inter)', fontSize: '0.68rem', color: 'var(--teal)' }}>{inStock} in stock</span>
+        )}
+      </span>
       <span style={{
         display: 'flex', alignItems: 'center', gap: '0.5rem',
         fontFamily: 'var(--font-inter)', fontSize: '0.7rem', letterSpacing: '0.08em', textTransform: 'uppercase',
@@ -53,11 +76,13 @@ function BranchRow({ branch, accent, href }: { branch: string; accent: string; h
 // with the request already typed. Used while CUSTOMER_ACCOUNTS_ENABLED is off.
 // `branches` narrows the list (e.g. an event's own branch); any without a
 // WhatsApp line are dropped, and if nothing is left every branch is offered.
-export default function WhatsAppReserveModal({ title, subtitle, details, branches, message, accent = 'var(--purple)', onClose }: {
+// `stock` (per-branch counts) shows availability and greys out empty branches.
+export default function WhatsAppReserveModal({ title, subtitle, details, branches, stock, message, accent = 'var(--purple)', onClose }: {
   title: string
   subtitle?: string
   details?: string
   branches?: string[]
+  stock?: Record<string, number>
   message: (branch: string) => string
   accent?: string
   onClose: () => void
@@ -122,7 +147,8 @@ export default function WhatsAppReserveModal({ title, subtitle, details, branche
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
             {options.map(b => (
-              <BranchRow key={b} branch={b} accent={accent} href={whatsappReserveUrl(b, message(b))} />
+              <BranchRow key={b} branch={b} accent={accent} href={whatsappReserveUrl(b, message(b))}
+                inStock={stock ? (stock[b] ?? 0) : undefined} />
             ))}
           </div>
         </div>

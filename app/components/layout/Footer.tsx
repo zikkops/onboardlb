@@ -105,6 +105,7 @@ export default function Footer() {
             <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '0.7rem' }}>
               {[
                 { label: 'Game Library', href: '/shop' },
+                { label: 'Accessories',  href: '/accessories' },
                 { label: 'Menu',         href: '/menu' },
                 { label: 'D&D',          href: '/dnd' },
                 { label: 'Events',       href: '#events' },

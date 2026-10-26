@@ -14,7 +14,7 @@ import { usePendingTableReservations } from '../lib/tableReservations'
 import { checkAndRunLoyaltyReset, migratePrivateFieldsOnce, migrateNameFieldsOnce } from '../lib/customerManagement'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
-  faCashRegister, faReceipt, faDice, faUtensils, faCalendar, faCalendarCheck,
+  faCashRegister, faReceipt, faDice, faKey, faUtensils, faCalendar, faCalendarCheck,
   faCalendarDay, faDiceD20, faDragon, faUsers, faUser, faClock, faMap,
   faClipboard, faThumbsUp, faGift, faTag, faTrophy, faUserShield,
   faFile, faPaperPlane, faTruck, faList, faImage, faScroll, faHandshake, faStore, faBook,
@@ -133,6 +133,7 @@ export default function AdminPage() {
       cards: [
         { label: 'Event Reservations', icon: faCalendarCheck, daily: true,  desc: 'Approve or reject pending event spot requests',        href: '/admin/events/reservations', access: SECTION_ACCESS.events, badge: pendingEventReservations.length },
         { label: 'Manage Games',       icon: faDice,          daily: false, desc: 'Add, edit or remove games from the shop',              href: '/admin/games',               access: SECTION_ACCESS.games },
+        { label: 'Manage Accessories', icon: faKey,           daily: false, desc: 'Keychain prices, wholesale prices and stock per branch', href: '/admin/accessories',         access: SECTION_ACCESS.games },
         { label: 'Manage Menu',        icon: faUtensils,      daily: false, desc: 'Update food and drink items',                           href: '/admin/menu',                access: SECTION_ACCESS.menu },
         { label: 'Manage Events',      icon: faCalendar,      daily: false, desc: 'Create and manage D&D sessions and events',            href: '/admin/events',              access: SECTION_ACCESS.events },
         { label: 'D&D Campaigns',      icon: faDragon,        daily: false, desc: 'Add and manage D&D campaigns',                         href: '/admin/dnd',                 access: SECTION_ACCESS.dnd },
